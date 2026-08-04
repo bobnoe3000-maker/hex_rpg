@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="description" content="Hex Infinity RPG - An old school, DnD flavored hex-based auto battler">
+    <meta name="theme-color" content="#1a1a2e">
+    <title>Hex Infinity RPG</title>
+    
+    <!-- Prevent text selection on mobile -->
+    <style>
+        * {
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        input, textarea {
+            -webkit-user-select: text;
+            user-select: text;
+        }
+    </style>
+    
+    <!-- Main stylesheet -->
+    <link rel="stylesheet" href="css/styles.css">
+    
+    <!-- Favicon (data URI for standalone) -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚔️</text></svg>">
+</head>
+<body>
+    <!-- Loading screen -->
+    <div id="loading-screen" style="
+        position: fixed;
+        inset: 0;
+        background: #1a1a2e;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        color: #e0e0e0;
+        font-family: 'Segoe UI', system-ui, sans-serif;
+    ">
+        <div style="font-size: 48px; margin-bottom: 16px;">⚔️</div>
+        <h1 style="font-size: 24px; margin-bottom: 8px;">Hex Infinity RPG</h1>
+        <p style="color: #8090a0;">Loading...</p>
+    </div>
+    
+    <!-- Main game container -->
+    <div id="game-container"></div>
+    
+    <!-- Main script (ES modules) -->
+    <script type="module">
+        // Catch and display errors
+        window.onerror = function(msg, url, line, col, error) {
+            document.getElementById('loading-screen')?.remove();
+            document.body.innerHTML = `
+                <div style="padding: 20px; color: #ff6b6b; background: #1a1a2e; font-family: monospace;">
+                    <h2>Error Loading Game</h2>
+                    <p><strong>Message:</strong> ${msg}</p>
+                    <p><strong>File:</strong> ${url}</p>
+                    <p><strong>Line:</strong> ${line}:${col}</p>
+                    <pre>${error?.stack || 'No stack trace'}</pre>
+                </div>
+            `;
+            return true;
+        };
+        
+        try {
+            const module = await import('./main.js');
+            console.log('Module loaded successfully');
+            
+            // Remove loading screen after module loads
+            setTimeout(() => {
+                const loadingScreen = document.getElementById('loading-screen');
+                if (loadingScreen) {
+                    loadingScreen.style.transition = 'opacity 0.5s ease';
+                    loadingScreen.style.opacity = '0';
+                    setTimeout(() => loadingScreen.remove(), 500);
+                }
+            }, 300);
+        } catch (e) {
+            document.getElementById('loading-screen')?.remove();
+            document.body.innerHTML = `
+                <div style="padding: 20px; color: #ff6b6b; background: #1a1a2e; font-family: monospace;">
+                    <h2>Import Error</h2>
+                    <p><strong>Message:</strong> ${e.message}</p>
+                    <pre>${e.stack}</pre>
+                </div>
+            `;
+        }
+    </script>
+    
+    <!-- Fallback for browsers that don't support ES modules -->
+    <noscript>
+        <div style="
+            position: fixed;
+            inset: 0;
+            background: #1a1a2e;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #e0e0e0;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            text-align: center;
+            padding: 20px;
+        ">
+            <div style="font-size: 48px; margin-bottom: 16px;">⚠️</div>
+            <h1 style="font-size: 24px; margin-bottom: 8px;">JavaScript Required</h1>
+            <p style="color: #8090a0;">Please enable JavaScript to play Hex Infinity RPG.</p>
+        </div>
+    </noscript>
+</body>
+</html>
