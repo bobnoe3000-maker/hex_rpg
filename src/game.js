@@ -1,10 +1,15 @@
-import { rf, ri, chance, clamp, shade, ell, T, CW, CH, drawPartPx } from './engine/core.js';
+import { clamp, ell, T, CW, CH, drawPartPx, mulberry32 } from './engine/core.js';
 import { makeHeroPortrait } from './engine/portraits.js';
 import { buildFigure } from './engine/creatures.js';
-import { fxUpdateDraw, fxClear, fxText, fxSlash, fxBolt, fxHeal, fxBreath, fxDissolve, fxRing, fxBlock } from './engine/fx.js';
+import { fxUpdateDraw, fxClear, fxText, fxSlash, fxBolt, fxDissolve, fxRing, fxBlock } from './engine/fx.js';
 import { GCOLS, GROWS, buildGameRoom, cx0g, cy0g, isBlocked } from './engine/dungeon.js';
-import { d, d20, mod, fm, makeHero, XP_NEXT, gearSum, atkBonus, dmgBonus, acOf, maxHp, dmgDice, rollLoot, ROOMS_SPEC } from './engine/combat.js';
-/* ============ DP ENGINE :: game.js — Dungeon Pals v2 glue ============ */
+import { XP_NEXT, rollLoot, ROOMS_SPEC } from './engine/combat.js';
+import { makeHero } from './models/units.js';
+import { HERO_BASES } from './data/classes.js';
+import { BAL } from './data/balance.js';
+import { derive } from './systems/StatEngine.js';
+import { resolveAttack } from './systems/CombatSim.js';
+/* ============ DP ENGINE :: game.js — Dungeon Pals glue (stat-based combat) ============ */
 "use strict";
 const cvG=document.getElementById("cv"), G=cvG.getContext("2d");
 const logEl=document.getElementById("log"), partyEl=document.getElementById("party"),
@@ -21,6 +26,7 @@ logBar.onclick=()=>{ const i=LOG_STATES.indexOf(logWrap.dataset.s||"mid");
 setLogState("mid");
 const state={ roomIdx:0, phase:"idle", room:null, units:[], t:0, speed:1, cleared:false, takenLoot:[] };
 const party=[makeHero("knight",11),makeHero("mage",22),makeHero("cleric",33)];
+let combatRng=Math.random;  // reseeded deterministically at the start of each fight
 const FIGCACHE={}, PORTCACHE={}, TILECACHE={};
 function figOf(u){
   const key=(u.cls||u.fig)+":"+u.figSeed;
@@ -102,15 +108,16 @@ function log(msg,cls){ const p=document.createElement("div"); if(cls)p.className
 function renderParty(){
   partyEl.innerHTML="";
   for(const h of party){
+    const D=derive(h);
     const c=document.createElement("div"); c.className="card"+(h.alive?"":" dead");
     const img=document.createElement("canvas"); img.width=img.height=96; img.className="pic";
     img.getContext("2d").drawImage(PORTS[h.cls],0,0,96,96);
     const gear=Object.values(h.gear).filter(Boolean).map(i=>i.n.split(" ")[0]).join(", ")||"no gear";
     const info=document.createElement("div");
-    info.innerHTML=`<b>${h.name}</b> <span class="lvl">Lv${h.lvl}</span><br>
-      <span style="opacity:.7">AC ${acOf(h)} · ${fm(atkBonus(h))} hit</span>
-      <div class="bar"><i style="width:${clamp(h.hp/maxHp(h)*100,0,100)}%"></i></div>
-      ${h.hp}/${maxHp(h)}<div class="gear">${gear}</div>`;
+    info.innerHTML=`<b>${h.name}</b> <span class="lvl">Lv${h.level}</span><br>
+      <span style="opacity:.7">ATK ${D.atk} · DEF ${D.def}</span>
+      <div class="bar"><i style="width:${clamp(h.hp/D.maxhp*100,0,100)}%"></i></div>
+      ${h.hp}/${D.maxhp}<div class="gear">${gear}</div>`;
     c.appendChild(img); c.appendChild(info); partyEl.appendChild(c);
   }
 }
@@ -134,8 +141,8 @@ function loadRoom(){
     let guard=0; while((isBlocked(state.room,h.r,h.c)||state.units.some(u=>u.r===h.r&&u.c===h.c))&&guard++<10){
       h.r--; if(h.r<GROWS-3)h.r=GROWS-2, h.c=1+((h.c)%(GCOLS-2)); }
     h.rr=h.r; h.cc=h.c; h.moveT=1;
-    h.next=(0.5+0.2*i)/h.spd; state.units.push(h); });
-  spec.spawn().forEach((f,i)=>{ f.next=(0.7+0.2*i)/f.spd;
+    h.next=0.5+0.2*i; state.units.push(h); });
+  spec.spawn().forEach((f,i)=>{ f.next=0.7+0.2*i;
     let guard=0; while((isBlocked(state.room,f.r,f.c)||state.units.some(u=>u.r===f.r&&u.c===f.c))&&guard++<20){
       f.c=1+((f.c)%(GCOLS-2)); if(guard%8===0)f.r=Math.min(GROWS-3,f.r+1); }
     f.rr=f.r; f.cc=f.c; f.moveT=1;
@@ -145,7 +152,7 @@ function loadRoom(){
   btnStart.disabled=false; state.phase="idle"; state.t=0;
   log(`— <span class="sys">${spec.title.split("— ")[1]}</span> —`);
 }
-/* ---------- sim (act-timer autobattle on the room grid) ---------- */
+/* ---------- sim (continuous act-timer autobattle on the room grid) ---------- */
 function livingFoes(team){ return state.units.filter(u=>u.alive&&u.team!==team); }
 function distU(a,b){ return Math.abs(a.r-b.r)+Math.abs(a.c-b.c); }
 function nearest(u){ let best=null,bd=99; for(const f of livingFoes(u.team)){ const dd=distU(u,f);
@@ -160,32 +167,26 @@ function stepToward(u,tg){
   u.r=opts[0].r; u.c=opts[0].c;
   u.moveT=0;                 // start the slide
 }
+/* one basic attack, resolved by the deterministic CombatSim; this layer only renders/logs */
 function attack(att,def){
-  const roll=d20(), ab=att.team===0?atkBonus(att):att.atk, total=roll+ab,
-        AC=def.team===0?acOf(def):def.ac;
-  const crit=roll===20, fumble=roll===1, who=`<b>${att.name}</b>`;
-  const doHit=()=>{
-    const dice=att.team===0?dmgDice(att):att.dice;
-    const n=crit?dice[0]*2:dice[0], dm=d(n,dice[1]);
-    const bonus=att.team===0?dmgBonus(att):att.dmgB;
-    const dmg=Math.max(1,dm+bonus);
-    log(`${who} d20: ${roll}${fm(ab)}=${total} vs AC ${AC} — <span class="${crit?'crit':'hit'}">${crit?"CRIT!":"hit"}</span> ${n}d${dice[1]}${fm(bonus)} = <span class="dmg">${dmg}</span> → ${def.name}`);
-    hurt(def,dmg,att);
-    fxText(uxS(def),uyS(def)-40,String(dmg),crit?"#ff6b6b":"#ffd166",crit);
-  };
-  if(fumble||(!crit&&total<AC)){
-    log(`${who} d20: ${roll}${fm(ab)}=${total} vs AC ${AC} — <span class="miss">miss${fumble?" (nat 1!)":""}</span>`);
-    fxText(uxS(def),uyS(def)-38,"miss","#8b7fa8");
+  const res=resolveAttack(att,def,combatRng);
+  const who=`<b>${att.name}</b>`;
+  att.lunge={tx:uxS(def),ty:uyS(def),t:0};
+  if(res.type==="dodge"){
+    log(`${who} strikes at ${def.name} — <span class="miss">dodged</span>`);
+    fxText(uxS(def),uyS(def)-38,"dodge","#8b7fa8");
     if(def.team===0&&def.cls==="knight") fxBlock(uxS(def),uyS(def)-18);
-    att.lunge={tx:uxS(def),ty:uyS(def),t:0};
     return;
   }
-  const range=att.rng||1;
-  att.lunge={tx:uxS(def),ty:uyS(def),t:0};
-  if(range>1){
+  const deliver=()=>{
+    log(`${who} hits ${def.name} — <span class="${res.crit?'crit':'hit'}">${res.crit?"CRIT!":"hit"}</span> <span class="dmg">${res.dmg}</span>`);
+    hurt(def,res.dmg,att);
+    fxText(uxS(def),uyS(def)-40,String(res.dmg),res.crit?"#ff6b6b":"#ffd166",res.crit);
+  };
+  if(derive(att).rng>1){
     const col=att.cls==="mage"?"#b48bff":(att.fig==="kobold"?"#c8ccd6":"#7ee787");
-    fxBolt(uxS(att),uyS(att)-18,uxS(def),uyS(def)-14,col,doHit);
-  } else { fxSlash(uxS(def),uyS(def)-14,crit); doHit(); }
+    fxBolt(uxS(att),uyS(att)-18,uxS(def),uyS(def)-14,col,deliver);
+  } else { fxSlash(uxS(def),uyS(def)-14,res.crit); deliver(); }
 }
 function hurt(u,dmg,src){
   u.hp-=dmg; u.flash=0.18;
@@ -201,49 +202,19 @@ function awardXP(xp){
   const share=Math.ceil(xp/Math.max(1,party.filter(p=>p.alive).length));
   for(const h of party){ if(!h.alive)continue;
     h.xp+=share;
-    while(h.lvl<3&&h.xp>=XP_NEXT[h.lvl]){
-      h.lvl++; h.prof++; const gain=ri(4,h.hpDie)+mod(h.CON);
-      h.maxhp+=gain; h.hp=maxHp(h);
-      log(`✨ <b>${h.name}</b> reaches <span class="sys">level ${h.lvl}</span>! (+${gain} HP, +1 hit)`,"heal");
+    while(h.level<3&&h.xp>=XP_NEXT[h.level]){
+      h.level++; const gr=HERO_BASES[h.cls].growth;
+      h.atk+=gr.atk; h.def+=gr.def; h.dodge+=gr.dodge; h.crit+=gr.crit; h.maxhp+=gr.hp;
+      h.hp=derive(h).maxhp;
+      log(`✨ <b>${h.name}</b> reaches <span class="sys">level ${h.level}</span>! (+${gr.hp} HP, +${gr.atk} ATK)`,"heal");
       fxRing(uxS(h),uyS(h)+6,"#7ee787"); fxText(uxS(h),uyS(h)-44,"LEVEL UP!","#7ee787",true);
     } }
   renderParty();
 }
 function act(u){
   if(!u.alive)return;
-  if(u.cls==="cleric"){
-    const ally=party.filter(p=>p.alive&&p.hp<maxHp(p)*0.5).sort((a,b)=>a.hp/maxHp(a)-b.hp/maxHp(b))[0];
-    if(ally&&chance(.85)){
-      const amt=d(1,8)+mod(u.WIS)+gearSum(u,"healB");
-      ally.hp=Math.min(maxHp(ally),ally.hp+amt);
-      log(`<b>${u.name}</b> casts <span class="heal">Healing Word</span>: ${amt} → ${ally.name}`,"heal");
-      fxHeal(uxS(ally),uyS(ally)-12); fxText(uxS(ally),uyS(ally)-40,"+"+amt,"#7ee787");
-      renderParty(); return;
-    }
-  }
-  if(u.breath){
-    if(u.cd>0)u.cd--;
-    else{
-      const targets=party.filter(p=>p.alive);
-      if(targets.length){
-        u.cd=u.breath.cd;
-        const dm=d(u.breath.dice[0],u.breath.dice[1]);
-        log(`🔥 <b>${u.name}</b> breathes fire! (${dm}, DEX save DC ${u.breath.dc})`);
-        const far=targets.reduce((a,b)=>distU(u,a)>distU(u,b)?a:b);
-        fxBreath(uxS(u),uyS(u)-14,uxS(far),uyS(far)-8);
-        for(const p of targets){
-          const sv=d20()+mod(p.DEX), ok=sv>=u.breath.dc;
-          const dmg=ok?Math.floor(dm/2):dm;
-          log(`&nbsp;&nbsp;${p.name} saves ${sv} — ${ok?'<span class="hit">half</span>':'<span class="miss">fails</span>'}, takes <span class="dmg">${dmg}</span>`);
-          fxText(uxS(p),uyS(p)-40,String(dmg),"#ff8a5a");
-          hurt(p,dmg,u);
-        }
-        return;
-      }
-    }
-  }
   const tg=nearest(u); if(!tg)return;
-  if(distU(u,tg)<=(u.rng||1)) attack(u,tg);
+  if(distU(u,tg)<=derive(u).rng) attack(u,tg);
   else stepToward(u,tg);
 }
 /* ---------- loot & flow ---------- */
@@ -291,7 +262,8 @@ function checkEnd(){
   if(!state.units.some(u=>u.team===1&&u.alive)){
     state.phase="loot"; state.cleared=true;
     log(`✅ <span class="sys">Room cleared!</span>`);
-    for(const h of party) if(h.alive) h.hp=Math.min(maxHp(h),h.hp+ri(2,6));
+    for(const h of party) if(h.alive){ const mh=derive(h).maxhp;
+      h.hp=Math.min(mh,h.hp+Math.round(mh*BAL.ROOM_HEAL_FRAC)); }
     renderParty();
     setTimeout(showLoot,700);
   }
@@ -316,8 +288,8 @@ function drawUnit(u){
   G.drawImage(tile.canvas,px-S/2,py-S/2,S,S); G.restore();
   if(u.flash>0){ G.save(); G.globalAlpha=Math.min(1,u.flash*4)*.7; G.globalCompositeOperation="lighter";
     G.drawImage(tile.canvas,px-S/2,py-S/2,S,S); G.restore(); u.flash-=0.016*state.speed; }
-  // HP capsule under the tile
-  const mh=u.team===0?maxHp(u):u.maxFoeHp, hw=S*0.7, hh=Math.max(3.5,S*0.085);
+  // HP capsule under the tile (same schema for heroes and enemies now)
+  const mh=derive(u).maxhp, hw=S*0.7, hh=Math.max(3.5,S*0.085);
   const hx=px-hw/2, hy=py+S*0.5+2;
   G.fillStyle="#0c0814"; rrp(G,hx-1.5,hy-1.5,hw+3,hh+3,hh); G.fill();
   G.fillStyle="#241a2e"; rrp(G,hx,hy,hw,hh,hh/2); G.fill();
@@ -330,7 +302,7 @@ function drawUnit(u){
     G.fillStyle="#0c0814"; rrp(G,hx-hh*1.6,hy-1.5,hh*1.7,hh+3,3); G.fill();
     G.fillStyle="#f4e3c1"; G.font="bold "+Math.round(hh*1.1)+"px monospace";
     G.textAlign="center"; G.textBaseline="middle";
-    G.fillText(u.lvl, hx-hh*0.75, hy+hh/2); G.textBaseline="alphabetic";
+    G.fillText(u.level, hx-hh*0.75, hy+hh/2); G.textBaseline="alphabetic";
   }
   if(u.boss){ G.fillStyle="#ffdf6b"; G.font="bold 8px monospace"; G.textAlign="center";
     G.fillText("★ BOSS ★",px,py-S/2-2); }
@@ -359,12 +331,11 @@ function render(dt){
 let last=performance.now();
 function loop(now){
   let dt=Math.min(0.05,(now-last)/1000); last=now; dt*=state.speed;
-  const PACE=0.75; // 25% slower fight
   state.t+=dt;
   if(state.phase==="fight"){
     for(const u of state.units){
       if(!u.alive)continue;
-      if(state.t>=u.next){ act(u); u.next=state.t+(1/u.spd)/PACE+rf(0,0.2); }
+      if(state.t>=u.next){ act(u); u.next=state.t+BAL.BASE_INTERVAL/derive(u).aspd+combatRng()*BAL.ASPD_JITTER; }
     }
     checkEnd();
   }
@@ -375,11 +346,15 @@ function loop(now){
   requestAnimationFrame(loop);
 }
 btnStart.onclick=()=>{
-  if(state.phase==="idle"){ state.phase="fight"; btnStart.disabled=true; }
+  if(state.phase==="idle"){
+    // deterministic per-battle rng seed (independent of the render/figure rng)
+    combatRng=mulberry32((((state.room&&state.room.seed)||1)^0x9e3779b9)>>>0);
+    state.phase="fight"; btnStart.disabled=true;
+  }
   else if(state.phase==="door"){ btnStart.disabled=true; nextRoom(); }
 };
 btnSpeed.onclick=()=>{ state.speed=state.speed===1?2:1; btnSpeed.textContent=`${state.speed}×`; };
 log(`Welcome to <span class="sys">The Emberdeep</span>. Bram, Wren & Odo descend.`,"sys");
-log(`d20 + bonus vs AC · crits on nat 20 · loot after every room · doors lead deeper.`,"sys");
+log(`ATK vs DEF · dodge &amp; crit are rated vs level · loot after every room · doors lead deeper.`,"sys");
 loadRoom(); renderParty();
 requestAnimationFrame(loop);

@@ -1,4 +1,4 @@
-import { mulberry32, R, rf, ri, pick, chance, shade, ell, inkPath, hatch, bakeGradeInto96, maskToSnap, applyMask, ground, limb, glowDot, part, partZ, blink, seedRng, setParts, setBlinks } from './core.js';
+import { mulberry32, R, rf, ri, pick, chance, shade, ell, inkPath, hatch, bakeGradeInto96, maskToSnap, applyMask, ground, limb, glowDot, part, blink, seedRng, setParts, setBlinks } from './core.js';
 /* ============ DP ENGINE :: creatures.js — full-body NPC + hero builders ============ */
 "use strict";
 
@@ -15,7 +15,7 @@ function cSpider(g){
   for(const s of [-1,1]) for(let i=0;i<4;i++){
     const pts=[[48+s*5,by+4],[48+s*(15+i*7),by-16-i*2+rf(-3,3)],[48+s*(21+i*8),84+rf(-2,1)]];
     const isAnim=(s===animA[0]&&i===animA[1])||(s===animB[0]&&i===animB[1]);
-    if(isAnim) partZ("back",48+s*5,by+4,
+    if(isAnim) part(48+s*5,by+4,
       {kind:"legtwitch",amp:rf(.10,.18)*s,speed:rf(.5,1.1),phase:rf(0,6)},
       pg=>limb(pg,pts,2.4,hide));
     else limb(g,pts,2.4,hide);
@@ -150,7 +150,7 @@ function cSkeleton(g){
   if(gear==="sword"&&chance(.6)){ ell(g,32,58,6,8,"#5a4a32"); // shield stays on the still arm
     inkPath(g,gg=>gg.ellipse(32,58,6,8,0,0,7),1.4); ell(g,32,58,1.6,1.6,"#8a8a92"); }
   // weapon arm — slow menace raise/lower, pivot at shoulder
-  partZ("front",53,46,{kind:"arm",amp:rf(-.16,-.07),speed:rf(.35,.7),phase:rf(0,6)},pg=>{
+  part(53,46,{kind:"arm",amp:rf(-.16,-.07),speed:rf(.35,.7),phase:rf(0,6)},pg=>{
     limb(pg,[[53,46],[60,52],[62,60]],2.4,bone);
     ell(pg,60,52,1.5,1.5,boneD); // elbow joint
     if(gear==="sword"){ limb(pg,[[62,60],[62,36]],1.8,"#9a9aa4",.8);
@@ -182,7 +182,7 @@ function cRat(g){
   const fur=pick(["#5a5048","#4a4038","#6e5a48","#3e3a36"]), furD=shade(fur,.6);
   ground(g,26);
   // tail — idle swish part
-  partZ("back",66,74,{kind:"sway",amp:rf(.10,.17),speed:rf(1.1,1.9),phase:rf(0,6)},
+  part(66,74,{kind:"sway",amp:rf(.10,.17),speed:rf(1.1,1.9),phase:rf(0,6)},
     pg=>inkPath(pg,gg=>{ gg.moveTo(66,74); gg.quadraticCurveTo(84,78,86,64); gg.quadraticCurveTo(87,56,80,54); },2.6,"#b89a8a"));
   // haunch + body (hunched)
   ell(g,60,70,13,12,fur);
@@ -301,7 +301,7 @@ function cWyvern(g){
   ground(g,22);
   // folded wings raised behind (two spikes with membrane)
   for(const s of [-1,1]){
-    partZ("back",48+s*4,56,{kind:"flap",amp:rf(.035,.06),speed:rf(.7,1.3),phase:rf(0,6),dir:s},pg=>{
+    part(48+s*4,56,{kind:"flap",amp:rf(.035,.06),speed:rf(.7,1.3),phase:rf(0,6),dir:s},pg=>{
       pg.fillStyle=wing; pg.beginPath();
       pg.moveTo(48+s*4,56); pg.lineTo(48+s*20,22+rf(-3,3)); pg.lineTo(48+s*26,52);
       pg.quadraticCurveTo(48+s*16,46,48+s*4,56); pg.closePath(); pg.fill();

@@ -221,11 +221,9 @@ Each phase is independently shippable and leaves `main` runnable.
 | **8 — PvP** | `PvPSim` + `NetService` mock (async snapshots) + `ArenaScreen` | Ranked async battles vs ghost snapshots |
 | **9 — Backend & monetization** | Real `NetService`/`SaveService`/`TimeService`; monetization flags | Server-authoritative; slots/offline/store hooks |
 
-**Status:** Phase 0 complete (ES-module conversion, verified no behavior change).
+**Status:** Phase 0 complete (ES-module conversion). **Phase 1 complete** — stat-based % combat: `data/{balance,stats,classes,enemies}.js`, `models/units.js`, `systems/StatEngine.js` + `systems/CombatSim.js` (pure, deterministic, DOM-free), driving `game.js`. Verified by `tests/combat.test.mjs` and a full headless auto-playthrough.
 
-**Carried into Phase 1** (tracked so they aren't lost):
-- **Unify the unit schema.** Heroes (`STR/DEX/…/gear/prof`) and foes (flat `atk/ac/dice/dmgB`) are currently two shapes, forcing `team===0 ? … : …` branches throughout combat. `StatEngine.derive(unit)` must return the identical six-stat object for both, deleting all team-branching in the combat math.
-- **Collapse `partZ`.** The `partZ(z, …)` wrapper in `core.js` just calls `part()` and ignores `z`; inline it into `part()` (drop the dead arg) during the Phase 1 rework.
+Both carried tasks landed in Phase 1: the hero/foe schema is unified through `StatEngine.derive()` (no more `team===` branching in combat math), and the `partZ` wrapper was collapsed into `part()`.
 
 ---
 

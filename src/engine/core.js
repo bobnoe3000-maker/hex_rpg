@@ -89,7 +89,6 @@ function part(px,py,motion,drawFn){
   const c=newLayer(); drawFn(c.getContext("2d"));
   PARTS.push({canvas:c,px,py,m:motion});
 }
-function partZ(z,px,py,motion,drawFn){ part(px,py,motion,drawFn); } // z ignored in-engine
 function blink(){ if(BLINKS) BLINKS.push([].slice.call(arguments)); }
 function partAngle(m,t){
   const ph=m.phase||0;
@@ -120,5 +119,5 @@ function setBlinks(v){ BLINKS = v; }
 function setGeom(t,wh,ox,oy,cw,ch){ T=t; WH=wh; OX=ox; OY=oy; CW=cw; CH=ch; }
 
 export {
-  mulberry32, R, rf, ri, pick, chance, clamp, shade, ell, inkPath, hatch, GRAIN, bakeGradeInto96, maskToSnap, applyMask, ground, limb, glowDot, flameShape, T, WH, OX, OY, CW, CH, PARTS, BLINKS, newLayer, gradeLayer, part, partZ, blink, partAngle, drawPartPx, seedRng, setParts, setBlinks, setGeom
+  mulberry32, R, rf, ri, pick, chance, clamp, shade, ell, inkPath, hatch, GRAIN, bakeGradeInto96, maskToSnap, applyMask, ground, limb, glowDot, flameShape, T, WH, OX, OY, CW, CH, PARTS, BLINKS, newLayer, gradeLayer, part, blink, partAngle, drawPartPx, seedRng, setParts, setBlinks, setGeom
 };
