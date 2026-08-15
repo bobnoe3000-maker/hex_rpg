@@ -29,10 +29,15 @@ logBar.onclick=()=>{ const i=LOG_STATES.indexOf(logWrap.dataset.s||"mid");
 setLogState("mid");
 /* phase: idle → fight ⇄ paused. inventory holds dropped loot; respawn/revive are timers. */
 const state={ roomIdx:0, phase:"idle", room:null, units:[], t:0, speed:1,
-  inventory:[], gems:0, respawnAt:null, reviveAt:null };
+  inventory:[], gems:0, silver:0, respawnAt:null, reviveAt:null };
 const party=[makeHero("knight",11),makeHero("mage",22),makeHero("cleric",33)];
 const PARTY_CLASSES=[...new Set(party.map(h=>h.cls))]; // bias drops to classes we can use
 let combatRng=Math.random;  // reseeded deterministically when a fight starts / area changes
+/* tiny currency readout in the log header */
+const hudEl=document.createElement("span");
+hudEl.style.cssText="font-size:10px;color:#d8c47a;letter-spacing:1px;margin:0 6px 0 auto";
+logBar.insertBefore(hudEl, logToggle);
+function updateHud(){ hudEl.textContent=`💰 ${state.silver}  💎 ${state.gems}`; }
 const FIGCACHE={}, PORTCACHE={}, TILECACHE={};
 function figOf(u){
   const key=(u.cls||u.fig)+":"+u.figSeed;
@@ -220,6 +225,10 @@ function hurt(u,dmg,src){
       if(combatRng()<(u.boss?BAL.GEM_CHANCE_BOSS:BAL.GEM_CHANCE)){ state.gems++;
         log(`💎 <b>${u.name}</b> drops a <span class="sys">Runic Gem</span> <span style="opacity:.6">(${state.gems})</span>`,"sys");
         fxText(uxS(u),uyS(u)-46,"💎","#9ad1ff"); }
+      const sv=Math.max(1,Math.round(u.xp*(BAL.SILVER_MULT+combatRng()*BAL.SILVER_JITTER)));
+      state.silver+=sv;
+      if(combatRng()<0.5) fxText(uxS(u),uyS(u)-14,"+"+sv,"#d8c47a");
+      updateHud();
     }
   }
   if(u.team===0) renderParty();
@@ -279,7 +288,7 @@ function tryForge(item){
   if(res.outcome==="success") log(`🔨 <span class="heal">+${item.upgradeLevel}!</span> ${item.n} strengthened.`,"heal");
   else if(res.outcome==="destroyed"){ removeItem(item); log(`🔨 <span class="crit">Shattered!</span> ${item.n} was destroyed.`,"crit"); }
   else log(`🔨 <span class="miss">The gem fizzles</span> — ${item.n} is unharmed.`);
-  renderParty();
+  renderParty(); updateHud();
   return res;
 }
 function openHero(h){
@@ -290,6 +299,7 @@ function openHero(h){
     portrait: PORTS[h.cls],
     refresh: renderParty,
     gems: ()=>state.gems,
+    silver: ()=>state.silver,
     forge: tryForge,
     close: ()=>{ state.phase=back; syncButtons(); },
   });
@@ -391,5 +401,5 @@ function loop(now){
 }
 log(`Welcome to <span class="sys">The Emberdeep</span>. Bram, Wren & Odo descend.`,"sys");
 log(`ATK vs DEF · loot drops from foes → your bag · <b>tap a hero</b> to equip · foes respawn · Area → goes deeper.`,"sys");
-loadRoom(); renderParty(); syncButtons();
+loadRoom(); renderParty(); syncButtons(); updateHud();
 requestAnimationFrame(loop);

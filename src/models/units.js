@@ -5,13 +5,16 @@
 
 import { HERO_BASES } from "../data/classes.js";
 import { ENEMIES } from "../data/enemies.js";
+import { SLOTS } from "../data/items/gearTypes.js";
 
 export function makeHero(cls, seed) {
   const b = HERO_BASES[cls];
+  const gear = {};
+  for (const s of SLOTS) gear[s] = null;
   return {
     name: b.name, cls: b.cls, team: 0, level: 1, xp: 0, rng: b.rng,
     hp: b.hp, maxhp: b.hp, atk: b.atk, def: b.def, dodge: b.dodge, crit: b.crit, aspd: b.aspd,
-    gear: { weapon: null, armor: null, trinket: null },
+    gear,
     alive: true, seed, figSeed: (seed * 7 + 3) | 0,
   };
 }

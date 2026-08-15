@@ -27,3 +27,19 @@ export function unequip(hero, slot, inventory) {
   inventory.push(it);
   return true;
 }
+
+/* A rough single-number worth for an item, so the bag can hint which drops upgrade a slot.
+   Weights normalize the stats against each other (a heuristic, not the last word on a build). */
+const SCORE_W = { atk: 2, def: 1.5, hp: 0.4, dodge: 1, crit: 1, aspd: 30 };
+export function itemScore(item) {
+  if (!item) return 0;
+  let s = 0;
+  for (const k in SCORE_W) if (item[k]) s += item[k] * SCORE_W[k];
+  return s;
+}
+
+/* True if `item` is equippable by `hero` and scores higher than what's in that slot now. */
+export function isUpgrade(hero, item) {
+  if (!canEquip(hero, item)) return false;
+  return itemScore(item) > itemScore(hero.gear[item.slot]);
+}

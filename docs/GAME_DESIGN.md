@@ -198,8 +198,8 @@ The single currency is **silver** (used for shop purchases, companion hires, for
 Keep-level upgrades (unlock/boost services) are 🔶 future.
 
 ### 8.2 Character & Inventory ✅ (Features 13, 14)
-- **Character screen:** view a hero's six stats, derived values, gear slots; **swap gear here**.
-- **Inventory screen:** grid management, filter/sort, compare, sell, send-to-forge.
+- **Character screen (implemented):** tap a hero → six stats, **8 gear slots** (weapon, offhand, helm, armor, gloves, boots, ring, amulet), and the bag. Equip/unequip/forge in place. **Tap a slot to filter** the bag to that slot; bag items show a **▲** hint when they'd upgrade the hero (score-based, `Equipment.isUpgrade`). Currency (💰 silver, 💎 gems) shown here and in a small HUD.
+- **Full inventory screen:** grid management, sort, side-by-side compare, sell — still ahead.
 
 ### 8.3 World Map & Dungeons ✅ (Features 11, 12)
 - **World map:** node graph of dungeons/regions, gated by level/progression/keys. Future open-world hunting areas 🔶.

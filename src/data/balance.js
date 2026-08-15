@@ -23,8 +23,12 @@ export const BAL = {
   // endless-map loop
   RESPAWN_DELAY: 1.6,     // seconds after a wave clears before the next spawns
   REVIVE_DELAY: 2.2,      // seconds after a wipe before the party revives
-  DROP_CHANCE: 0.30,      // chance a normal enemy drops an item on death (bosses always drop)
+  DROP_CHANCE: 0.06,      // chance a normal enemy drops an item on death (bosses always drop)
   // (per-component drop weights live in data/items/*; rarer components fall less often)
+
+  // silver (the shop/economy currency) — a little from every kill
+  SILVER_MULT: 0.4,       // silver ≈ enemy.xp * (SILVER_MULT + rng*SILVER_JITTER)
+  SILVER_JITTER: 0.3,
 
   // runic gems (the Forge currency)
   GEM_CHANCE: 0.06,       // chance a normal enemy drops a runic gem

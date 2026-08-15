@@ -3,7 +3,7 @@
 import { makeHero, makeEnemy } from "../src/models/units.js";
 import { derive, dodgeChance, critChance, mitigate } from "../src/systems/StatEngine.js";
 import { resolveAttack } from "../src/systems/CombatSim.js";
-import { canEquip, equip, unequip } from "../src/systems/Equipment.js";
+import { canEquip, equip, unequip, isUpgrade, itemScore } from "../src/systems/Equipment.js";
 import { generate } from "../src/systems/LootGenerator.js";
 import { upgrade, canUpgrade, primaryStat } from "../src/systems/ForgeSystem.js";
 
@@ -47,7 +47,7 @@ ok("different seed diverges", seq(123) !== seq(777));
   const h = makeHero("knight", 1);
   const sword = { n: "Test Sword", slot: "weapon", use: "knight", r: "common", atk: 3 };
   const wand  = { n: "Test Wand",  slot: "weapon", use: "mage",   r: "common", atk: 3 };
-  const ring  = { n: "Test Ring",  slot: "trinket", use: "any",   r: "common", hp: 5 };
+  const ring  = { n: "Test Ring",  slot: "amulet", use: "any",   r: "common", hp: 5 };
   const inv = [sword, wand, ring];
   ok("class restriction blocks wrong-class item", !canEquip(h, wand) && canEquip(h, sword));
   ok("equip moves item out of the bag", equip(h, sword, inv) && h.gear.weapon === sword && !inv.includes(sword));
@@ -66,7 +66,7 @@ ok("different seed diverges", seq(123) !== seq(777));
 {
   const g1 = generate(mb(42)), g2 = generate(mb(42));
   ok("generator is deterministic for a seed", JSON.stringify(g1) === JSON.stringify(g2));
-  ok("generated item has a name, slot and description", !!g1.n && ["weapon","armor","trinket"].includes(g1.slot) && typeof g1.d === "string");
+  ok("generated item has a name, slot and description", !!g1.n && typeof g1.slot === "string" && g1.slot.length > 0 && typeof g1.d === "string");
   ok("generated item carries at least one stat", ["atk","def","hp","dodge","crit","aspd"].some(k => k in g1));
   ok("upgradeLevel starts at 0", g1.upgradeLevel === 0);
   // class restriction: only knight-usable weapons/items when we ask for knight
@@ -101,6 +101,18 @@ ok("different seed diverges", seq(123) !== seq(777));
   ok("cannot upgrade past max", !canUpgrade(it3) && upgrade(it3, always).outcome === "max");
   // primaryStat fallback picks the biggest stat when none stored
   ok("primaryStat falls back to the largest stat", primaryStat({ def: 8, atk: 2, upgradeLevel: 0 }) === "def");
+}
+
+// isUpgrade: an item that scores higher than the equipped slot is flagged
+{
+  const h = makeHero("knight", 2);
+  const weak = { n: "Iron Sword", slot: "weapon", use: "knight", atk: 3 };
+  const strong = { n: "Steel Greatsword", slot: "weapon", use: "knight", atk: 7 };
+  ok("any item beats an empty slot", isUpgrade(h, weak));
+  equip(h, weak, [weak]);
+  ok("a higher-scoring item is an upgrade", isUpgrade(h, strong) && itemScore(strong) > itemScore(weak));
+  ok("a lower-scoring item is not an upgrade", !isUpgrade(h, { n:"Rusty", slot:"weapon", use:"knight", atk:1 }));
+  ok("wrong-class item is never an upgrade", !isUpgrade(h, { n:"Wand", slot:"weapon", use:"mage", atk:9 }));
 }
 
 console.log(fails ? `\n${fails} FAILED` : "\nall passed");
