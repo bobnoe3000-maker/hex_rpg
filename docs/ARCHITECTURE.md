@@ -65,9 +65,10 @@ systems/│ pure game logic (no DOM,   │   │  engine/     │  ← canvas ar
     id.js                    — id/uid generation
   /data/                     — PURE DATA (content & tunables)
     balance.js               — all formula constants, curves, drop/forge odds
-    classes.js               — fighter/mage/rogue base stats + growth + gear/skill pools
-    stats.js                 — the six stat defs + derived-stat definitions
+    classes.js               — fighter/mage/rogue/cleric base stats + growth + gear/skill pools
+    stats.js                 — the six stat defs (hp/atk/def/dodge/crit/aspd) + derived
     skills.js                — skill catalog (target rules, conditions, effects, upgrades)
+    skillTrees.js            — per-class branching trees + capstones (future depth)
     xpCurve.js               — level/XP formulas
     enemies.js               — enemy stat blocks by kind
     dungeons.js              — dungeon/region/theme configs (levelRange, pools, palette)
@@ -156,6 +157,17 @@ PvPSim.resolve({ snapshotA, snapshotB, seed }) -> result   // == CombatSim.run
 ```
 No `Date.now()` / `Math.random()` inside — time and randomness are injected (RNG seed, elapsed ms). This is what makes PvP fair and server-verifiable.
 
+### 4.4 Multiplayer integrity model (why the dice model doesn't matter)
+
+A common question: *does a dice-based combat model (d20) cause cheating or performance problems in PvP?* **No — integrity is independent of the RNG model.** Whether combat uses d20 or stat-based %, the risks and the fixes are identical:
+
+- **Performance is a non-issue.** A full auto-battle resolves in microseconds; a server can re-simulate thousands of matches per second. d20 vs % makes no measurable difference.
+- **Cheating never comes from the dice** — it comes from **client authority**. If the client runs the battle and reports "I won," that result can be forged regardless of the math.
+- **The fix (already designed in):** the sim is **deterministic and seeded** (§2.4). The server stores each party as a **snapshot** and, on result submission, **re-runs the exact same sim** from the same seed. If the client's reported outcome doesn't match the server's re-simulation, it's rejected. Because the sim is pure and fast, re-simulation is cheap.
+- Seeds are **server-issued** for ranked matches so a client can't cherry-pick a favorable roll.
+
+We chose stat-based % over d20 purely for **gameplay legibility** (transparent numbers for theorycraft), *not* for any multiplayer reason. Either model would be equally safe under this snapshot + re-simulation design.
+
 ### 4.3 Service interfaces (mock now → real later)
 ```
 SaveService:  listSlots() load(slot) save(slot,state) delete(slot)
@@ -195,6 +207,7 @@ Each phase is independently shippable and leaves `main` runnable.
 | **1 — Combat swap** | Stat-based % model: `StatEngine` + `CombatSim` (deterministic) + six-stat `Character` | Old fight replaced by new engine; identical UX, new math |
 | **2 — Loot & gear** | Data-driven `LootGenerator` (prefix/material/type), `Inventory` + `Character` screens, equip | Kill → roll item → equip → stats change |
 | **3 — Skills** | `SkillEngine` + priority list + upgrades + `SkillPriorityScreen` | Player orders a rotation that drives combat |
+| **3.5 — Skill trees** 🔶 | Per-class `skillTrees.js` + point investment + respec | Same-class heroes build differently (e.g. Cleric: Devotion vs Wrath) |
 | **4 — Town hub** | `SceneManager` + `TownScreen`; Shop/Bank/Forge + `Economy` | Boot to Town; buy/sell/forge loop works |
 | **5 — Map & dungeons** | `WorldMapScreen` + themed procedural dungeons + uncapped progression | Choose dungeon → generated themed run → tiered loot |
 | **6 — Companions** | `Roster`: generate/hire/equip/upgrade; party of 4 | Full 4-slot party from hired randoms |

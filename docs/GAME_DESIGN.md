@@ -31,11 +31,11 @@ We **replace the prototype's D&D d20 system** with a deterministic, stat-driven 
 | **Attack** | `atk` | Scales outgoing damage. |
 | **Defense** | `def` | Mitigates incoming damage (diminishing curve). |
 | **Dodge** | `dodge%` | Chance to fully avoid an incoming hit. |
-| **Grit** | `grit%` | Chance to **blunt** a hit: negates any crit and reduces the blow (default to 50%). Toughness. |
+| **Crit** | `crit%` | Chance to land a **critical hit** for bonus damage (`× critMult`). |
 | **Attack Speed** | `aspd` | Governs how often the unit acts (action cadence). |
 
 **Hidden / derived (not core-six, sourced from gear procs & skills):**
-- `crit%` (base 5%), `critMult` (base ×1.5)
+- `critMult` (base ×1.5) — crit damage multiplier; raised by procs/skills.
 - `lifesteal%`, elemental/DoT proc magnitudes, buff/debuff values.
 
 ### 2.2 Action economy
@@ -46,32 +46,32 @@ We **replace the prototype's D&D d20 system** with a deterministic, stat-driven 
 
 ### 2.3 Damage resolution (per hit)
 ```
-1. Dodge check:   rand() < target.dodge%      → AVOIDED (0 dmg, "dodge")
+1. Dodge check:   rand() < target.dodge%       → AVOIDED (0 dmg, "dodge")
 2. Base damage:   dmg = skill.base * atkScale(attacker.atk)
-3. Crit check:    rand() < crit%               → dmg *= critMult   (crit)
+3. Crit check:    rand() < attacker.crit%       → dmg *= critMult   (crit)
 4. Mitigation:    dmg *= 100 / (100 + target.def)   // smooth diminishing returns
-5. Grit check:    rand() < target.grit%         → negate crit, dmg *= GRIT_BLUNT (0.5)
-6. Floor:         dmg = max(1, round(dmg))
-7. Apply procs (lifesteal, burn, etc.)
+5. Floor:         dmg = max(1, round(dmg))
+6. Apply procs (lifesteal, burn, etc.)
 ```
-Constants (`atkScale`, `GRIT_BLUNT`, mitigation curve) live in `data/balance.js` — all tunable, no magic numbers in code. 🔶 Exact constants are placeholders pending balance passes.
+Constants (`atkScale`, `critMult`, mitigation curve) live in `data/balance.js` — all tunable, no magic numbers in code. 🔶 Exact constants are placeholders pending balance passes.
 
 ### 2.4 Determinism
 All randomness flows through a **seeded RNG** (mulberry32, already in the prototype). Same seed + same inputs ⇒ identical battle. This is mandatory for **fair async PvP** and **server-side verification** later.
 
 ---
 
-## 3. Classes ✅ (fighter / mage / rogue)
+## 3. Classes ✅ (fighter / mage / rogue / cleric)
 
-Three base classes (the prototype's *cleric* is retired; healing becomes a **support skill line** any class can slot; a dedicated healer class is 🔶 future).
+Four base classes. Each defines: base stats, per-level growth, allowed gear types, a native **skill pool**, and (future) a **skill tree** for specialization (§4.1).
 
 | Class | Fantasy | Stat lean | Role |
 |---|---|---|---|
-| **Fighter** | Frontline bruiser | High HP / DEF / GRIT, melee ATK | Soak & hold the line; taunt/guard skills |
-| **Mage** | Glass cannon | High ATK, AoE; low HP/DEF; ranged | Burst & crowd damage |
-| **Rogue** | Skirmisher | High DODGE / ASPD / crit; single-target | Burst priority targets, utility (poison/bleed) |
+| **Fighter** | Frontline bruiser | High HP / DEF, melee ATK | Soak & hold the line; taunt/guard skills |
+| **Mage** | Glass cannon | High ATK, AoE; low HP/DEF; ranged | Burst & crowd damage; elemental procs |
+| **Rogue** | Skirmisher | High DODGE / ASPD / CRIT; single-target | Burst priority targets, utility (poison/bleed) |
+| **Cleric** | Support / divine | High HP / WIS-flavored; mid ATK | Healing, party buffs, and enemy debuffs |
 
-Each class defines: base stats, per-level growth, allowed gear types, and its native skill pool.
+**Cleric** is a full support class — it can lean toward **healing/buffs** to keep the party alive, or toward **combat/debuffs** to bend fights. Which way a given cleric goes is a **skill-tree** choice (§4.1), and is the flagship example of the theorycraft the game is built around.
 
 ---
 
@@ -85,6 +85,22 @@ Each class defines: base stats, per-level growth, allowed gear types, and its na
 - **Priority list:** the player **orders** their skills. On each action the engine walks the list top→down and fires the **first skill whose cooldown is ready and condition is met**; if none, basic attack. (Feature 3.)
 - **Upgrades:** skills level up (stronger effect / lower cooldown / added rider) via **skill points** (from leveling) and/or materials. Diminishing per level. (Features 1 & 2.)
 - No mana/energy — the knobs are **cooldown, condition, and order**. This is the heart of the theorycraft.
+
+### 4.1 Skill Trees & Specialization 🔶 (future depth)
+
+Each class owns a **skill tree**: a branching set of skills and passives the player unlocks with skill points as they level. Trees let two heroes of the same class play completely differently — the core of long-term theorycraft.
+
+- **Branches** within a tree pull toward different roles; investing deeply in one branch (and its capstone) means investing less elsewhere — meaningful opportunity cost.
+- Points are **respec-able** (for a cost 🔶) so builds can be experimented with.
+- Trees feed the **priority list** (§4): specialization changes *which* skills you have to order, not just their numbers.
+
+**Flagship example — the Cleric:**
+| Branch | Focus | Playstyle it enables |
+|---|---|---|
+| **Devotion** | Party buffs & healing | Keep a fragile glass-cannon party alive; enable aggressive comps |
+| **Wrath** | Combat & debuffs (smites, curses, armor-break) | Turn the cleric into a damage/control piece that bends the fight |
+
+The same pattern applies to every class (e.g. Fighter: *Guardian* tank vs *Berserker* damage; Mage: *Elementalist* AoE vs *Arcanist* single-target burst; Rogue: *Assassin* burst vs *Trickster* evasion/utility). 🔶 Exact trees are designed per-class in a later phase; the data model reserves space for them now.
 
 ---
 
@@ -228,20 +244,21 @@ Keep the prototype's **procedural, seeded, hand-inked engine** (portraits, creat
 | 12 | Procedural themed dungeons w/ gating | §8.3 | ✅ |
 | 13 | Inventory management | §8.2 | ✅ |
 | 14 | Character view + gear swap | §8.2 | ✅ |
-| 15 | Stats: atk/def/dodge/grit/aspd/hp | §2.1 | ✅ |
+| 15 | Stats: atk/def/dodge/crit/aspd/hp | §2.1 | ✅ |
 | 16 | Expandable asset engine | §12 | ✅ |
 
 ---
 
 ## 14. Open Questions / To-Decide 🔶
 
-1. **Dedicated healer/support class** vs healing-as-skill-line (current: skill line).
-2. **Crit** as a first-class stat vs proc/skill-only (current: hidden, from procs/skills).
-3. **Rarity tiers** — 3 (common/rare/epic) or 4 (+legendary)? Colors/odds.
+1. ~~Dedicated healer/support class~~ — **resolved:** Cleric is a core class (§3).
+2. ~~Crit as a stat vs proc-only~~ — **resolved:** Crit is a first-class stat (§2.1).
+3. **Rarity tiers** — 3 (common/rare/epic) or 4 (+legendary)? Colors/odds. (Affects Phase 2 loot tables.)
 4. **Permadeath** for companions? (current: no; revive between runs.)
 5. **Damage-formula constants** — needs a balance pass (placeholders in `balance.js`).
 6. **Live PvP / co-op** — async only for now; realtime is a later backend decision.
-7. **Energy/stamina** gating on dungeon runs? (Not in the feature list — omitted unless desired.)
-8. **Consumables** (potions, scrolls) — in scope? Implied by Shop; needs a small spec.
+7. **Skill-tree respec cost** — free experimentation vs gold/material sink (§4.1).
+8. **Energy/stamina** gating on dungeon runs? (Not in the feature list — omitted unless desired.)
+9. **Consumables** (potions, scrolls) — in scope? Implied by Shop; needs a small spec.
 
 See `docs/ARCHITECTURE.md` for the technical realization and the phased build roadmap.
