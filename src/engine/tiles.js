@@ -68,17 +68,6 @@ function pPit(g,x,y,tone){ pFloor(g,x,y,tone);
   inkPath(g,gg=>{ gg.moveTo(x+9,y+14); gg.lineTo(x+39,y+13); },.8,"rgba(10,8,14,.55)");
   crackLine(g,x+rf(4,40),y+rf(2,7),2);
 }
-function pStairsDown(g,x,y,tone){ pFloor(g,x,y,tone);
-  let sy=y+7, w=36, sx=x+6;
-  inkPath(g,gg=>gg.rect(x+6,y+7,36,34),1.2);
-  for(let i=0;i<5;i++){ const h=34/5, kk=1-(i/5)*.85;
-    g.fillStyle=shade("#5e5a54",kk); g.fillRect(sx,sy,w,h);
-    g.strokeStyle="rgba(240,230,210,"+(0.13*kk)+")"; g.lineWidth=1;
-    g.beginPath(); g.moveTo(sx,sy+.6); g.lineTo(sx+w,sy+.6); g.stroke();
-    inkPath(g,gg=>{ gg.moveTo(sx,sy+h); gg.lineTo(sx+w,sy+h); },.8,"rgba(10,8,14,.55)");
-    sy+=h; sx+=1.7; w-=3.4; }
-  g.fillStyle="#04030a"; g.fillRect(sx,sy-1.5,w,3);
-}
 /* --- tall blocking (extruded) --- */
 function pFirePit(g,x,y,tone){ pFloor(g,x,y,tone);
   const fx=x+T/2, fy=y+T/2+4;
@@ -252,5 +241,5 @@ function pDoor(g,x,y,tone,type,label){
 }
 
 export {
-  STONE, crackLine, pFloor, pCracked, pMoss, pGrate, pPuddle, pPit, pStairsDown, pFirePit, pColumn, pWallCap, pWallFace, pWall, doorLabel, pDoor
+  STONE, crackLine, pFloor, pCracked, pMoss, pGrate, pPuddle, pPit, pFirePit, pColumn, pWallCap, pWallFace, pWall, doorLabel, pDoor
 };

@@ -114,7 +114,6 @@ function renderParty(){
     c.appendChild(img); c.appendChild(info); partyEl.appendChild(c);
   }
 }
-const ux=u=>cx0g(u.c)+T/2, uy=u=>cy0g(u.r)+T/2;
 const ease=k=>k*k*(3-2*k);
 function uxS(u){ const k=(u.moveT===undefined)?1:ease(u.moveT);
   const c=(u.cc===undefined?u.c:u.cc)+((u.c)-(u.cc===undefined?u.c:u.cc))*k;
