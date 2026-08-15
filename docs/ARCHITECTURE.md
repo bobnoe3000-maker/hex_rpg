@@ -160,6 +160,13 @@ PvPSim.resolve({ snapshotA, snapshotB, seed }) -> result   // == CombatSim.run
 ```
 No `Date.now()` / `Math.random()` inside — time and randomness are injected (RNG seed, elapsed ms). This is what makes PvP fair and server-verifiable.
 
+### 4.3 Service interfaces (mock now → real later)
+```
+SaveService:  listSlots() load(slot) save(slot,state) delete(slot)
+NetService:   findOpponent(snapshot) submitResult(r) getLadder()   // local mock today
+TimeService:  now() elapsedSince(ts)                               // server-auth later
+```
+
 ### 4.4 Multiplayer integrity model (why the dice model doesn't matter)
 
 A common question: *does a dice-based combat model (d20) cause cheating or performance problems in PvP?* **No — integrity is independent of the RNG model.** Whether combat uses d20 or stat-based %, the risks and the fixes are identical:
@@ -170,13 +177,6 @@ A common question: *does a dice-based combat model (d20) cause cheating or perfo
 - Seeds are **server-issued** for ranked matches so a client can't cherry-pick a favorable roll.
 
 We chose stat-based % over d20 purely for **gameplay legibility** (transparent numbers for theorycraft), *not* for any multiplayer reason. Either model would be equally safe under this snapshot + re-simulation design.
-
-### 4.3 Service interfaces (mock now → real later)
-```
-SaveService:  listSlots() load(slot) save(slot,state) delete(slot)
-NetService:   findOpponent(snapshot) submitResult(r) getLadder()   // local mock today
-TimeService:  now() elapsedSince(ts)                               // server-auth later
-```
 
 ---
 
