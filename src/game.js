@@ -1,3 +1,9 @@
+import { rf, ri, chance, clamp, shade, ell, T, CW, CH, drawPartPx } from './engine/core.js';
+import { makeHeroPortrait } from './engine/portraits.js';
+import { buildFigure } from './engine/creatures.js';
+import { fxUpdateDraw, fxClear, fxText, fxSlash, fxBolt, fxHeal, fxBreath, fxDissolve, fxRing, fxBlock } from './engine/fx.js';
+import { GCOLS, GROWS, buildGameRoom, cx0g, cy0g, isBlocked } from './engine/dungeon.js';
+import { d, d20, mod, fm, makeHero, XP_NEXT, gearSum, atkBonus, dmgBonus, acOf, maxHp, dmgDice, rollLoot, ROOMS_SPEC } from './engine/combat.js';
 /* ============ DP ENGINE :: game.js — Dungeon Pals v2 glue ============ */
 "use strict";
 const cvG=document.getElementById("cv"), G=cvG.getContext("2d");

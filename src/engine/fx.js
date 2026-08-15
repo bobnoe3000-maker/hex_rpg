@@ -1,3 +1,4 @@
+import { rf, pick, clamp, ell } from './core.js';
 /* ============ DP ENGINE :: fx.js — combat & spell effects ============ */
 "use strict";
 const FXS=[];
@@ -161,3 +162,7 @@ function fxBlock(x,y){
     g.restore();
   });
 }
+
+export {
+  FXS, fxSpawn, fxUpdateDraw, fxClear, easeOut, fxText, fxSlash, fxSparks, fxBolt, fxHeal, fxBreath, fxCloud, fxLightning, fxDissolve, fxRing, fxBlock
+};

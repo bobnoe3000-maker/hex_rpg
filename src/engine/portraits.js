@@ -1,3 +1,4 @@
+import { mulberry32, R, rf, pick, chance, shade, ell, inkPath, hatch, GRAIN, seedRng } from './core.js';
 /* ============ DP ENGINE :: portraits.js — hero portrait generator ============ */
 "use strict";
 const SKIN={
@@ -341,7 +342,7 @@ const ARCH=[
  {id:"Demon",    sp:"demon", gear:["horns"], hair:["bald","crop","wild"], glow:.8, glowCol:["#ffdf6b","#ff8a3a"], snarl:.6, angry:1, fangs:.5, iris:["#ffdf6b"]},
 ];
 function buildPortrait(seed, archIdx){
-  R=mulberry32(seed);
+  seedRng(seed);
   const a=ARCH[archIdx%ARCH.length];
   const skin=pick(SKIN[a.sp]);
   const pal={
@@ -392,3 +393,7 @@ const PORTRAIT_ARCH={knight:0,mage:1,cleric:2};
 function makeHeroPortrait(cls,seed){
   return buildPortrait(seed, PORTRAIT_ARCH[cls]!==undefined?PORTRAIT_ARCH[cls]:0);
 }
+
+export {
+  SKIN, HAIR, BGH, CLOTH, METAL, drawBG, drawShoulders, headPath, drawHead, drawEars, drawEyes, drawNoseMouth, drawHair, drawGear, drawFace, finish, ARCH, buildPortrait, PORTRAIT_ARCH, makeHeroPortrait
+};

@@ -112,3 +112,13 @@ function drawPartPx(ctx,p,t){
   ctx.drawImage(p.canvas,0,0,CW,CH);
   ctx.restore();
 }
+
+/* ---- Phase 0: setters so other modules can mutate shared state via live bindings ---- */
+function seedRng(s){ R = mulberry32(s); }
+function setParts(v){ PARTS = v; }
+function setBlinks(v){ BLINKS = v; }
+function setGeom(t,wh,ox,oy,cw,ch){ T=t; WH=wh; OX=ox; OY=oy; CW=cw; CH=ch; }
+
+export {
+  mulberry32, R, rf, ri, pick, chance, clamp, shade, ell, inkPath, hatch, GRAIN, bakeGradeInto96, maskToSnap, applyMask, ground, limb, glowDot, flameShape, T, WH, OX, OY, CW, CH, PARTS, BLINKS, newLayer, gradeLayer, part, partZ, blink, partAngle, drawPartPx, seedRng, setParts, setBlinks, setGeom
+};

@@ -1,3 +1,4 @@
+import { ri } from './core.js';
 /* ============ DP ENGINE :: combat.js — D&D-lite sim: dice, units, loot, XP ============ */
 "use strict";
 const d=(n,s)=>{ let t=0; for(let i=0;i<n;i++) t+=ri(1,s); return t; };
@@ -70,3 +71,7 @@ const ROOMS_SPEC=[
   features:["firepit","firepit","column","crack","moss","puddle"],
   spawn:()=>[foe("dragon",1,4),foe("kobold",2,2),foe("kobold",2,6)]},
 ];
+
+export {
+  d, d20, mod, fm, makeHero, XP_NEXT, gearSum, atkBonus, dmgBonus, acOf, maxHp, dmgDice, ITEM_POOL, rollLoot, foe, ROOMS_SPEC
+};

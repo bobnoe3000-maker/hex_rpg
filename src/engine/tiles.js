@@ -1,3 +1,4 @@
+import { rf, ri, pick, chance, shade, ell, inkPath, flameShape, T, WH, OY, part } from './core.js';
 /* ============ DP ENGINE :: tiles.js — floor/wall/door painters ============ */
 "use strict";
 
@@ -249,3 +250,7 @@ function pDoor(g,x,y,tone,type,label){
     }); }
   doorLabel(g,x,y,label,y<OY+T); // above for the north wall, below for the south
 }
+
+export {
+  STONE, crackLine, pFloor, pCracked, pMoss, pGrate, pPuddle, pPit, pStairsDown, pFirePit, pColumn, pWallCap, pWallFace, pWall, doorLabel, pDoor
+};

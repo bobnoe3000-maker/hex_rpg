@@ -1,10 +1,12 @@
+import { mulberry32, R, ri, pick, maskToSnap, applyMask, T, WH, OX, OY, CW, CH, PARTS, newLayer, gradeLayer, seedRng, setParts, setGeom } from './core.js';
+import { STONE, pFloor, pCracked, pMoss, pGrate, pPuddle, pPit, pFirePit, pColumn, pWall, pDoor } from './tiles.js';
 /* ============ DP ENGINE :: dungeon.js — room generation + graph ============ */
 "use strict";
 const GCOLS=8, GROWS=11;
-function setRoomGeom(){ T=44; WH=24; OX=12; OY=WH+30; CW=GCOLS*T+OX*2; CH=GROWS*T+OY+26; }
+function setRoomGeom(){ const T=44, WH=24, OX=12, OY=WH+30, CW=GCOLS*T+OX*2, CH=GROWS*T+OY+26; setGeom(T,WH,OX,OY,CW,CH); }
 function buildGameRoom(seed,spec){
   setRoomGeom();
-  R=mulberry32(seed); PARTS=[];
+  seedRng(seed); setParts([]);
   const layer=newLayer(); const g=layer.getContext("2d");
   g.fillStyle="#0a0812"; g.fillRect(0,0,CW,CH);
   const tone=pick(STONE), wallTone=pick(STONE);
@@ -50,7 +52,7 @@ function buildGameRoom(seed,spec){
   g.fillStyle="rgba(6,4,10,.8)"; g.fillText(spec.title+"  ·  #"+(seed%100000),OX+1,15);
   g.fillStyle="#d8a24a"; g.fillText(spec.title+"  ·  #"+(seed%100000),OX,14);
   gradeLayer(layer);
-  const parts=PARTS; PARTS=null;
+  const parts=PARTS; setParts(null);
   for(const p of parts){ const snap=maskToSnap(p.canvas); gradeLayer(p.canvas); applyMask(p.canvas,snap); }
   return {base:layer,parts,blocked,door:{r:0,c:doorC},seed};
 }
@@ -59,3 +61,7 @@ function isBlocked(room,r,c){
   if(r<0||c<0||r>=GROWS||c>=GCOLS) return true;
   return !!room.blocked[r+","+c];
 }
+
+export {
+  GCOLS, GROWS, setRoomGeom, buildGameRoom, cx0g, cy0g, isBlocked
+};

@@ -1,3 +1,4 @@
+import { mulberry32, R, rf, ri, pick, chance, shade, ell, inkPath, hatch, bakeGradeInto96, maskToSnap, applyMask, ground, limb, glowDot, part, partZ, blink, seedRng, setParts, setBlinks } from './core.js';
 /* ============ DP ENGINE :: creatures.js — full-body NPC + hero builders ============ */
 "use strict";
 
@@ -512,7 +513,7 @@ function hCleric(g){
 const FIGURES={rat:cRat,goblin:cGoblin,kobold:cKobold,skeleton:cSkeleton,wight:cWight,dragon:cDragon,
   spider:cSpider,lich:cLich,wyvern:cWyvern,golem:cGolem,knight:hKnight,mage:hMage,cleric:hCleric};
 function buildFigure(kind,seed){
-  R=mulberry32(seed); PARTS=null; BLINKS=null;
+  seedRng(seed); setParts(null); setBlinks(null);
   const c=document.createElement("canvas"); c.width=c.height=384;
   const g=c.getContext("2d"); g.scale(4,4);
   (FIGURES[kind]||cGoblin)(g);
@@ -520,3 +521,7 @@ function buildFigure(kind,seed){
   bakeGradeInto96(g); applyMask(c,snap);
   return c;
 }
+
+export {
+  cSpider, cKobold, cGoblin, cSkeleton, cRat, cLich, cWight, cWyvern, cDragon, cGolem, hKnight, hMage, hCleric, FIGURES, buildFigure
+};
