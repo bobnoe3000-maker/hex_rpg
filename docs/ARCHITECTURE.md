@@ -221,7 +221,11 @@ Each phase is independently shippable and leaves `main` runnable.
 | **8 — PvP** | `PvPSim` + `NetService` mock (async snapshots) + `ArenaScreen` | Ranked async battles vs ghost snapshots |
 | **9 — Backend & monetization** | Real `NetService`/`SaveService`/`TimeService`; monetization flags | Server-authoritative; slots/offline/store hooks |
 
-**Immediate next step:** Phase 0 (mechanical, low-risk) — establishes the module skeleton the rest builds on.
+**Status:** Phase 0 complete (ES-module conversion, verified no behavior change).
+
+**Carried into Phase 1** (tracked so they aren't lost):
+- **Unify the unit schema.** Heroes (`STR/DEX/…/gear/prof`) and foes (flat `atk/ac/dice/dmgB`) are currently two shapes, forcing `team===0 ? … : …` branches throughout combat. `StatEngine.derive(unit)` must return the identical six-stat object for both, deleting all team-branching in the combat math.
+- **Collapse `partZ`.** The `partZ(z, …)` wrapper in `core.js` just calls `part()` and ignores `z`; inline it into `part()` (drop the dead arg) during the Phase 1 rework.
 
 ---
 
