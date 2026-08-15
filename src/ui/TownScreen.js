@@ -5,6 +5,7 @@
 "use strict";
 
 import { derive } from "../systems/StatEngine.js";
+import { iconImg } from "../engine/icons.js";
 
 let cssDone = false;
 export function ensureTownCss() {
@@ -74,16 +75,16 @@ export function openTown(ctx) {
     <div class="tw-head">
       <h1>The Keep</h1>
       <p>Emberdeep hold — your pals rest between delves</p>
-      <div class="tw-cur"><span>💰 ${ctx.silver()}</span><span class="g">💎 ${ctx.gems()}</span></div>
+      <div class="tw-cur"><span>${iconImg("coin",14)} ${ctx.silver()}</span><span class="g">${iconImg("gem",14)} ${ctx.gems()}</span></div>
     </div>
     <div class="tw-sec">Party — tap to manage gear</div>
     <div class="tw-party">${ctx.party.map(card).join("")}</div>
     <div class="tw-sec">Services</div>
     <div class="tw-svc">
-      <button class="tw-btn" data-tavern><span class="ic">🍺</span><span>Tavern<small>Hire pals to fill your party (up to 4)</small></span></button>
-      <button class="tw-btn" data-shop><span class="ic">🛒</span><span>Shop<small>Buy &amp; sell gear · trade silver for runic gems</small></span></button>
-      <button class="tw-btn" disabled><span class="ic">🏦</span><span>Bank<small>Coming soon — a death-safe vault</small></span></button>
-      <button class="tw-btn primary" data-enter>⚔️ Descend into the Emberdeep</button>
+      <button class="tw-btn" data-tavern><span class="ic">${iconImg("tankard",20)}</span><span>Tavern<small>Hire pals to fill your party (up to 4)</small></span></button>
+      <button class="tw-btn" data-shop><span class="ic">${iconImg("pouch",20)}</span><span>Shop<small>Buy &amp; sell gear · trade silver for runic gems</small></span></button>
+      <button class="tw-btn" disabled><span class="ic">${iconImg("vault",20)}</span><span>Bank<small>Coming soon — a death-safe vault</small></span></button>
+      <button class="tw-btn primary" data-enter>${iconImg("sword",16)} Descend into the Emberdeep</button>
     </div>
   </div>`;
 

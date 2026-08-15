@@ -15,6 +15,8 @@ automatically (`core` has no dependencies, everything imports from it).
 - `src/systems/ForgeSystem.js`  — runic-gem upgrades: diminishing success + shatter risk (pure, DOM-free)
 - `src/systems/Economy.js`      — item buy/sell pricing (pure, DOM-free)
 - `src/core/rng.js`            — seeded PRNG (mulberry32), pure — used by the art kit and the models
+- `src/engine/icons.js`        — procedural ink-style UI/status icons (replaces all emoji)
+- `src/engine/gearIcon.js`     — procedural item icons (shape=type, palette=material, accent=prefix)
 - `src/ui/Onboarding.js`        — splash → guest login → create main hero (class, roll stats, roll portrait, name)
 - `src/ui/TownScreen.js`        — the Keep: hub with party, currency, services, Descend / 🏠
 - `src/ui/ShopScreen.js`        — buy / sell gear, reroll stock, trade silver for gems

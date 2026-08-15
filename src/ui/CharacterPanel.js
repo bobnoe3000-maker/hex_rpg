@@ -8,6 +8,8 @@ import { canEquip, equip, unequip, isUpgrade } from "../systems/Equipment.js";
 import { canUpgrade } from "../systems/ForgeSystem.js";
 import { SLOTS } from "../data/items/gearTypes.js";
 import { itemNameHtml as itemName } from "./itemView.js";
+import { iconImg } from "../engine/icons.js";
+import { gearIconImg } from "../engine/gearIcon.js";
 
 const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
 const STAT_ROWS = [["ATK", "atk"], ["DEF", "def"], ["Dodge", "dodge"], ["Crit", "crit"]];
@@ -60,11 +62,11 @@ export function openCharacter(hero, ctx) {
   injectCss();
   const overlay = document.getElementById("overlay");
   let filterSlot = null; // when set, the bag lists only items for that slot
-  const forgeMsg = res => res.outcome === "success" ? ["good", "🔨 Upgrade succeeded!"]
-    : res.outcome === "destroyed" ? ["bad", "🔨 The item shattered!"]
+  const forgeMsg = res => res.outcome === "success" ? ["good", `${iconImg("hammer",13)} Upgrade succeeded!`]
+    : res.outcome === "destroyed" ? ["bad", `${iconImg("hammer",13)} The item shattered!`]
     : res.outcome === "max" ? ["meh", "Already at max upgrade."]
     : res.outcome === "nogem" ? ["meh", "No runic gems."]
-    : ["meh", "🔨 The gem fizzled — no change."];
+    : ["meh", `${iconImg("hammer",13)} The gem fizzled — no change.`];
 
   function render(msg) {
     const D = derive(hero);
@@ -75,20 +77,20 @@ export function openCharacter(hero, ctx) {
     if (filterSlot) usable = usable.filter(it => it.slot === filterSlot);
     const canForge = it => ctx.forge && gems > 0 && canUpgrade(it);
 
-    const forgeBtn = attr => `<button class="cp-btn forge" ${attr}>🔨</button>`;
+    const forgeBtn = attr => `<button class="cp-btn forge" ${attr}>${iconImg("hammer", 13)}</button>`;
     const statCell = (k, key) => `<div><span class="k">${k}</span><span class="v">${D[key]}</span></div>`;
     const slotRow = key => {
       const it = hero.gear[key];
       return `<div class="cp-slot ${filterSlot === key ? "sel" : ""}" data-filter="${key}"><span class="sl">${cap(key)}</span>` +
         (it
-          ? `<span class="it">${itemName(it)}<br><small>${it.d}</small></span>` +
+          ? `${gearIconImg(it, 26)}<span class="it">${itemName(it)}<br><small>${it.d}</small></span>` +
             (canForge(it) ? forgeBtn(`data-fslot="${key}"`) : "") +
             `<button class="cp-btn off" data-uneq="${key}">✕</button>`
           : `<span class="it cp-empty">— empty —</span>`) +
         `</div>`;
     };
     const itemRow = (it, i) =>
-      `<div class="cp-item"><span class="it">${isUpgrade(hero, it) ? '<span class="cp-up" title="Upgrade for an empty/weaker slot">▲</span>' : ""}${itemName(it)}<br><small>${it.d}</small></span>` +
+      `<div class="cp-item">${gearIconImg(it, 26)}<span class="it">${isUpgrade(hero, it) ? `<span class="cp-up" title="Upgrade for an empty/weaker slot">${iconImg("chevron", 11)}</span>` : ""}${itemName(it)}<br><small>${it.d}</small></span>` +
       (canForge(it) ? forgeBtn(`data-fbag="${i}"`) : "") +
       `<button class="cp-btn" data-eq="${i}">Equip</button></div>`;
 
@@ -96,7 +98,7 @@ export function openCharacter(hero, ctx) {
       <div class="cp-head">
         <canvas width="96" height="96"></canvas>
         <div class="nm"><b>${hero.name}</b> <span class="lvl">Lv ${hero.level}</span></div>
-        <span class="cur">💰 ${silver}<br>💎 ${gems}</span>
+        <span class="cur">${iconImg("coin", 13)} ${silver}<br>${iconImg("gem", 13)} ${gems}</span>
         <span class="cp-x" data-close="1">✕</span>
       </div>
       ${msg ? `<div class="cp-msg ${msg[0]}">${msg[1]}</div>` : ""}

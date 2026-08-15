@@ -1,6 +1,7 @@
 import { clamp, ell, T, CW, CH, drawPartPx, mulberry32 } from './engine/core.js';
 import { makeHeroPortrait } from './engine/portraits.js';
 import { buildFigure } from './engine/creatures.js';
+import { iconImg, iconCanvas } from './engine/icons.js';
 import { fxUpdateDraw, fxClear, fxText, fxSlash, fxBolt, fxDissolve, fxRing, fxBlock } from './engine/fx.js';
 import { GCOLS, GROWS, buildGameRoom, cx0g, cy0g, isBlocked } from './engine/dungeon.js';
 import { XP_NEXT, ROOMS_SPEC } from './engine/combat.js';
@@ -43,7 +44,7 @@ let combatRng=Math.random;  // reseeded deterministically when a fight starts / 
 const hudEl=document.createElement("span");
 hudEl.style.cssText="font-size:10px;color:#d8c47a;letter-spacing:1px;margin:0 6px 0 auto";
 logBar.insertBefore(hudEl, logToggle);
-function updateHud(){ hudEl.textContent=`💰 ${state.silver}  💎 ${state.gems}`; }
+function updateHud(){ hudEl.innerHTML=`${iconImg("coin",13)} ${state.silver}&nbsp;&nbsp;${iconImg("gem",13)} ${state.gems}`; }
 const FIGCACHE={}, PORTCACHE={}, TILECACHE={}, HEROPORT={};
 /* per-hero portrait bust, cached by the hero's portrait seed (rolled at creation) */
 function heroPortrait(h){
@@ -111,14 +112,14 @@ function tileOf(u){
     g.fillStyle=pal.gem; g.fillRect(-s,-s,s*2,s*2);
     g.strokeStyle=pal.o; g.lineWidth=1; g.strokeRect(-s,-s,s*2,s*2); g.restore(); };
   gem(S/2,bw/2+1); gem(S/2,S-bw/2-1); gem(bw/2+1,S/2); gem(S-bw/2-1,S/2);
-  // role icon medallion (top-right)
-  const icons={knight:"⚔",mage:"✦",cleric:"✚",rat:"~",goblin:"🗡",kobold:"▲",
-    skeleton:"☠",wight:"✦",dragon:"★"};
-  const ic=icons[u.cls||u.fig]||"⚔", ir=S*0.15;
+  // role icon medallion (top-right) — procedural sprite, not emoji
+  const medal={knight:"sword",mage:"spark",cleric:"cross",rat:"fang",goblin:"fang",
+    kobold:"fang",skeleton:"skull",wight:"skull",dragon:"star"};
+  const mname=medal[u.cls||u.fig]||"sword", ir=S*0.15;
   g.fillStyle=pal.o; g.beginPath(); g.arc(S-ir*0.9,ir*0.9,ir,0,7); g.fill();
   g.strokeStyle=pal.c1; g.lineWidth=1.4; g.stroke();
-  g.fillStyle="#f4e3c1"; g.font=Math.round(ir*1.15)+"px serif"; g.textAlign="center"; g.textBaseline="middle";
-  g.fillText(ic, S-ir*0.9, ir*1.0);
+  const isz=Math.round(ir*1.7);
+  g.drawImage(iconCanvas(mname,isz*2), S-ir*0.9-isz/2, ir*0.9-isz/2, isz, isz);
   TILECACHE[key]={canvas:c,S,pal};
   return TILECACHE[key];
 }
@@ -139,7 +140,7 @@ function renderParty(){
     info.innerHTML=`<b>${h.name}</b> <span class="lvl">Lv${h.level}</span><br>
       <span style="opacity:.7">ATK ${D.atk} · DEF ${D.def}</span>
       <div class="bar"><i style="width:${clamp(h.hp/D.maxhp*100,0,100)}%"></i></div>
-      ${h.hp}/${D.maxhp}<div class="gear">${bag} equipped · ⚙ gear</div>`;
+      ${h.hp}/${D.maxhp}<div class="gear">${bag} equipped · tap for gear ›</div>`;
     c.appendChild(img); c.appendChild(info); partyEl.appendChild(c);
   }
 }
@@ -220,7 +221,7 @@ function attack(att,def){
 function hurt(u,dmg,src){
   u.hp-=dmg; u.flash=0.18;
   if(u.hp<=0){ u.hp=0; u.alive=false;
-    log(`💀 <b>${u.name}</b> falls!`, u.team===0?"crit":"sys");
+    log(`${iconImg("skull",14)} <b>${u.name}</b> falls!`, u.team===0?"crit":"sys");
     const f=figOf(u), S=u.boss?76:54;
     fxDissolve(f,uxS(u),uyS(u)+4,S,S,u.team===0?"#9ad1ff":"#c98a8a");
     if(u.team===1&&src&&src.team===0){
@@ -228,12 +229,12 @@ function hurt(u,dmg,src){
       if(u.boss||combatRng()<BAL.DROP_CHANCE){
         const drop=generate(combatRng,{classes:partyClasses()});
         state.inventory.push(drop);
-        log(`🎁 <b>${u.name}</b> drops <span class="sys">${drop.n}</span> <span style="opacity:.6">→ bag (${state.inventory.length})</span>`);
+        log(`${iconImg("chest",14)} <b>${u.name}</b> drops <span class="sys">${drop.n}</span> <span style="opacity:.6">→ bag (${state.inventory.length})</span>`);
         fxText(uxS(u),uyS(u)-30,"+"+drop.n.split(" ").pop(),"#ffd166");
       }
       if(combatRng()<(u.boss?BAL.GEM_CHANCE_BOSS:BAL.GEM_CHANCE)){ state.gems++;
-        log(`💎 <b>${u.name}</b> drops a <span class="sys">Runic Gem</span> <span style="opacity:.6">(${state.gems})</span>`,"sys");
-        fxText(uxS(u),uyS(u)-46,"💎","#9ad1ff"); }
+        log(`${iconImg("gem",14)} <b>${u.name}</b> drops a <span class="sys">Runic Gem</span> <span style="opacity:.6">(${state.gems})</span>`,"sys");
+        fxText(uxS(u),uyS(u)-46,"gem","#9ad1ff"); }
       const sv=Math.max(1,Math.round(u.xp*(BAL.SILVER_MULT+combatRng()*BAL.SILVER_JITTER)));
       state.silver+=sv;
       if(combatRng()<0.5) fxText(uxS(u),uyS(u)-14,"+"+sv,"#d8c47a");
@@ -250,7 +251,7 @@ function awardXP(xp){
       h.level++; const gr=HERO_BASES[h.cls].growth;
       h.atk+=gr.atk; h.def+=gr.def; h.dodge+=gr.dodge; h.crit+=gr.crit; h.maxhp+=gr.hp;
       h.hp=derive(h).maxhp;
-      log(`✨ <b>${h.name}</b> reaches <span class="sys">level ${h.level}</span>! (+${gr.hp} HP, +${gr.atk} ATK)`,"heal");
+      log(`${iconImg("spark",14)} <b>${h.name}</b> reaches <span class="sys">level ${h.level}</span>! (+${gr.hp} HP, +${gr.atk} ATK)`,"heal");
       fxRing(uxS(h),uyS(h)+6,"#7ee787"); fxText(uxS(h),uyS(h)-44,"LEVEL UP!","#7ee787",true);
     } }
   renderParty();
@@ -267,7 +268,7 @@ function updateWaves(){
   const foesAlive=state.units.some(u=>u.team===1&&u.alive);
   if(!heroesAlive){
     if(state.reviveAt===null){ state.reviveAt=state.t+BAL.REVIVE_DELAY;
-      log(`☠️ <span class="crit">The party falls…</span> they'll regroup.`); }
+      log(`${iconImg("skull",14)} <span class="crit">The party falls…</span> they'll regroup.`); }
     return;
   }
   if(!foesAlive && state.respawnAt===null){
@@ -275,7 +276,7 @@ function updateWaves(){
     for(const h of party) if(h.alive){ const mh=derive(h).maxhp;
       h.hp=Math.min(mh,h.hp+Math.round(mh*BAL.WAVE_HEAL_FRAC)); }
     renderParty();
-    log(`✅ <span class="sys">Wave cleared.</span> Another approaches…`);
+    log(`${iconImg("check",14)} <span class="sys">Wave cleared.</span> Another approaches…`);
   }
 }
 /* ---------- controls & menus ---------- */
@@ -294,9 +295,9 @@ function tryForge(item){
   if(!canUpgrade(item)) return {outcome:"max"};
   state.gems--;
   const res=forgeUpgrade(item, Math.random);
-  if(res.outcome==="success") log(`🔨 <span class="heal">+${item.upgradeLevel}!</span> ${item.n} strengthened.`,"heal");
-  else if(res.outcome==="destroyed"){ removeItem(item); log(`🔨 <span class="crit">Shattered!</span> ${item.n} was destroyed.`,"crit"); }
-  else log(`🔨 <span class="miss">The gem fizzles</span> — ${item.n} is unharmed.`);
+  if(res.outcome==="success") log(`${iconImg("hammer",14)} <span class="heal">+${item.upgradeLevel}!</span> ${item.n} strengthened.`,"heal");
+  else if(res.outcome==="destroyed"){ removeItem(item); log(`${iconImg("hammer",14)} <span class="crit">Shattered!</span> ${item.n} was destroyed.`,"crit"); }
+  else log(`${iconImg("hammer",14)} <span class="miss">The gem fizzles</span> — ${item.n} is unharmed.`);
   renderParty(); updateHud();
   return res;
 }
@@ -337,7 +338,7 @@ function hireCompanion(recruit){
   const i=state.recruits.indexOf(recruit); if(i<0) return false;
   state.silver-=BAL.TAVERN.HIRE_COST; state.recruits.splice(i,1); party.push(recruit);
   renderParty(); updateHud();
-  log(`🍺 <b>${recruit.name}</b> the ${recruit.cls} joins the party!`,"sys");
+  log(`${iconImg("tankard",14)} <b>${recruit.name}</b> the ${recruit.cls} joins the party!`,"sys");
   return true;
 }
 function openTavernScreen(){
@@ -389,6 +390,10 @@ btnStart.onclick=()=>{
 };
 btnNext.onclick=()=>{ if(state.phase!=="paused") nextArea(); };
 btnTown.onclick=()=>{ if(state.scene==="dungeon") enterTown(); };
+btnTown.innerHTML=iconImg("house",18);   // replace the emoji label with a sprite
+{ let fav=document.querySelector("link[rel='icon']");
+  if(!fav){ fav=document.createElement("link"); fav.rel="icon"; document.head.appendChild(fav); }
+  fav.href=iconCanvas("sword",64).toDataURL(); }
 btnSpeed.onclick=()=>{ state.speed=state.speed===1?2:1; btnSpeed.textContent=`${state.speed}×`; };
 
 /* ---------- render ---------- */
@@ -428,7 +433,7 @@ function drawUnit(u){
     G.fillText(u.level, hx-hh*0.75, hy+hh/2); G.textBaseline="alphabetic";
   }
   if(u.boss){ G.fillStyle="#ffdf6b"; G.font="bold 8px monospace"; G.textAlign="center";
-    G.fillText("★ BOSS ★",px,py-S/2-2); }
+    G.fillText("· BOSS ·",px,py-S/2-2); }
 }
 function render(dt){
   G.setTransform(2,0,0,2,0,0);
@@ -460,7 +465,7 @@ function loop(now){
     if(state.respawnAt!==null && state.t>=state.respawnAt){ state.respawnAt=null; spawnWave(); }
     if(state.reviveAt!==null && state.t>=state.reviveAt){ state.reviveAt=null;
       for(const h of party){ h.alive=true; const mh=derive(h).maxhp; h.hp=Math.round(mh*BAL.REVIVE_HEAL_FRAC); }
-      renderParty(); log(`✨ <span class="heal">The party regroups and fights on.</span>`); }
+      renderParty(); log(`${iconImg("spark",14)} <span class="heal">The party regroups and fights on.</span>`); }
     // prune slain enemies so the unit list doesn't grow without bound over endless waves
     state.units=state.units.filter(u=>u.team===0||u.alive);
   }
@@ -474,7 +479,7 @@ function loop(now){
 startOnboarding(hero=>{
   party=[hero];
   log(`Welcome to <span class="sys">The Emberdeep</span>, <b>${hero.name}</b> the ${hero.cls}.`,"sys");
-  log(`Hire pals &amp; gear up at the Keep, then <b>Descend</b>. Loot &amp; silver drop from foes · 🏠 returns home.`,"sys");
+  log(`Hire pals &amp; gear up at the Keep, then <b>Descend</b>. Loot &amp; silver drop from foes; the house button returns home.`,"sys");
   loadRoom(); renderParty(); syncButtons(); updateHud();
   enterTown();          // open the hub, not straight into a fight
   requestAnimationFrame(loop);

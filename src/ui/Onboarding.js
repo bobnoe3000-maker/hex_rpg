@@ -6,11 +6,12 @@
 import { makeHeroPortrait } from "../engine/portraits.js";
 import { rollStats, makeHero } from "../models/units.js";
 import { HERO_BASES } from "../data/classes.js";
+import { iconImg } from "../engine/icons.js";
 
 const CLASS_INFO = {
-  knight: { name: "Knight", icon: "⚔", blurb: "Frontline bruiser — high HP &amp; armor. Soaks hits and holds the line." },
-  mage:   { name: "Mage",   icon: "✦", blurb: "Glass cannon — high attack &amp; crit, ranged, but fragile." },
-  cleric: { name: "Cleric", icon: "✚", blurb: "Sturdy support — balanced, durable, the party's backbone." },
+  knight: { name: "Knight", icon: "sword", blurb: "Frontline bruiser — high HP &amp; armor. Soaks hits and holds the line." },
+  mage:   { name: "Mage",   icon: "spark", blurb: "Glass cannon — high attack &amp; crit, ranged, but fragile." },
+  cleric: { name: "Cleric", icon: "cross", blurb: "Sturdy support — balanced, durable, the party's backbone." },
 };
 const STAT_ROWS = [["HP", "hp"], ["ATK", "atk"], ["DEF", "def"], ["Dodge", "dodge"], ["Crit", "crit"], ["Speed", "aspd"]];
 const seed = () => (Math.random() * 1e9) >>> 0;
@@ -80,7 +81,7 @@ export function startOnboarding(onComplete) {
   function render() {
     if (S.step === "splash") {
       el.innerHTML = `<div class="fl-wrap">
-        <div class="sp-emblem">⚔️</div>
+        <div class="sp-emblem">${iconImg("sword",68)}</div>
         <h1 class="sp-title">The Emberdeep</h1>
         <div class="sp-sub">Dungeon Pals</div>
         <p class="sp-tag">Forge a hero, gather pals, and delve an endless dungeon of loot, gems, and ember-scarred foes.</p>
@@ -99,7 +100,7 @@ export function startOnboarding(onComplete) {
         <h2 class="fl-h">Choose Your Class</h2>
         <div class="cls-grid">${Object.keys(CLASS_INFO).map(k => `
           <div class="cls-card ${S.cls === k ? "sel" : ""}" data-cls="${k}">
-            <span class="ic">${CLASS_INFO[k].icon}</span>
+            <span class="ic">${iconImg(CLASS_INFO[k].icon,26)}</span>
             <span><b>${CLASS_INFO[k].name}</b><small>${CLASS_INFO[k].blurb}</small></span>
           </div>`).join("")}</div>
         <button class="fl-btn" data-go="create" ${S.cls ? "" : "disabled style='opacity:.45;pointer-events:none'"}>Next</button>
@@ -111,13 +112,13 @@ export function startOnboarding(onComplete) {
         <h2 class="fl-h">${CLASS_INFO[S.cls].name}</h2>
         <canvas class="cr-port" width="118" height="118"></canvas>
         <div class="fl-row">
-          <button class="fl-btn ghost" data-roll="port">🎨 Roll Portrait</button>
-          <button class="fl-btn ghost" data-roll="stats">🎲 Roll Stats</button>
+          <button class="fl-btn ghost" data-roll="port">${iconImg("brush",15)} Roll Portrait</button>
+          <button class="fl-btn ghost" data-roll="stats">${iconImg("dice",15)} Roll Stats</button>
         </div>
         <div class="cr-stats">${STAT_ROWS.map(([k, key]) =>
           `<div><span class="k">${k}</span><span class="v">${key === "aspd" ? st[key].toFixed(2) : st[key]}</span></div>`).join("")}</div>
         <input class="fl-in" id="fl-hero" placeholder="Name your hero" maxlength="16" value="${S.name}" autocomplete="off">
-        <button class="fl-btn" data-finish>⚔️ Begin the Descent</button>
+        <button class="fl-btn" data-finish>${iconImg("sword",16)} Begin the Descent</button>
       </div>`;
       drawPortrait();
     }

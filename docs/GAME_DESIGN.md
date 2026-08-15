@@ -258,6 +258,8 @@ Hooks reserved (all behind feature flags, no store in MVP):
 
 Keep the prototype's **procedural, seeded, hand-inked engine** (portraits, creatures, tiles, fx). It is deterministic, cache-friendly, asset-free, and expandable. Wrapped as a rendering module; individual generators can later be swapped for authored art per-entity without touching game logic.
 
+**No emoji — everything is a sprite.** All UI/status/currency glyphs are drawn procedurally in the same ink style by `engine/icons.js`, and **gear has visual identity** via `engine/gearIcon.js` — an item's icon is composed from its **gear type** (shape), **material** (palette), **prefix** (accent), and **forge level** (rim), matching the loot generator. Both are cached (canvas + data-URL) and used across the HUD, shop, tavern, character panel, onboarding, and the in-battle role medallions.
+
 ---
 
 ## 13. Feature Coverage Map

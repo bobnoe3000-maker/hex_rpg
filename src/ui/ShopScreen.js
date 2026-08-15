@@ -5,6 +5,8 @@
 
 import { ensureTownCss } from "./TownScreen.js";
 import { itemNameHtml } from "./itemView.js";
+import { iconImg } from "../engine/icons.js";
+import { gearIconImg } from "../engine/gearIcon.js";
 
 /* ctx = { silver, gems, stock:()=>[], inventory:()=>[], priceOf, sellPriceOf, gemPrice, rerollCost,
            buy:(item)=>bool, sell:(item)=>bool, buyGem:()=>bool, reroll:()=>bool, back:()=>void } */
@@ -16,29 +18,29 @@ export function openShop(ctx) {
     const silver = ctx.silver(), stock = ctx.stock(), inv = ctx.inventory();
     const buyRow = (it, i) => {
       const p = ctx.priceOf(it);
-      return `<div class="shop-row"><span class="it">${itemNameHtml(it)}<br><small>${it.d}</small></span>` +
-        `<span class="price">💰 ${p}</span>` +
+      return `<div class="shop-row">${gearIconImg(it,24)}<span class="it">${itemNameHtml(it)}<br><small>${it.d}</small></span>` +
+        `<span class="price">${iconImg("coin",12)} ${p}</span>` +
         `<button class="shop-btn" data-buy="${i}" ${silver < p ? "disabled" : ""}>Buy</button></div>`;
     };
     const sellRow = (it, i) => {
       const p = ctx.sellPriceOf(it);
-      return `<div class="shop-row"><span class="it">${itemNameHtml(it)}<br><small>${it.d}</small></span>` +
-        `<span class="price">💰 ${p}</span>` +
+      return `<div class="shop-row">${gearIconImg(it,24)}<span class="it">${itemNameHtml(it)}<br><small>${it.d}</small></span>` +
+        `<span class="price">${iconImg("coin",12)} ${p}</span>` +
         `<button class="shop-btn sell" data-sell="${i}">Sell</button></div>`;
     };
 
     el.innerHTML = `<div class="tw-wrap">
       <div class="shop-top">
         <span class="shop-back" data-back>‹ The Keep</span>
-        <span class="tw-cur"><span>💰 ${silver}</span> <span class="g">💎 ${ctx.gems()}</span></span>
+        <span class="tw-cur"><span>${iconImg("coin",12)} ${silver}</span> <span class="g">${iconImg("gem",12)} ${ctx.gems()}</span></span>
       </div>
       <div class="tw-head"><h1>Shop</h1></div>
 
       <div class="tw-sec">For sale</div>
       ${stock.length ? stock.map(buyRow).join("") : `<div class="shop-none">Sold out — reroll for fresh stock.</div>`}
       <div class="tw-svc" style="flex-direction:row;gap:8px">
-        <button class="tw-btn" data-reroll style="justify-content:center" ${silver < ctx.rerollCost ? "disabled" : ""}>🔄 Reroll · 💰 ${ctx.rerollCost}</button>
-        <button class="tw-btn" data-gem style="justify-content:center" ${silver < ctx.gemPrice ? "disabled" : ""}>💎 Buy Gem · 💰 ${ctx.gemPrice}</button>
+        <button class="tw-btn" data-reroll style="justify-content:center" ${silver < ctx.rerollCost ? "disabled" : ""}>${iconImg("refresh",13)} Reroll · ${iconImg("coin",12)} ${ctx.rerollCost}</button>
+        <button class="tw-btn" data-gem style="justify-content:center" ${silver < ctx.gemPrice ? "disabled" : ""}>${iconImg("gem",13)} Buy Gem · ${iconImg("coin",12)} ${ctx.gemPrice}</button>
       </div>
 
       <div class="tw-sec">Sell from your bag</div>
