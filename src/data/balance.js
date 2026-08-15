@@ -24,7 +24,5 @@ export const BAL = {
   RESPAWN_DELAY: 1.6,     // seconds after a wave clears before the next spawns
   REVIVE_DELAY: 2.2,      // seconds after a wipe before the party revives
   DROP_CHANCE: 0.30,      // chance a normal enemy drops an item on death (bosses always drop)
-
-  // drop rarity weights (rarer items fall less often — no rarity tiers, just drop rates)
-  DROP_WEIGHT: { common: 6, rare: 3, epic: 1 },
+  // (per-component drop weights live in data/items/*; rarer components fall less often)
 };

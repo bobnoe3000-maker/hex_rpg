@@ -225,7 +225,7 @@ Each phase is independently shippable and leaves `main` runnable.
 
 Both carried tasks landed in Phase 1: the hero/foe schema is unified through `StatEngine.derive()` (no more `team===` branching in combat math), and the `partZ` wrapper was collapsed into `part()`.
 
-**Phase 2 in progress** — the endless-map loop is in: loot drops from kills into a shared inventory (`combat.js` `rollDrop`, drop-weighted, no tiers), `systems/Equipment.js` (equip/unequip, pure), and `ui/CharacterPanel.js` (tap-a-hero stats/gear modal). Still ahead in Phase 2: the full **prefix+material+gear-type** procedural generator (drops currently reuse the remapped item pool), a dedicated inventory screen, and item comparison.
+**Phase 2 largely done** — endless-map loot loop: the **procedural `LootGenerator`** (prefix + material + gear type, drop-weighted per component in `data/items/*`, class-restricted, cosmetic grade from the rarest component, `lifesteal` proc wired end-to-end via `StatEngine.procVal` → `CombatSim`), drops-into-inventory on kill, `systems/Equipment.js`, and `ui/CharacterPanel.js`. Still ahead: **Forge** upgrades (`+1/+2` runic gems — `upgradeLevel` field is reserved), more gear **slots** than the current weapon/armor/trinket three, more procs (burn/chill need the status-effect pass), and a dedicated full-inventory screen with compare/sell.
 
 ---
 

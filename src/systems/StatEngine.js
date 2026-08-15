@@ -47,3 +47,13 @@ export function critChance(attacker, target) {
 export function mitigate(dmg, def) {
   return dmg * (100 / (100 + def));
 }
+
+/* total value of a named proc across a unit's equipped gear (e.g. "lifesteal") */
+export function procVal(u, kind) {
+  let t = 0;
+  if (u && u.gear) for (const slot in u.gear) {
+    const it = u.gear[slot];
+    if (it && it.proc && it.proc.kind === kind) t += it.proc.val;
+  }
+  return t;
+}

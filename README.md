@@ -11,6 +11,8 @@ automatically (`core` has no dependencies, everything imports from it).
 - `src/systems/StatEngine.js` — `derive()` final stats + rating→chance curves (pure, DOM-free)
 - `src/systems/CombatSim.js`  — deterministic, seeded basic-attack resolution (pure, DOM-free)
 - `src/systems/Equipment.js`  — equip / unequip / class restriction (pure, DOM-free)
+- `src/systems/LootGenerator.js` — procedural items: prefix + material + gear type (pure, DOM-free)
+- `src/data/items/`          — `prefixes.js`, `materials.js`, `gearTypes.js` (drop-weighted component tables)
 - `src/ui/CharacterPanel.js`  — tap-a-hero modal: stats + gear slots + bag (equip/unequip)
 - `src/engine/core.js`      — seeded rng (mulberry32) + ink/hatch/grain style kit + shared room geometry/PARTS state (with setters)
 - `src/engine/portraits.js` — hero portrait generator; `makeHeroPortrait(cls, seed)`

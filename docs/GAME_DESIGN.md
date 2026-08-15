@@ -137,7 +137,9 @@ Every item is composed of **Prefix + Material + Gear Type + Upgrade Level**, and
   Vampiric  Dragonhide   Shield         —        → "Vampiric Dragonhide Shield"
 ```
 
-### 6.1 The three component tables (each grants exactly one stat)
+### 6.1 The three component tables (each grants exactly one stat) ✅ (implemented)
+> Live in `data/items/{prefixes,materials,gearTypes}.js`; `systems/LootGenerator.js` composes them into drops. Names read `[Prefix] [Material] [Type]` (e.g. *Sturdy Meteoric Wand*), class-restricted, colour-graded by the rarest component. The `lifesteal` proc is wired; `+N` upgrade levels and more procs are still ahead.
+
 - **Gear Type** — defines the **slot**, the **class** it serves, and one stat bonus.
   - *Weapon types:* sword, dagger, mace (fighter); wand, staff, orb (mage); bow, blades (rogue)… 🔶 extend.
   - *Wearable types:* helm, chest, gloves, boots, cloak, ring, amulet, shield.

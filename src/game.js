@@ -3,12 +3,13 @@ import { makeHeroPortrait } from './engine/portraits.js';
 import { buildFigure } from './engine/creatures.js';
 import { fxUpdateDraw, fxClear, fxText, fxSlash, fxBolt, fxDissolve, fxRing, fxBlock } from './engine/fx.js';
 import { GCOLS, GROWS, buildGameRoom, cx0g, cy0g, isBlocked } from './engine/dungeon.js';
-import { XP_NEXT, rollDrop, ROOMS_SPEC } from './engine/combat.js';
+import { XP_NEXT, ROOMS_SPEC } from './engine/combat.js';
 import { makeHero } from './models/units.js';
 import { HERO_BASES } from './data/classes.js';
 import { BAL } from './data/balance.js';
 import { derive } from './systems/StatEngine.js';
 import { resolveAttack } from './systems/CombatSim.js';
+import { generate } from './systems/LootGenerator.js';
 import { openCharacter } from './ui/CharacterPanel.js';
 /* ============ DP ENGINE :: game.js — endless auto-battle loop ============ */
 "use strict";
@@ -29,6 +30,7 @@ setLogState("mid");
 const state={ roomIdx:0, phase:"idle", room:null, units:[], t:0, speed:1,
   inventory:[], respawnAt:null, reviveAt:null };
 const party=[makeHero("knight",11),makeHero("mage",22),makeHero("cleric",33)];
+const PARTY_CLASSES=[...new Set(party.map(h=>h.cls))]; // bias drops to classes we can use
 let combatRng=Math.random;  // reseeded deterministically when a fight starts / area changes
 const FIGCACHE={}, PORTCACHE={}, TILECACHE={};
 function figOf(u){
@@ -192,6 +194,8 @@ function attack(att,def){
     log(`${who} hits ${def.name} — <span class="${res.crit?'crit':'hit'}">${res.crit?"CRIT!":"hit"}</span> <span class="dmg">${res.dmg}</span>`);
     hurt(def,res.dmg,att);
     fxText(uxS(def),uyS(def)-40,String(res.dmg),res.crit?"#ff6b6b":"#ffd166",res.crit);
+    if(res.heal && att.alive){ const mh=derive(att).maxhp; att.hp=Math.min(mh,att.hp+res.heal);
+      fxText(uxS(att),uyS(att)-30,"+"+res.heal,"#7ee787"); if(att.team===0) renderParty(); }
   };
   if(derive(att).rng>1){
     const col=att.cls==="mage"?"#b48bff":(att.fig==="kobold"?"#c8ccd6":"#7ee787");
@@ -206,10 +210,12 @@ function hurt(u,dmg,src){
     fxDissolve(f,uxS(u),uyS(u)+4,S,S,u.team===0?"#9ad1ff":"#c98a8a");
     if(u.team===1&&src&&src.team===0){
       awardXP(u.xp);
-      const drop=rollDrop(combatRng,!!u.boss);
-      if(drop){ state.inventory.push(drop);
+      if(u.boss||combatRng()<BAL.DROP_CHANCE){
+        const drop=generate(combatRng,{classes:PARTY_CLASSES});
+        state.inventory.push(drop);
         log(`🎁 <b>${u.name}</b> drops <span class="sys">${drop.n}</span> <span style="opacity:.6">→ bag (${state.inventory.length})</span>`);
-        fxText(uxS(u),uyS(u)-30,"+"+drop.n.split(" ")[0],"#ffd166"); }
+        fxText(uxS(u),uyS(u)-30,"+"+drop.n.split(" ").pop(),"#ffd166");
+      }
     }
   }
   if(u.team===0) renderParty();

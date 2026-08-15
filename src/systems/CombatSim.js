@@ -5,12 +5,12 @@
 "use strict";
 
 import { BAL } from "../data/balance.js";
-import { derive, dodgeChance, critChance, mitigate } from "./StatEngine.js";
+import { derive, dodgeChance, critChance, mitigate, procVal } from "./StatEngine.js";
 
 /* Resolve one basic attack from `attacker` against `defender`.
    Returns a plain result object (no DOM, no side effects):
      { type: "dodge" }
-     { type: "hit", crit: bool, dmg: number }  */
+     { type: "hit", crit: bool, dmg: number, heal?: number }  // heal = lifesteal to attacker */
 export function resolveAttack(attacker, defender, rng) {
   if (rng() < dodgeChance(defender, attacker)) return { type: "dodge" };
 
@@ -20,5 +20,8 @@ export function resolveAttack(attacker, defender, rng) {
   dmg = mitigate(dmg, D.def);
   dmg = Math.max(1, Math.round(dmg));
 
-  return { type: "hit", crit, dmg };
+  const res = { type: "hit", crit, dmg };
+  const ls = procVal(attacker, "lifesteal");
+  if (ls > 0) res.heal = Math.max(1, Math.round(dmg * ls));
+  return res;
 }

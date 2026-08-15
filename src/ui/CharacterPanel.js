@@ -11,6 +11,8 @@ const SLOTS = [
   { key: "armor",   label: "Armor"   },
   { key: "trinket", label: "Trinket" },
 ];
+const GRADE_COLOR = { plain: "#e8e8e8", fine: "#8fd39a", rare: "#4da6ff", epic: "#c77dff" };
+const itemName = it => `<b style="color:${GRADE_COLOR[it.grade] || "#e8e8e8"}">${it.n}${it.upgradeLevel ? " +" + it.upgradeLevel : ""}</b>`;
 const STAT_ROWS = [
   ["ATK", "atk"], ["DEF", "def"], ["Dodge", "dodge"], ["Crit", "crit"],
 ];
@@ -63,12 +65,12 @@ export function openCharacter(hero, ctx) {
       const it = hero.gear[s.key];
       return `<div class="cp-slot"><span class="sl">${s.label}</span>` +
         (it
-          ? `<span class="it"><b>${it.n}</b><br><small>${it.d}</small></span><button class="cp-btn off" data-uneq="${s.key}">Unequip</button>`
+          ? `<span class="it">${itemName(it)}<br><small>${it.d}</small></span><button class="cp-btn off" data-uneq="${s.key}">Unequip</button>`
           : `<span class="it cp-empty">— empty —</span>`) +
         `</div>`;
     };
     const itemRow = (it, i) =>
-      `<div class="cp-item"><span class="it"><b>${it.n}</b><br><small>${it.d}</small></span>` +
+      `<div class="cp-item"><span class="it">${itemName(it)}<br><small>${it.d}</small></span>` +
       `<button class="cp-btn" data-eq="${i}">Equip</button></div>`;
 
     overlay.innerHTML = `<div class="cpanel">

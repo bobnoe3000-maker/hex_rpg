@@ -4,6 +4,7 @@ import { makeHero, makeEnemy } from "../src/models/units.js";
 import { derive, dodgeChance, critChance, mitigate } from "../src/systems/StatEngine.js";
 import { resolveAttack } from "../src/systems/CombatSim.js";
 import { canEquip, equip, unequip } from "../src/systems/Equipment.js";
+import { generate } from "../src/systems/LootGenerator.js";
 
 let fails = 0;
 const ok = (name, cond) => { console.log(`${cond ? "PASS" : "FAIL"}  ${name}`); if (!cond) fails++; };
@@ -58,6 +59,24 @@ ok("different seed diverges", seq(123) !== seq(777));
   ok("swapping returns the previous item to the bag", h.gear.weapon === sword2 && inv.includes(sword));
   ok("unequip clears the slot and returns to the bag",
     unequip(h, "weapon", inv) && h.gear.weapon === null && inv.includes(sword2));
+}
+
+// LootGenerator: deterministic, valid shape, class-respecting
+{
+  const g1 = generate(mb(42)), g2 = generate(mb(42));
+  ok("generator is deterministic for a seed", JSON.stringify(g1) === JSON.stringify(g2));
+  ok("generated item has a name, slot and description", !!g1.n && ["weapon","armor","trinket"].includes(g1.slot) && typeof g1.d === "string");
+  ok("generated item carries at least one stat", ["atk","def","hp","dodge","crit","aspd"].some(k => k in g1));
+  ok("upgradeLevel starts at 0", g1.upgradeLevel === 0);
+  // class restriction: only knight-usable weapons/items when we ask for knight
+  const r = mb(7); let offClass = 0;
+  for (let i = 0; i < 300; i++) { const it = generate(r, { classes: ["knight"] });
+    if (it.use !== "any" && it.use !== "knight") offClass++; }
+  ok("class-restricted drops are all usable by the party", offClass === 0);
+  // a vampiric item carries the lifesteal proc; procVal reads it
+  let sawProc = false; const r2 = mb(3);
+  for (let i = 0; i < 500 && !sawProc; i++) { const it = generate(r2); if (it.proc && it.proc.kind === "lifesteal") sawProc = true; }
+  ok("some items roll a proc (lifesteal exists in the pool)", sawProc);
 }
 
 console.log(fails ? `\n${fails} FAILED` : "\nall passed");
