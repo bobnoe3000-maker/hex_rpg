@@ -3,18 +3,19 @@ import { makeHeroPortrait } from './engine/portraits.js';
 import { buildFigure } from './engine/creatures.js';
 import { fxUpdateDraw, fxClear, fxText, fxSlash, fxBolt, fxDissolve, fxRing, fxBlock } from './engine/fx.js';
 import { GCOLS, GROWS, buildGameRoom, cx0g, cy0g, isBlocked } from './engine/dungeon.js';
-import { XP_NEXT, rollLoot, ROOMS_SPEC } from './engine/combat.js';
+import { XP_NEXT, rollDrop, ROOMS_SPEC } from './engine/combat.js';
 import { makeHero } from './models/units.js';
 import { HERO_BASES } from './data/classes.js';
 import { BAL } from './data/balance.js';
 import { derive } from './systems/StatEngine.js';
 import { resolveAttack } from './systems/CombatSim.js';
-/* ============ DP ENGINE :: game.js — Dungeon Pals glue (stat-based combat) ============ */
+import { openCharacter } from './ui/CharacterPanel.js';
+/* ============ DP ENGINE :: game.js — endless auto-battle loop ============ */
 "use strict";
 const cvG=document.getElementById("cv"), G=cvG.getContext("2d");
 const logEl=document.getElementById("log"), partyEl=document.getElementById("party"),
       overlay=document.getElementById("overlay"), btnStart=document.getElementById("btnStart"),
-      btnSpeed=document.getElementById("btnSpeed"),
+      btnNext=document.getElementById("btnNext"), btnSpeed=document.getElementById("btnSpeed"),
       logWrap=document.getElementById("logwrap"), logBar=document.getElementById("logbar"),
       logToggle=document.getElementById("logToggle");
 /* combat log: cycle min → mid → max → min */
@@ -24,9 +25,11 @@ function setLogState(st){ logWrap.dataset.s=st; logToggle.textContent=LOG_LABEL[
 logBar.onclick=()=>{ const i=LOG_STATES.indexOf(logWrap.dataset.s||"mid");
   setLogState(LOG_STATES[(i+1)%LOG_STATES.length]); };
 setLogState("mid");
-const state={ roomIdx:0, phase:"idle", room:null, units:[], t:0, speed:1, cleared:false, takenLoot:[] };
+/* phase: idle → fight ⇄ paused. inventory holds dropped loot; respawn/revive are timers. */
+const state={ roomIdx:0, phase:"idle", room:null, units:[], t:0, speed:1,
+  inventory:[], respawnAt:null, reviveAt:null };
 const party=[makeHero("knight",11),makeHero("mage",22),makeHero("cleric",33)];
-let combatRng=Math.random;  // reseeded deterministically at the start of each fight
+let combatRng=Math.random;  // reseeded deterministically when a fight starts / area changes
 const FIGCACHE={}, PORTCACHE={}, TILECACHE={};
 function figOf(u){
   const key=(u.cls||u.fig)+":"+u.figSeed;
@@ -110,14 +113,16 @@ function renderParty(){
   for(const h of party){
     const D=derive(h);
     const c=document.createElement("div"); c.className="card"+(h.alive?"":" dead");
+    c.style.cursor="pointer"; c.title="Tap to view stats & gear";
+    c.onclick=()=>openHero(h);
     const img=document.createElement("canvas"); img.width=img.height=96; img.className="pic";
     img.getContext("2d").drawImage(PORTS[h.cls],0,0,96,96);
-    const gear=Object.values(h.gear).filter(Boolean).map(i=>i.n.split(" ")[0]).join(", ")||"no gear";
+    const bag=Object.values(h.gear).filter(Boolean).length;
     const info=document.createElement("div");
     info.innerHTML=`<b>${h.name}</b> <span class="lvl">Lv${h.level}</span><br>
       <span style="opacity:.7">ATK ${D.atk} · DEF ${D.def}</span>
       <div class="bar"><i style="width:${clamp(h.hp/D.maxhp*100,0,100)}%"></i></div>
-      ${h.hp}/${D.maxhp}<div class="gear">${gear}</div>`;
+      ${h.hp}/${D.maxhp}<div class="gear">${bag} equipped · ⚙ gear</div>`;
     c.appendChild(img); c.appendChild(info); partyEl.appendChild(c);
   }
 }
@@ -129,29 +134,34 @@ function uyS(u){ const k=(u.moveT===undefined)?1:ease(u.moveT);
   const r=(u.rr===undefined?u.r:u.rr)+((u.r)-(u.rr===undefined?u.r:u.rr))*k;
   return cy0g(0)+r*T+T/2; }
 
-/* ---------- room + spawn ---------- */
-function loadRoom(){
-  const spec=ROOMS_SPEC[state.roomIdx];
-  state.room=buildGameRoom((Date.now()+state.roomIdx*7919)|0,spec);
-  state.units=[]; state.cleared=false; fxClear();
+/* ---------- room, party placement, waves ---------- */
+function placeParty(){
   const pcols=[2,4,6], prow=GROWS-2; // GROWS-1 is the south wall; GROWS-2 is floor
   party.forEach((h,i)=>{ if(h.hp<=0){h.hp=1;h.alive=true;}
     h.r=prow; h.c=pcols[i];
-    // ensure the spawn cell is clear floor (nudge up a row if a feature sits here)
     let guard=0; while((isBlocked(state.room,h.r,h.c)||state.units.some(u=>u.r===h.r&&u.c===h.c))&&guard++<10){
       h.r--; if(h.r<GROWS-3)h.r=GROWS-2, h.c=1+((h.c)%(GCOLS-2)); }
-    h.rr=h.r; h.cc=h.c; h.moveT=1;
-    h.next=0.5+0.2*i; state.units.push(h); });
-  spec.spawn().forEach((f,i)=>{ f.next=0.7+0.2*i;
+    h.rr=h.r; h.cc=h.c; h.moveT=1; h.next=state.t+0.5+0.2*i;
+    if(!state.units.includes(h)) state.units.push(h); });
+  party.forEach(figOf);
+}
+function spawnWave(){
+  const spec=ROOMS_SPEC[state.roomIdx];
+  spec.spawn().forEach((f,i)=>{ f.next=state.t+0.7+0.2*i;
     let guard=0; while((isBlocked(state.room,f.r,f.c)||state.units.some(u=>u.r===f.r&&u.c===f.c))&&guard++<20){
       f.c=1+((f.c)%(GCOLS-2)); if(guard%8===0)f.r=Math.min(GROWS-3,f.r+1); }
     f.rr=f.r; f.cc=f.c; f.moveT=1;
     state.units.push(f); figOf(f); });
-  party.forEach(figOf);
-  btnStart.textContent="Fight!";
-  btnStart.disabled=false; state.phase="idle"; state.t=0;
+}
+function loadRoom(){
+  const spec=ROOMS_SPEC[state.roomIdx];
+  state.room=buildGameRoom((Date.now()+state.roomIdx*7919)|0,spec);
+  state.units=[]; fxClear(); state.respawnAt=null; state.reviveAt=null;
+  placeParty(); spawnWave();
   log(`— <span class="sys">${spec.title.split("— ")[1]}</span> —`);
 }
+function seedBattle(){ combatRng=mulberry32((((state.room&&state.room.seed)||1)^0x9e3779b9)>>>0); }
+
 /* ---------- sim (continuous act-timer autobattle on the room grid) ---------- */
 function livingFoes(team){ return state.units.filter(u=>u.alive&&u.team!==team); }
 function distU(a,b){ return Math.abs(a.r-b.r)+Math.abs(a.c-b.c); }
@@ -194,7 +204,13 @@ function hurt(u,dmg,src){
     log(`💀 <b>${u.name}</b> falls!`, u.team===0?"crit":"sys");
     const f=figOf(u), S=u.boss?76:54;
     fxDissolve(f,uxS(u),uyS(u)+4,S,S,u.team===0?"#9ad1ff":"#c98a8a");
-    if(u.team===1&&src&&src.team===0) awardXP(u.xp);
+    if(u.team===1&&src&&src.team===0){
+      awardXP(u.xp);
+      const drop=rollDrop(combatRng,!!u.boss);
+      if(drop){ state.inventory.push(drop);
+        log(`🎁 <b>${u.name}</b> drops <span class="sys">${drop.n}</span> <span style="opacity:.6">→ bag (${state.inventory.length})</span>`);
+        fxText(uxS(u),uyS(u)-30,"+"+drop.n.split(" ")[0],"#ffd166"); }
+    }
   }
   if(u.team===0) renderParty();
 }
@@ -217,57 +233,55 @@ function act(u){
   if(distU(u,tg)<=derive(u).rng) attack(u,tg);
   else stepToward(u,tg);
 }
-/* ---------- loot & flow ---------- */
-function heroFor(item){ return item.use==="any"
-  ? party.slice().sort((a,b)=>Object.values(a.gear).filter(Boolean).length-Object.values(b.gear).filter(Boolean).length)[0]
-  : party.find(h=>h.cls===item.use); }
-function showLoot(){
-  const items=rollLoot(state.roomIdx,state.takenLoot);
-  overlay.innerHTML=`<h2>Loot!</h2><p>Choose one treasure.</p>`;
-  for(const it of items){
-    const h=heroFor(it);
-    const b=document.createElement("div"); b.className=`loot r-${it.r}`;
-    b.innerHTML=`<b>${it.n}<span class="tag">${it.r}</span></b>${it.d}<br><small>${it.slot} → ${h.name}</small>`;
-    b.onclick=()=>{ h.gear[it.slot]=it; state.takenLoot.push(it);
-      log(`🎁 <b>${h.name}</b> equips <span class="sys">${it.n}</span>`,"sys");
-      overlay.classList.remove("show"); renderParty(); doorPhase(); };
-    overlay.appendChild(b);
+/* wave clears -> schedule respawn; party wipes -> schedule revive (endless map) */
+function updateWaves(){
+  const heroesAlive=party.some(h=>h.alive);
+  const foesAlive=state.units.some(u=>u.team===1&&u.alive);
+  if(!heroesAlive){
+    if(state.reviveAt===null){ state.reviveAt=state.t+BAL.REVIVE_DELAY;
+      log(`☠️ <span class="crit">The party falls…</span> they'll regroup.`); }
+    return;
   }
-  overlay.classList.add("show");
-}
-function doorPhase(){
-  state.phase="door";
-  const spec=ROOMS_SPEC[state.roomIdx];
-  btnStart.textContent=(state.roomIdx>=ROOMS_SPEC.length-1)?"Ascend "+spec.doorLabel:"Enter "+spec.doorLabel;
-  btnStart.disabled=false;
-  log(`🚪 The way <span class="sys">${spec.doorLabel}</span> is open.`,"sys");
-}
-function nextRoom(){
-  state.roomIdx++;
-  if(state.roomIdx>=ROOMS_SPEC.length){ finale(true); return; }
-  loadRoom();
-}
-function finale(win){
-  state.phase="done";
-  overlay.innerHTML= win
-    ? `<h2>🏆 Dungeon Cleared!</h2><p>Ashwing is slain, the Emberdeep falls quiet, and three pals climb into daylight arguing about snacks.</p>`
-    : `<h2>☠️ Party Wiped</h2><p>The Emberdeep keeps what it kills. Roll new heroes and descend again.</p>`;
-  const b=document.createElement("button"); b.textContent="Play Again"; b.style.maxWidth="220px";
-  b.onclick=()=>location.reload();
-  overlay.appendChild(b); overlay.classList.add("show");
-}
-function checkEnd(){
-  if(state.phase!=="fight")return;
-  if(!party.some(h=>h.alive)){ finale(false); return; }
-  if(!state.units.some(u=>u.team===1&&u.alive)){
-    state.phase="loot"; state.cleared=true;
-    log(`✅ <span class="sys">Room cleared!</span>`);
+  if(!foesAlive && state.respawnAt===null){
+    state.respawnAt=state.t+BAL.RESPAWN_DELAY;
     for(const h of party) if(h.alive){ const mh=derive(h).maxhp;
-      h.hp=Math.min(mh,h.hp+Math.round(mh*BAL.ROOM_HEAL_FRAC)); }
+      h.hp=Math.min(mh,h.hp+Math.round(mh*BAL.WAVE_HEAL_FRAC)); }
     renderParty();
-    setTimeout(showLoot,700);
+    log(`✅ <span class="sys">Wave cleared.</span> Another approaches…`);
   }
 }
+/* ---------- controls & menus ---------- */
+function syncButtons(){
+  btnStart.textContent = state.phase==="idle" ? "Fight!" : state.phase==="fight" ? "Pause" : "Resume";
+  btnStart.disabled=false;
+  btnNext.disabled=false;
+}
+function openHero(h){
+  const back = state.phase==="fight" ? "fight" : "idle";
+  state.phase="paused"; syncButtons();
+  openCharacter(h, {
+    inventory: state.inventory,
+    portrait: PORTS[h.cls],
+    refresh: renderParty,
+    close: ()=>{ state.phase=back; syncButtons(); },
+  });
+}
+function nextArea(){
+  state.roomIdx=(state.roomIdx+1)%ROOMS_SPEC.length;
+  const wasFighting = state.phase!=="idle";
+  loadRoom(); seedBattle();
+  state.phase = wasFighting ? "fight" : "idle";
+  renderParty(); syncButtons();
+}
+btnStart.onclick=()=>{
+  if(state.phase==="idle"){ seedBattle(); state.phase="fight"; }
+  else if(state.phase==="fight"){ state.phase="paused"; }
+  else if(state.phase==="paused"){ state.phase="fight"; }
+  syncButtons();
+};
+btnNext.onclick=()=>{ if(state.phase!=="paused") nextArea(); };
+btnSpeed.onclick=()=>{ state.speed=state.speed===1?2:1; btnSpeed.textContent=`${state.speed}×`; };
+
 /* ---------- render ---------- */
 function drawUnit(u){
   if(!u.alive) return;
@@ -311,20 +325,15 @@ function render(dt){
   G.setTransform(2,0,0,2,0,0);
   G.drawImage(state.room.base,0,0,CW,CH);
   for(const p of state.room.parts) drawPartPx(G,p,state.t);
-  // door glow when open
-  if(state.cleared){
-    const dx=cx0g(state.room.door.c)+T/2, dy=cy0g(state.room.door.r)+T-6;
-    G.save(); G.globalAlpha=.4+.25*Math.sin(state.t*3);
-    const rg=G.createRadialGradient(dx,dy,2,dx,dy,26);
-    rg.addColorStop(0,"rgba(255,209,102,.8)"); rg.addColorStop(1,"rgba(255,209,102,0)");
-    G.fillStyle=rg; G.fillRect(dx-30,dy-34,60,44); G.restore();
-  }
   const sorted=[...state.units].sort((a,b)=>a.r-b.r||a.c-b.c);
   for(const u of sorted) drawUnit(u);
   fxUpdateDraw(G,dt);
   if(state.phase==="idle"){
     G.fillStyle="#e8dcc4"; G.font="bold 13px monospace"; G.textAlign="center";
     G.fillText("Press Fight! to begin",CW/2,CH-8);
+  } else if(state.phase==="paused"){
+    G.fillStyle="#e8dcc4"; G.font="bold 13px monospace"; G.textAlign="center";
+    G.fillText("Paused",CW/2,CH-8);
   }
 }
 /* ---------- main loop ---------- */
@@ -337,7 +346,14 @@ function loop(now){
       if(!u.alive)continue;
       if(state.t>=u.next){ act(u); u.next=state.t+BAL.BASE_INTERVAL/derive(u).aspd+combatRng()*BAL.ASPD_JITTER; }
     }
-    checkEnd();
+    updateWaves();
+    // endless map: respawn a fresh wave / revive a fallen party on their timers
+    if(state.respawnAt!==null && state.t>=state.respawnAt){ state.respawnAt=null; spawnWave(); }
+    if(state.reviveAt!==null && state.t>=state.reviveAt){ state.reviveAt=null;
+      for(const h of party){ h.alive=true; const mh=derive(h).maxhp; h.hp=Math.round(mh*BAL.REVIVE_HEAL_FRAC); }
+      renderParty(); log(`✨ <span class="heal">The party regroups and fights on.</span>`); }
+    // prune slain enemies so the unit list doesn't grow without bound over endless waves
+    state.units=state.units.filter(u=>u.team===0||u.alive);
   }
   // advance grid-slide interpolation for every unit
   for(const u of state.units){ if(u.moveT!==undefined&&u.moveT<1)
@@ -345,16 +361,7 @@ function loop(now){
   render(dt);
   requestAnimationFrame(loop);
 }
-btnStart.onclick=()=>{
-  if(state.phase==="idle"){
-    // deterministic per-battle rng seed (independent of the render/figure rng)
-    combatRng=mulberry32((((state.room&&state.room.seed)||1)^0x9e3779b9)>>>0);
-    state.phase="fight"; btnStart.disabled=true;
-  }
-  else if(state.phase==="door"){ btnStart.disabled=true; nextRoom(); }
-};
-btnSpeed.onclick=()=>{ state.speed=state.speed===1?2:1; btnSpeed.textContent=`${state.speed}×`; };
 log(`Welcome to <span class="sys">The Emberdeep</span>. Bram, Wren & Odo descend.`,"sys");
-log(`ATK vs DEF · dodge &amp; crit are rated vs level · loot after every room · doors lead deeper.`,"sys");
-loadRoom(); renderParty();
+log(`ATK vs DEF · loot drops from foes → your bag · <b>tap a hero</b> to equip · foes respawn · Area → goes deeper.`,"sys");
+loadRoom(); renderParty(); syncButtons();
 requestAnimationFrame(loop);

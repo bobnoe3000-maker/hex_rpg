@@ -1,4 +1,5 @@
 import { makeEnemy } from '../models/units.js';
+import { BAL } from '../data/balance.js';
 /* ============ CONTENT :: combat.js — loot pool, loot rolls, XP curve, room specs ============ */
 /* Combat *resolution* now lives in systems/CombatSim.js + StatEngine.js. This module is the
    d20-free content layer: what items exist, how loot is rolled, and how rooms are populated.
@@ -37,6 +38,18 @@ export function rollLoot(roomIdx, taken) {
   picks.push(take(roomIdx >= 1 ? "rare" : "common") || take("common"));
   picks.push(take("common") || take("rare"));
   return picks.filter(Boolean);
+}
+
+/* Roll a single item drop for a slain enemy (or null for no drop).
+   `rng` is a ()=>[0,1) so combat drops stay deterministic with the battle seed.
+   Rarer items fall less often via DROP_WEIGHT — no rarity tiers, just drop rates.
+   Returns a fresh clone so each drop is its own inventory instance. */
+export function rollDrop(rng, guaranteed) {
+  if (!guaranteed && rng() >= BAL.DROP_CHANCE) return null;
+  const weighted = [];
+  for (const it of ITEM_POOL) { const w = BAL.DROP_WEIGHT[it.r] || 1; for (let i = 0; i < w; i++) weighted.push(it); }
+  const base = weighted[Math.floor(rng() * weighted.length)];
+  return { ...base };
 }
 
 export const ROOMS_SPEC = [

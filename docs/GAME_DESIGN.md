@@ -208,6 +208,14 @@ Keep-level upgrades (unlock/boost services) are 🔶 future.
 ### 8.4 Skill Priority screen ✅ (Feature 3)
 Drag-to-order each hero's skill rotation; set per-skill conditions.
 
+### 8.5 Map loop — endless farm + optional advance ✅ (implemented)
+The battle map is a **continuous farm**, not a one-shot room clear:
+- **Stay as long as you like.** When a wave is cleared, a fresh wave respawns after a short delay — the fight never forces you onward.
+- **Loot drops into your bag mid-combat.** Slain foes have a drop chance (bosses always drop); items fall straight into a shared **inventory** (no more "pick 1 of 3" gate). Better materials/procs drop less often (§6.2).
+- **Tap a hero** to open a stats + gear panel; equipping/unequipping is done here and **pauses** the fight so you can theorycraft safely.
+- **Area →** advances to the next room (Rat Warrens → Bone Gallery → Ashwing's Hoard) when *you* choose; the world map (§8.3) generalizes this later.
+- **On a party wipe** the party currently **auto-revives** and fights on. The roguelite item-loss penalty (§7.1) activates once the **Bank** exists to hold death-safe valuables.
+
 ---
 
 ## 9. Multiplayer ✅ (async PvP first; local-first seam)

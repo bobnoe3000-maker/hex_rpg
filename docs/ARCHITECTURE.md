@@ -225,6 +225,8 @@ Each phase is independently shippable and leaves `main` runnable.
 
 Both carried tasks landed in Phase 1: the hero/foe schema is unified through `StatEngine.derive()` (no more `team===` branching in combat math), and the `partZ` wrapper was collapsed into `part()`.
 
+**Phase 2 in progress** — the endless-map loop is in: loot drops from kills into a shared inventory (`combat.js` `rollDrop`, drop-weighted, no tiers), `systems/Equipment.js` (equip/unequip, pure), and `ui/CharacterPanel.js` (tap-a-hero stats/gear modal). Still ahead in Phase 2: the full **prefix+material+gear-type** procedural generator (drops currently reuse the remapped item pool), a dedicated inventory screen, and item comparison.
+
 ---
 
 ## 7. Testing & Tooling
