@@ -30,9 +30,16 @@ We **replace the prototype's D&D d20 system** with a deterministic, stat-driven 
 | **HP** | `hp` | Health pool. Unit dies at 0. |
 | **Attack** | `atk` | Scales outgoing damage. |
 | **Defense** | `def` | Mitigates incoming damage (diminishing curve). |
-| **Dodge** | `dodge%` | Chance to fully avoid an incoming hit. |
-| **Crit** | `crit%` | Chance to land a **critical hit** for bonus damage (`× critMult`). |
+| **Dodge** | `dodge` | **Rating** for avoiding a hit. Effective chance is derived by contesting the rating against the attacker's level (§2.2). |
+| **Crit** | `crit` | **Rating** for landing a critical hit (`× critMult`). Effective chance is derived by contesting against the target's level (§2.2). |
 | **Attack Speed** | `aspd` | Governs how often the unit acts (action cadence). |
+
+**Dodge and Crit are ratings, not raw percentages.** Storing them as scores (contested against the opponent) — rather than flat % — is what keeps combat balanceable across the whole level/gear curve:
+- **No hard caps:** ratings stack without ever reaching a literal 100%; the derived chance soft-caps naturally via the formula.
+- **Level-relative:** the same rating yields high avoidance/crit vs weaker foes and low vs stronger ones, so high-level content self-balances instead of needing per-enemy % tuning.
+- **Clean gear rolls:** items grant integer amounts ("+12 Dodge") that always feel additive.
+- **One tuning knob:** a single curve constant per stat in `balance.js` retunes the whole game.
+This mirrors how **Defense** already works (`x/(x+…)` diminishing returns), so all three chance/mitigation stats share one consistent shape. The UI always shows the **derived effective %** against the current target.
 
 **Hidden / derived (not core-six, sourced from gear procs & skills):**
 - `critMult` (base ×1.5) — crit damage multiplier; raised by procs/skills.
@@ -46,14 +53,18 @@ We **replace the prototype's D&D d20 system** with a deterministic, stat-driven 
 
 ### 2.3 Damage resolution (per hit)
 ```
-1. Dodge check:   rand() < target.dodge%       → AVOIDED (0 dmg, "dodge")
+0. Derive chances from ratings (contested against opponent level):
+     dodgeChance = dodge / (dodge + K_dodge * attacker.level)
+     critChance  = crit  / (crit  + K_crit  * target.level)
+     (both clamped to a soft floor/cap, e.g. 0%..75%)
+1. Dodge check:   rand() < dodgeChance          → AVOIDED (0 dmg, "dodge")
 2. Base damage:   dmg = skill.base * atkScale(attacker.atk)
-3. Crit check:    rand() < attacker.crit%       → dmg *= critMult   (crit)
+3. Crit check:    rand() < critChance           → dmg *= critMult   (crit)
 4. Mitigation:    dmg *= 100 / (100 + target.def)   // smooth diminishing returns
 5. Floor:         dmg = max(1, round(dmg))
 6. Apply procs (lifesteal, burn, etc.)
 ```
-Constants (`atkScale`, `critMult`, mitigation curve) live in `data/balance.js` — all tunable, no magic numbers in code. 🔶 Exact constants are placeholders pending balance passes.
+All tunables (`atkScale`, `critMult`, `K_dodge`, `K_crit`, dodge/crit clamps, mitigation curve) live in `data/balance.js` — no magic numbers in code. Contesting dodge against the *attacker's* level and crit against the *target's* level is what makes both scale correctly with progression. 🔶 Exact constants pending balance passes; the opposing term can later become an explicit `accuracy`/`resilience` stat instead of raw level if fights need finer control.
 
 ### 2.4 Determinism
 All randomness flows through a **seeded RNG** (mulberry32, already in the prototype). Same seed + same inputs ⇒ identical battle. This is mandatory for **fair async PvP** and **server-side verification** later.
@@ -131,7 +142,7 @@ Every item is composed of **Prefix + Material + Gear Type + Upgrade Level**, and
   - *Wearable types:* helm, chest, gloves, boots, cloak, ring, amulet, shield.
 - **Material** — defines **base stats** and rarity weighting; carries one stat bonus and may carry a **drawback**.
   - *Weapon materials:* iron, steel, meteoric, emberglass… (e.g. *meteoric*: +ATK, −ASPD).
-  - *Wearable materials:* cotton, silk, leather, dragonhide… (e.g. *dragonhide*: +DEF, +GRIT).
+  - *Wearable materials:* cotton, silk, leather, dragonhide… (e.g. *dragonhide*: +DEF, +HP).
 - **Prefix** — defines a **proc** (special effect) + one stat bonus + rarity weighting. `normal` = no proc.
   - e.g. *fiery* (burn DoT), *icy* (slow/chill), *vampiric* (lifesteal), *keen* (+crit).
 

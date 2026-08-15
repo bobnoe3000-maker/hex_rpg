@@ -66,7 +66,8 @@ systems/│ pure game logic (no DOM,   │   │  engine/     │  ← canvas ar
   /data/                     — PURE DATA (content & tunables)
     balance.js               — all formula constants, curves, drop/forge odds
     classes.js               — fighter/mage/rogue/cleric base stats + growth + gear/skill pools
-    stats.js                 — the six stat defs (hp/atk/def/dodge/crit/aspd) + derived
+    stats.js                 — six stat defs (hp/atk/def/dodge/crit/aspd); dodge & crit
+                               are RATINGS → effective % derived vs opponent level
     skills.js                — skill catalog (target rules, conditions, effects, upgrades)
     skillTrees.js            — per-class branching trees + capstones (future depth)
     xpCurve.js               — level/XP formulas
@@ -150,7 +151,9 @@ Everything is plain data. Behavior lives in `systems/`. `SaveService` persists e
 ### 4.2 Deterministic sim entry points
 ```
 CombatSim.run({ partyA, partyB, dungeon?, seed }) -> { winner, log[], stateTimeline }
-StatEngine.derive(character) -> { hp, atk, def, dodge, grit, aspd, ...hidden }
+StatEngine.derive(character) -> { hp, atk, def, dodge, crit, aspd, ...hidden }   // dodge/crit are ratings
+StatEngine.dodgeChance(defender, attacker) -> 0..1   // rating contested vs attacker level
+StatEngine.critChance(attacker, target)    -> 0..1   // rating contested vs target level
 LootGenerator.roll({ tier, classHint, seed }) -> Item
 OfflineSim.simulate({ state, elapsedMs, cap }) -> { rewards, log }
 PvPSim.resolve({ snapshotA, snapshotB, seed }) -> result   // == CombatSim.run
