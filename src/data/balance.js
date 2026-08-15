@@ -34,8 +34,17 @@ export const BAL = {
   GEM_CHANCE: 0.06,       // chance a normal enemy drops a runic gem
   GEM_CHANCE_BOSS: 0.90,  // bosses almost always drop one
 
+  // starting purse: enough to hire two level-1 companions (+ a reroll)
+  STARTING_SILVER: 130,
+
   // Tavern (hiring companions; party caps at 4 = main + 3)
-  TAVERN: { RECRUITS: 3, HIRE_COST: 60, REFRESH_COST: 10 },
+  // recruits scale to the main hero's level; hire = HIRE_BASE + level*HIRE_PER_LEVEL
+  TAVERN: { RECRUITS: 3, HIRE_BASE: 40, HIRE_PER_LEVEL: 20, REFRESH_COST: 10 },
+
+  // Temple: resurrect a fallen companion; fee = RESURRECT_BASE + level*RESURRECT_PER_LEVEL
+  TEMPLE: { RESURRECT_BASE: 30, RESURRECT_PER_LEVEL: 20 },
+
+  WIPE_DELAY: 1.6,        // seconds after a full wipe before you're pulled back to the Keep
 
   // Shop / economy (silver)
   SHOP: {

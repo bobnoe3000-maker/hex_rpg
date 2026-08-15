@@ -52,16 +52,25 @@ export function makeHero(cls, opts = {}) {
   };
 }
 
-/* A randomly-generated companion (class, name, rolled stats & portrait, starter gear). */
-export function makeCompanion(seed) {
+/* Grow a hero to `level` by applying its class growth (level-ups). Mutates and refills HP. */
+export function growTo(hero, level) {
+  const gr = HERO_BASES[hero.cls].growth;
+  while (hero.level < level) {
+    hero.level++;
+    hero.atk += gr.atk; hero.def += gr.def; hero.dodge += gr.dodge; hero.crit += gr.crit; hero.maxhp += gr.hp;
+  }
+  hero.hp = hero.maxhp;
+  return hero;
+}
+
+/* A randomly-generated companion (class, name, rolled stats & portrait, starter gear),
+   grown to `level` so recruits can scale with the player. */
+export function makeCompanion(seed, level = 1) {
   const r = mulberry32((seed >>> 0) || 1);
   const cls = CLASSES[Math.floor(r() * CLASSES.length)];
   const name = COMPANION_NAMES[Math.floor(r() * COMPANION_NAMES.length)];
-  return makeHero(cls, {
-    name,
-    statSeed: (seed * 13 + 1) >>> 0,
-    portraitSeed: (seed * 7 + 5) >>> 0,
-  });
+  const h = makeHero(cls, { name, statSeed: (seed * 13 + 1) >>> 0, portraitSeed: (seed * 7 + 5) >>> 0 });
+  return growTo(h, Math.max(1, level));
 }
 
 let _figCounter = 0; // deterministic-ish figure variety without Math.random

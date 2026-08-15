@@ -82,6 +82,7 @@ export function openTown(ctx) {
     <div class="tw-sec">Services</div>
     <div class="tw-svc">
       <button class="tw-btn" data-tavern><span class="ic">${iconImg("tankard",20)}</span><span>Tavern<small>Hire pals to fill your party (up to 4)</small></span></button>
+      <button class="tw-btn" data-temple><span class="ic">${iconImg("temple",20)}</span><span>Temple<small>Restore fallen companions (fee scales with level)</small></span></button>
       <button class="tw-btn" data-shop><span class="ic">${iconImg("pouch",20)}</span><span>Shop<small>Buy &amp; sell gear · trade silver for runic gems</small></span></button>
       <button class="tw-btn" disabled><span class="ic">${iconImg("vault",20)}</span><span>Bank<small>Coming soon — a death-safe vault</small></span></button>
       <button class="tw-btn primary" data-enter>${iconImg("sword",16)} Descend into the Emberdeep</button>
@@ -94,6 +95,7 @@ export function openTown(ctx) {
   });
   el.querySelectorAll("[data-hero]").forEach(c => c.onclick = () => ctx.openHero(ctx.party[+c.getAttribute("data-hero")]));
   el.querySelector("[data-tavern]").onclick = () => ctx.openTavern();
+  el.querySelector("[data-temple]").onclick = () => ctx.openTemple();
   el.querySelector("[data-shop]").onclick = () => ctx.openShop();
   el.querySelector("[data-enter]").onclick = () => ctx.enterDungeon();
 }

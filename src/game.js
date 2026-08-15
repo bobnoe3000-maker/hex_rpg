@@ -16,6 +16,7 @@ import { openCharacter } from './ui/CharacterPanel.js';
 import { openTown } from './ui/TownScreen.js';
 import { openShop } from './ui/ShopScreen.js';
 import { openTavern } from './ui/TavernScreen.js';
+import { openTemple } from './ui/TempleScreen.js';
 import { startOnboarding } from './ui/Onboarding.js';
 import { makeCompanion } from './models/units.js';
 /* ============ DP ENGINE :: game.js — endless auto-battle loop ============ */
@@ -36,7 +37,7 @@ logBar.onclick=()=>{ const i=LOG_STATES.indexOf(logWrap.dataset.s||"mid");
 setLogState("mid");
 /* phase: idle → fight ⇄ paused. inventory holds dropped loot; respawn/revive are timers. */
 const state={ roomIdx:0, scene:"town", phase:"idle", room:null, units:[], t:0, speed:1,
-  inventory:[], gems:0, silver:0, shopStock:[], recruits:[], respawnAt:null, reviveAt:null };
+  inventory:[], gems:0, silver:0, shopStock:[], recruits:[], respawnAt:null, wipeAt:null };
 let party=[];               // filled by onboarding: [main, ...hired companions] (max 4)
 const partyClasses=()=>party.length?[...new Set(party.map(h=>h.cls))]:["knight","mage","cleric"];
 let combatRng=Math.random;  // reseeded deterministically when a fight starts / area changes
@@ -155,7 +156,7 @@ function uyS(u){ const k=(u.moveT===undefined)?1:ease(u.moveT);
 /* ---------- room, party placement, waves ---------- */
 function placeParty(){
   const pcols=[2,5,3,6], prow=GROWS-2; // spread up to 4 heroes; GROWS-2 is the floor row
-  party.forEach((h,i)=>{ if(h.hp<=0){h.hp=1;h.alive=true;}
+  party.forEach((h,i)=>{ if(!h.alive) return; // fallen companions sit out until the Temple revives them
     h.r=prow; h.c=pcols[i];
     let guard=0; while((isBlocked(state.room,h.r,h.c)||state.units.some(u=>u.r===h.r&&u.c===h.c))&&guard++<10){
       h.r--; if(h.r<GROWS-3)h.r=GROWS-2, h.c=1+((h.c)%(GCOLS-2)); }
@@ -174,7 +175,7 @@ function spawnWave(){
 function loadRoom(){
   const spec=ROOMS_SPEC[state.roomIdx];
   state.room=buildGameRoom((Date.now()+state.roomIdx*7919)|0,spec);
-  state.units=[]; fxClear(); state.respawnAt=null; state.reviveAt=null;
+  state.units=[]; fxClear(); state.respawnAt=null; state.wipeAt=null;
   placeParty(); spawnWave();
   log(`— <span class="sys">${spec.title.split("— ")[1]}</span> —`);
 }
@@ -267,8 +268,8 @@ function updateWaves(){
   const heroesAlive=party.some(h=>h.alive);
   const foesAlive=state.units.some(u=>u.team===1&&u.alive);
   if(!heroesAlive){
-    if(state.reviveAt===null){ state.reviveAt=state.t+BAL.REVIVE_DELAY;
-      log(`${iconImg("skull",14)} <span class="crit">The party falls…</span> they'll regroup.`); }
+    if(state.wipeAt===null){ state.wipeAt=state.t+BAL.WIPE_DELAY;
+      log(`${iconImg("skull",14)} <span class="crit">The party falls…</span> retreating to the Keep.`); }
     return;
   }
   if(!foesAlive && state.respawnAt===null){
@@ -315,7 +316,14 @@ function openHero(h){
   });
 }
 /* ---------- scenes: town hub ⇄ dungeon ---------- */
-function enterTown(){ state.scene="town"; townEl.classList.add("show"); openTownScreen(); }
+function enterTown(){
+  state.scene="town"; townEl.classList.add("show");
+  // the main hero always wakes at the Keep, free of charge
+  const main=party[0];
+  if(main && !main.alive){ main.alive=true; main.hp=Math.round(derive(main).maxhp*BAL.REVIVE_HEAL_FRAC);
+    renderParty(); log(`${iconImg("spark",14)} <span class="heal">You awaken at the Keep, battered but breathing.</span>`,"sys"); }
+  openTownScreen();
+}
 function enterDungeon(){
   state.scene="dungeon"; townEl.classList.remove("show");
   if(state.phase==="idle") seedBattle();
@@ -323,29 +331,46 @@ function enterDungeon(){
 }
 function openTownScreen(){
   openTown({ silver:()=>state.silver, gems:()=>state.gems, party, portrait:h=>heroPortrait(h),
-    openHero, openShop:openShopScreen, openTavern:openTavernScreen, enterDungeon });
+    openHero, openShop:openShopScreen, openTavern:openTavernScreen, openTemple:openTempleScreen, enterDungeon });
 }
-/* ---------- tavern: hire companions ---------- */
+/* ---------- tavern: hire companions (scale to the main hero's level) ---------- */
+const mainLevel=()=>party[0]?party[0].level:1;
+const hireCostFor=h=>BAL.TAVERN.HIRE_BASE + h.level*BAL.TAVERN.HIRE_PER_LEVEL;
 function refreshRecruits(free){
   const cost=free?0:BAL.TAVERN.REFRESH_COST;
   if(state.silver<cost) return false;
   state.silver-=cost;
-  state.recruits=Array.from({length:BAL.TAVERN.RECRUITS},()=>makeCompanion((Math.random()*1e9)>>>0));
+  state.recruits=Array.from({length:BAL.TAVERN.RECRUITS},()=>makeCompanion((Math.random()*1e9)>>>0, mainLevel()));
   updateHud(); return true;
 }
 function hireCompanion(recruit){
-  if(party.length>=4 || state.silver<BAL.TAVERN.HIRE_COST) return false;
+  const cost=hireCostFor(recruit);
+  if(party.length>=4 || state.silver<cost) return false;
   const i=state.recruits.indexOf(recruit); if(i<0) return false;
-  state.silver-=BAL.TAVERN.HIRE_COST; state.recruits.splice(i,1); party.push(recruit);
+  state.silver-=cost; state.recruits.splice(i,1); party.push(recruit);
   renderParty(); updateHud();
-  log(`${iconImg("tankard",14)} <b>${recruit.name}</b> the ${recruit.cls} joins the party!`,"sys");
+  log(`${iconImg("tankard",14)} <b>${recruit.name}</b> the ${recruit.cls} (Lv ${recruit.level}) joins the party!`,"sys");
   return true;
 }
 function openTavernScreen(){
   if(!state.recruits.length) refreshRecruits(true); // first visit fills the tavern for free
   openTavern({ silver:()=>state.silver, party:()=>party, recruits:()=>state.recruits,
-    hireCost:BAL.TAVERN.HIRE_COST, refreshCost:BAL.TAVERN.REFRESH_COST,
+    hireCost:hireCostFor, refreshCost:BAL.TAVERN.REFRESH_COST,
     hire:hireCompanion, refresh:()=>refreshRecruits(false), portrait:h=>heroPortrait(h), back:openTownScreen });
+}
+/* ---------- temple: resurrect fallen companions (fee scales with level) ---------- */
+const resurrectFee=h=>BAL.TEMPLE.RESURRECT_BASE + h.level*BAL.TEMPLE.RESURRECT_PER_LEVEL;
+function resurrectHero(h){
+  const fee=resurrectFee(h);
+  if(h.alive || state.silver<fee) return false;
+  state.silver-=fee; h.alive=true; h.hp=derive(h).maxhp;
+  renderParty(); updateHud();
+  log(`${iconImg("temple",14)} <b>${h.name}</b> is restored to life.`,"sys");
+  return true;
+}
+function openTempleScreen(){
+  openTemple({ silver:()=>state.silver, party:()=>party, fee:resurrectFee,
+    resurrect:resurrectHero, portrait:h=>heroPortrait(h), back:openTownScreen });
 }
 function rerollStock(free){
   const cost=free?0:BAL.SHOP.REROLL_COST;
@@ -461,13 +486,12 @@ function loop(now){
       if(state.t>=u.next){ act(u); u.next=state.t+BAL.BASE_INTERVAL/derive(u).aspd+combatRng()*BAL.ASPD_JITTER; }
     }
     updateWaves();
-    // endless map: respawn a fresh wave / revive a fallen party on their timers
+    // endless map: respawn a fresh wave on its timer
     if(state.respawnAt!==null && state.t>=state.respawnAt){ state.respawnAt=null; spawnWave(); }
-    if(state.reviveAt!==null && state.t>=state.reviveAt){ state.reviveAt=null;
-      for(const h of party){ h.alive=true; const mh=derive(h).maxhp; h.hp=Math.round(mh*BAL.REVIVE_HEAL_FRAC); }
-      renderParty(); log(`${iconImg("spark",14)} <span class="heal">The party regroups and fights on.</span>`); }
-    // prune slain enemies so the unit list doesn't grow without bound over endless waves
-    state.units=state.units.filter(u=>u.team===0||u.alive);
+    // full wipe: pull back to the Keep (main revives free there; fallen pals need the Temple)
+    if(state.wipeAt!==null && state.t>=state.wipeAt){ state.wipeAt=null; enterTown(); }
+    // prune slain units so the list doesn't grow without bound over endless waves
+    state.units=state.units.filter(u=>u.alive);
   }
   // advance grid-slide interpolation for every unit
   for(const u of state.units){ if(u.moveT!==undefined&&u.moveT<1)
@@ -478,8 +502,9 @@ function loop(now){
 /* boot: splash → login → create the main character, then open the Keep */
 startOnboarding(hero=>{
   party=[hero];
+  state.silver=BAL.STARTING_SILVER;   // enough to hire two companions at the Tavern
   log(`Welcome to <span class="sys">The Emberdeep</span>, <b>${hero.name}</b> the ${hero.cls}.`,"sys");
-  log(`Hire pals &amp; gear up at the Keep, then <b>Descend</b>. Loot &amp; silver drop from foes; the house button returns home.`,"sys");
+  log(`Hire two pals at the Tavern, gear up, then <b>Descend</b>. Fallen pals can be restored at the Temple.`,"sys");
   loadRoom(); renderParty(); syncButtons(); updateHud();
   enterTown();          // open the hub, not straight into a fight
   requestAnimationFrame(loop);

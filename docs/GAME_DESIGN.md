@@ -166,7 +166,7 @@ There are **no labeled rarity tiers** (no common/rare/epic/legendary). Loot is a
 ## 7. Party & Companions ✅ (main + up to 3)
 
 - **Party = 4 slots:** the player's **main hero** + up to **3 hired companions**. (Feature 2.)
-- **Companions** are **randomly generated** (class, name, rolled stats, rolled portrait, starter gear) — **implemented** via the **Tavern** service (`ui/TavernScreen.js`, `models/makeCompanion`): hire for silver, refresh the recruits, party caps at 4 (main + 3).
+- **Companions** are **randomly generated** (class, name, rolled stats, rolled portrait, starter gear) — **implemented** via the **Tavern** service (`ui/TavernScreen.js`, `models/makeCompanion`): hire for silver, refresh the recruits, party caps at 4 (main + 3). The player **starts with silver to hire two** (`BAL.STARTING_SILVER`). Recruits **scale to the main hero's level**, and the **hire fee scales with recruit level** (`HIRE_BASE + level*HIRE_PER_LEVEL`), so higher-level pals cost more as you grow.
 - Companions **earn XP and loot**, are **equippable**, and the player chooses **which of their skills to upgrade**. (Feature 2.)
 - Heroes are **not permanently deleted**, but death carries a real penalty (§7.1). A **roster cap** limits benched companions (expandable — monetization hook).
 
@@ -177,6 +177,8 @@ Both the main hero and companions **can die**. A **party wipe** ends the run wit
 - **Safe:** anything in the **Bank** — items and silver — survives. Banking valuables before a risky delve becomes a core strategic decision, and gives the Bank a real purpose.
 
 Individually downed heroes in a fight the party still **wins** are revived at run's end with **no loss** — only a **full party wipe** strips carried items. This turns each dungeon into a risk/reward push: press deeper for better drops, or bank your haul and retreat.
+
+**Current model (pre-Bank):** on a party wipe you're sent back to **the Keep**. The **main hero auto-revives for free** (partial HP — *"You awaken at the Keep"*), but **fallen companions stay dead** until you pay to raise them at the **Temple** (`ui/TempleScreen.js`). The **resurrection fee scales with the companion's level** (`BAL.TEMPLE: RESURRECT_BASE + level*RESURRECT_PER_LEVEL`), so keeping a high-level pal alive is a real silver cost. The item-loss penalty (§7.1, above) activates once the **Bank** exists to hold death-safe valuables.
 
 🔶 **Open:** on a wipe, does the party keep **silver carried on hand**, or only banked silver? *Default assumption: on-hand silver is kept — only carried **items** are lost.*
 
@@ -218,7 +220,7 @@ The battle map is a **continuous farm**, not a one-shot room clear:
 - **Loot drops into your bag mid-combat.** Slain foes have a drop chance (bosses always drop); items fall straight into a shared **inventory** (no more "pick 1 of 3" gate). Better materials/procs drop less often (§6.2).
 - **Tap a hero** to open a stats + gear panel; equipping/unequipping is done here and **pauses** the fight so you can theorycraft safely.
 - **Area →** advances to the next room (Rat Warrens → Bone Gallery → Ashwing's Hoard) when *you* choose; the world map (§8.3) generalizes this later.
-- **On a party wipe** the party currently **auto-revives** and fights on. The roguelite item-loss penalty (§7.1) activates once the **Bank** exists to hold death-safe valuables.
+- **On a party wipe** you're returned to **the Keep**: the **main hero auto-revives for free** at partial HP, while **fallen companions stay dead** until raised at the **Temple** for a level-scaled fee (§7.1). The roguelite item-loss penalty (§7.1) activates once the **Bank** exists to hold death-safe valuables.
 
 ---
 

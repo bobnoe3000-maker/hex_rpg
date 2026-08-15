@@ -17,13 +17,13 @@ export function openTavern(ctx) {
   function render() {
     const silver = ctx.silver(), full = ctx.party().length >= CAP, recruits = ctx.recruits();
     const row = (h, i) => {
-      const D = derive(h);
+      const D = derive(h), cost = ctx.hireCost(h);
       return `<div class="shop-row">
         <canvas width="96" height="96" style="width:42px;height:42px;border-radius:8px;border:1px solid #6e5a2a;flex:0 0 auto"></canvas>
-        <span class="it"><b style="color:var(--gold)">${h.name}</b> · ${h.cls}<br>
+        <span class="it"><b style="color:var(--gold)">${h.name}</b> · ${h.cls} · Lv ${h.level}<br>
           <small>HP ${D.maxhp} · ATK ${D.atk} · DEF ${D.def} · Dodge ${D.dodge} · Crit ${D.crit}</small></span>
-        <span class="price">${iconImg("coin",12)} ${ctx.hireCost}</span>
-        <button class="shop-btn" data-hire="${i}" ${(silver < ctx.hireCost || full) ? "disabled" : ""}>Hire</button>
+        <span class="price">${iconImg("coin",12)} ${cost}</span>
+        <button class="shop-btn" data-hire="${i}" ${(silver < cost || full) ? "disabled" : ""}>Hire</button>
       </div>`;
     };
 

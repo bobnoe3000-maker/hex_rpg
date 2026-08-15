@@ -1,6 +1,6 @@
 /* Headless regression tests for the pure combat + equipment layers (no DOM, no deps).
    Run: node tests/combat.test.mjs   — exits non-zero on failure. */
-import { makeHero, makeEnemy, makeCompanion, rollStats } from "../src/models/units.js";
+import { makeHero, makeEnemy, makeCompanion, rollStats, growTo } from "../src/models/units.js";
 import { derive, dodgeChance, critChance, mitigate } from "../src/systems/StatEngine.js";
 import { resolveAttack } from "../src/systems/CombatSim.js";
 import { canEquip, equip, unequip, isUpgrade, itemScore } from "../src/systems/Equipment.js";
@@ -140,6 +140,16 @@ ok("different seed diverges", seq(123) !== seq(777));
   ok("companions are deterministic per seed", comp.name === comp2.name && comp.cls === comp2.cls);
   ok("companion has a class, name, stats and starter gear",
      ["knight","mage","cleric"].includes(comp.cls) && !!comp.name && comp.gear.boots && comp.team === 0);
+}
+
+// Companion scaling: growTo raises level & stats; makeCompanion(seed, level) scales
+{
+  const c1 = makeCompanion(2024, 1), c3 = makeCompanion(2024, 3);
+  ok("same seed + level is deterministic", JSON.stringify(makeCompanion(2024,3)) === JSON.stringify(c3));
+  ok("higher-level companion is the same identity, stronger", c3.cls === c1.cls && c3.name === c1.name && c3.level === 3 && c3.maxhp > c1.maxhp && c3.atk >= c1.atk);
+  const h = makeHero("knight", { statSeed: 1 }); const hp0 = h.maxhp;
+  growTo(h, 4);
+  ok("growTo lifts level and HP", h.level === 4 && h.maxhp > hp0 && h.hp === h.maxhp);
 }
 
 console.log(fails ? `\n${fails} FAILED` : "\nall passed");

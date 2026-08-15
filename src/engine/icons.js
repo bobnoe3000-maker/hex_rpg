@@ -116,6 +116,12 @@ const DRAW = {
   },
   chevron(g) { line(g, [[6, 15], [12, 9], [18, 15]], 2.6, "#7ee787"); },
   check(g) { line(g, [[4, 13], [10, 19], [20, 5]], 2.8, "#7ee787"); },
+  temple(g) { // resurrection shrine: pediment on pillars
+    poly(g, [[3, 9], [12, 3], [21, 9]], shade(GOLD, .62)); inkPoly(g, [[3, 9], [12, 3], [21, 9]], 1.4);
+    g.fillStyle = shade(BONE, .92); for (const x of [5, 11, 16]) g.fillRect(x, 9, 3, 10);
+    for (const x of [5, 11, 16]) inkPath(g, gg => gg.rect(x, 9, 3, 10), 1, INK);
+    g.fillStyle = shade(GOLD, .5); g.fillRect(4, 19, 16, 2.4); inkPath(g, gg => gg.rect(4, 19, 16, 2.4), 1.3, INK);
+  },
 };
 
 const CANVAS = {}, URL = {};
