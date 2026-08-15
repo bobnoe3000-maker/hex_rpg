@@ -5,6 +5,7 @@ import { derive, dodgeChance, critChance, mitigate } from "../src/systems/StatEn
 import { resolveAttack } from "../src/systems/CombatSim.js";
 import { canEquip, equip, unequip } from "../src/systems/Equipment.js";
 import { generate } from "../src/systems/LootGenerator.js";
+import { upgrade, canUpgrade, primaryStat } from "../src/systems/ForgeSystem.js";
 
 let fails = 0;
 const ok = (name, cond) => { console.log(`${cond ? "PASS" : "FAIL"}  ${name}`); if (!cond) fails++; };
@@ -77,6 +78,29 @@ ok("different seed diverges", seq(123) !== seq(777));
   let sawProc = false; const r2 = mb(3);
   for (let i = 0; i < 500 && !sawProc; i++) { const it = generate(r2); if (it.proc && it.proc.kind === "lifesteal") sawProc = true; }
   ok("some items roll a proc (lifesteal exists in the pool)", sawProc);
+}
+
+// ForgeSystem: success raises stat+level, determinism, max cap, destroy path
+{
+  const mk = () => ({ n: "Iron Sword", slot: "weapon", use: "knight", primary: "atk", atk: 3, upgradeLevel: 0 });
+  // rng that always succeeds (returns 0 < any success chance)
+  const always = () => 0;
+  const it = mk();
+  const r = upgrade(it, always);
+  ok("successful upgrade raises level and primary stat", r.outcome === "success" && it.upgradeLevel === 1 && it.atk === 4);
+  // determinism: same item + same rng stream -> same outcome
+  const seq = seed => { const rr = mb(seed); const x = mk(); const outs = []; for (let i = 0; i < 6; i++) outs.push(upgrade(x, rr).outcome + ":" + x.upgradeLevel); return outs.join("|"); };
+  ok("forge is deterministic for a seed", seq(9) === seq(9));
+  // rng that always fails -> never success; may destroy at higher levels
+  const it2 = mk(); it2.upgradeLevel = 5;
+  const rFail = () => 0.999; // above any success chance
+  const r2 = upgrade(it2, rFail);
+  ok("failed upgrade does not raise the stat", r2.outcome !== "success" && it2.atk === 3);
+  // max level guard
+  const it3 = mk(); it3.upgradeLevel = 99;
+  ok("cannot upgrade past max", !canUpgrade(it3) && upgrade(it3, always).outcome === "max");
+  // primaryStat fallback picks the biggest stat when none stored
+  ok("primaryStat falls back to the largest stat", primaryStat({ def: 8, atk: 2, upgradeLevel: 0 }) === "def");
 }
 
 console.log(fails ? `\n${fails} FAILED` : "\nall passed");

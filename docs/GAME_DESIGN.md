@@ -154,10 +154,11 @@ Item's total stats = prefix bonus + material bonus + gear-type bonus + upgrade b
 ### 6.2 No rarity tiers — quality is emergent ✅
 There are **no labeled rarity tiers** (no common/rare/epic/legendary). Loot is a **random drop**: each item is an independent roll of prefix + material + gear type. **Better materials and stronger procs simply drop less often**, so a powerful item is one where scarce components happened to roll together. An item's power reads directly from its **components + upgrade level** (`+1`, `+2`, … via runic gems, §6.3) — not from a tier badge. Drop weights live in the component tables / `data/lootTables.js`; changing a weight changes how often that component appears. (UI may still tint an item by its best component for readability, but that's cosmetic, not a mechanical tier.)
 
-### 6.3 Forge — gem upgrades ✅ (Feature 10)
-- **Runic gems** are rare drops.
-- At the **Forge**, apply a gem to attempt **+1 to the item's primary stat** (raises Upgrade Level).
-- **Diminishing success chance** as level rises; on failure, a **chance of destruction** (or downgrade). All success/destruction odds are data-driven per level in `data/balance.js`.
+### 6.3 Forge — gem upgrades ✅ (Feature 10) — implemented
+- **Runic gems** are rare drops (`BAL.GEM_CHANCE`, bosses almost always drop one).
+- Spend a gem to attempt **+1 to the item's primary stat** (raises `upgradeLevel`; name shows `+N`).
+- **Diminishing success** as level rises; on failure, a growing **chance the item shatters** — all odds per level in `data/balance.js` (`FORGE.SUCCESS` / `FORGE.DESTROY` / `FORGE.STEP`). Logic in `systems/ForgeSystem.js` (pure).
+- Surfaced in the character/gear panel for now (🔨 on any gear item); moves into a dedicated **Forge** service when the town hub lands (Phase 4).
 
 ---
 

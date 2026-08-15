@@ -25,4 +25,18 @@ export const BAL = {
   REVIVE_DELAY: 2.2,      // seconds after a wipe before the party revives
   DROP_CHANCE: 0.30,      // chance a normal enemy drops an item on death (bosses always drop)
   // (per-component drop weights live in data/items/*; rarer components fall less often)
+
+  // runic gems (the Forge currency)
+  GEM_CHANCE: 0.06,       // chance a normal enemy drops a runic gem
+  GEM_CHANCE_BOSS: 0.90,  // bosses almost always drop one
+
+  // Forge: spend a gem to attempt +1 to an item's primary stat.
+  // SUCCESS[level] falls as the item's upgradeLevel rises; on failure, DESTROY[level]
+  // is the chance the item shatters (else the attempt just fizzles). Data-driven per level.
+  FORGE: {
+    MAX_LEVEL: 10,
+    SUCCESS: [0.95, 0.88, 0.80, 0.70, 0.60, 0.50, 0.42, 0.34, 0.27, 0.20],
+    DESTROY: [0.00, 0.00, 0.05, 0.10, 0.16, 0.22, 0.28, 0.34, 0.40, 0.46],
+    STEP: { atk: 1, def: 2, hp: 4, dodge: 2, crit: 2, aspd: 0.05 }, // stat gained per +1
+  },
 };

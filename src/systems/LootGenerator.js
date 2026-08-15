@@ -52,7 +52,7 @@ export function generate(rng, opts = {}) {
   const grade = minW <= 1 ? "epic" : minW <= 2 ? "rare" : minW <= 3 ? "fine" : "plain";
 
   const item = {
-    n: name, slot: type.slot, use: type.use,
+    n: name, slot: type.slot, use: type.use, primary: type.stat,
     proc: prefix.proc || null, upgradeLevel: 0, grade,
     d: descParts.join(", "),
     parts: { prefix: prefix.id, material: material.id, type: type.id },

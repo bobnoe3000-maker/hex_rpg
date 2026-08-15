@@ -10,6 +10,7 @@ import { BAL } from './data/balance.js';
 import { derive } from './systems/StatEngine.js';
 import { resolveAttack } from './systems/CombatSim.js';
 import { generate } from './systems/LootGenerator.js';
+import { upgrade as forgeUpgrade, canUpgrade } from './systems/ForgeSystem.js';
 import { openCharacter } from './ui/CharacterPanel.js';
 /* ============ DP ENGINE :: game.js — endless auto-battle loop ============ */
 "use strict";
@@ -28,7 +29,7 @@ logBar.onclick=()=>{ const i=LOG_STATES.indexOf(logWrap.dataset.s||"mid");
 setLogState("mid");
 /* phase: idle → fight ⇄ paused. inventory holds dropped loot; respawn/revive are timers. */
 const state={ roomIdx:0, phase:"idle", room:null, units:[], t:0, speed:1,
-  inventory:[], respawnAt:null, reviveAt:null };
+  inventory:[], gems:0, respawnAt:null, reviveAt:null };
 const party=[makeHero("knight",11),makeHero("mage",22),makeHero("cleric",33)];
 const PARTY_CLASSES=[...new Set(party.map(h=>h.cls))]; // bias drops to classes we can use
 let combatRng=Math.random;  // reseeded deterministically when a fight starts / area changes
@@ -216,6 +217,9 @@ function hurt(u,dmg,src){
         log(`🎁 <b>${u.name}</b> drops <span class="sys">${drop.n}</span> <span style="opacity:.6">→ bag (${state.inventory.length})</span>`);
         fxText(uxS(u),uyS(u)-30,"+"+drop.n.split(" ").pop(),"#ffd166");
       }
+      if(combatRng()<(u.boss?BAL.GEM_CHANCE_BOSS:BAL.GEM_CHANCE)){ state.gems++;
+        log(`💎 <b>${u.name}</b> drops a <span class="sys">Runic Gem</span> <span style="opacity:.6">(${state.gems})</span>`,"sys");
+        fxText(uxS(u),uyS(u)-46,"💎","#9ad1ff"); }
     }
   }
   if(u.team===0) renderParty();
@@ -262,6 +266,22 @@ function syncButtons(){
   btnStart.disabled=false;
   btnNext.disabled=false;
 }
+function removeItem(item){
+  const i=state.inventory.indexOf(item); if(i>=0){ state.inventory.splice(i,1); return; }
+  for(const h of party) for(const s in h.gear) if(h.gear[s]===item){ h.gear[s]=null; return; }
+}
+/* spend a gem to upgrade an item at the Forge; returns the outcome for the panel to show */
+function tryForge(item){
+  if(state.gems<=0) return {outcome:"nogem"};
+  if(!canUpgrade(item)) return {outcome:"max"};
+  state.gems--;
+  const res=forgeUpgrade(item, Math.random);
+  if(res.outcome==="success") log(`🔨 <span class="heal">+${item.upgradeLevel}!</span> ${item.n} strengthened.`,"heal");
+  else if(res.outcome==="destroyed"){ removeItem(item); log(`🔨 <span class="crit">Shattered!</span> ${item.n} was destroyed.`,"crit"); }
+  else log(`🔨 <span class="miss">The gem fizzles</span> — ${item.n} is unharmed.`);
+  renderParty();
+  return res;
+}
 function openHero(h){
   const back = state.phase==="fight" ? "fight" : "idle";
   state.phase="paused"; syncButtons();
@@ -269,6 +289,8 @@ function openHero(h){
     inventory: state.inventory,
     portrait: PORTS[h.cls],
     refresh: renderParty,
+    gems: ()=>state.gems,
+    forge: tryForge,
     close: ()=>{ state.phase=back; syncButtons(); },
   });
 }
