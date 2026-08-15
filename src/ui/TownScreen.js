@@ -29,8 +29,14 @@ export function ensureTownCss() {
   .tw-card{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;
     background:linear-gradient(#241b38,#1a1328);border:1px solid var(--line);border-radius:10px;padding:9px 5px;font-size:10px}
   .tw-card:active{transform:translateY(1px)}
-  .tw-card canvas{width:46px;height:46px;border-radius:8px;border:1px solid #6e5a2a}
+  .tw-card .tw-portwrap{position:relative;width:46px;height:46px}
+  .tw-card canvas{width:46px;height:46px;border-radius:8px;border:1px solid #6e5a2a;display:block}
+  .tw-card .tw-skull{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
   .tw-card b{font-size:11px;color:var(--gold)} .tw-card .lv{color:#9ad1ff}
+  .tw-card .cls{color:#9a8fb8;text-transform:capitalize;font-style:italic;font-size:9.5px}
+  .tw-card .fallen{color:#c98a8a;font-style:italic;display:inline-flex;align-items:center;gap:3px;margin-top:3px;font-size:9.5px}
+  .tw-card.dead{border-color:#5a2a2a}
+  .tw-card.dead canvas{filter:grayscale(1) brightness(.7)}
   .tw-card .bar{width:100%;height:4px;background:#4a1f26;border-radius:2px;overflow:hidden;margin-top:2px}
   .tw-card .bar i{display:block;height:100%;background:linear-gradient(#ff7a70,#e5484d)}
   .tw-svc{display:flex;flex-direction:column;gap:8px}
@@ -67,9 +73,14 @@ export function openTown(ctx) {
   const el = document.getElementById("town");
   const card = (h, i) => {
     const mh = derive(h).maxhp;
-    return `<div class="tw-card" data-hero="${i}"><canvas width="96" height="96"></canvas>
-      <b>${h.name}</b><span class="lv">Lv ${h.level}</span>
-      <div class="bar"><i style="width:${Math.max(0, Math.min(100, h.hp / mh * 100))}%"></i></div></div>`;
+    const skull = h.alive ? "" : `<div class="tw-skull">${iconImg("skull",20)}</div>`;
+    const foot = h.alive
+      ? `<div class="bar"><i style="width:${Math.max(0, Math.min(100, h.hp / mh * 100))}%"></i></div>`
+      : `<span class="fallen">${iconImg("skull",10)} fallen</span>`;
+    return `<div class="tw-card ${h.alive ? "" : "dead"}" data-hero="${i}">
+      <div class="tw-portwrap"><canvas width="96" height="96"></canvas>${skull}</div>
+      <b>${h.name}</b><span class="cls">${h.cls}</span><span class="lv">Lv ${h.level}</span>
+      ${foot}</div>`;
   };
   el.innerHTML = `<div class="tw-wrap">
     <div class="tw-head">
@@ -77,16 +88,16 @@ export function openTown(ctx) {
       <p>Emberdeep hold — your pals rest between delves</p>
       <div class="tw-cur"><span>${iconImg("coin",14)} ${ctx.silver()}</span><span class="g">${iconImg("gem",14)} ${ctx.gems()}</span></div>
     </div>
-    <div class="tw-sec">Party — tap to manage gear</div>
-    <div class="tw-party">${ctx.party.map(card).join("")}</div>
     <div class="tw-sec">Services</div>
     <div class="tw-svc">
       <button class="tw-btn" data-tavern><span class="ic">${iconImg("tankard",20)}</span><span>Tavern<small>Hire pals to fill your party (up to 4)</small></span></button>
       <button class="tw-btn" data-temple><span class="ic">${iconImg("temple",20)}</span><span>Temple<small>Restore fallen companions (fee scales with level)</small></span></button>
       <button class="tw-btn" data-shop><span class="ic">${iconImg("pouch",20)}</span><span>Shop<small>Buy &amp; sell gear · trade silver for runic gems</small></span></button>
       <button class="tw-btn" disabled><span class="ic">${iconImg("vault",20)}</span><span>Bank<small>Coming soon — a death-safe vault</small></span></button>
-      <button class="tw-btn primary" data-enter>${iconImg("sword",16)} Descend into the Emberdeep</button>
     </div>
+    <div class="tw-sec">Party — tap to manage gear</div>
+    <div class="tw-party">${ctx.party.map(card).join("")}</div>
+    <button class="tw-btn primary" data-enter>${iconImg("sword",16)} Descend into the Emberdeep</button>
   </div>`;
 
   ctx.party.forEach((h, i) => {

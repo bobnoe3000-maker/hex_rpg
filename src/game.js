@@ -134,15 +134,19 @@ function renderParty(){
     const c=document.createElement("div"); c.className="card"+(h.alive?"":" dead");
     c.style.cursor="pointer"; c.title="Tap to view stats & gear";
     c.onclick=()=>openHero(h);
+    const picWrap=document.createElement("div"); picWrap.className="picwrap";
     const img=document.createElement("canvas"); img.width=img.height=96; img.className="pic";
     img.getContext("2d").drawImage(heroPortrait(h),0,0,96,96);
+    picWrap.appendChild(img);
+    if(!h.alive){ const sk=document.createElement("div"); sk.className="skull"; sk.innerHTML=iconImg("skull",22); picWrap.appendChild(sk); }
     const bag=Object.values(h.gear).filter(Boolean).length;
     const info=document.createElement("div");
-    info.innerHTML=`<b>${h.name}</b> <span class="lvl">Lv${h.level}</span><br>
-      <span style="opacity:.7">ATK ${D.atk} · DEF ${D.def}</span>
+    info.innerHTML=`<b>${h.name}</b> <span class="lvl">Lv${h.level}</span> <span class="cls">${h.cls}</span><br>
+      ${h.alive ? `<span style="opacity:.7">ATK ${D.atk} · DEF ${D.def}</span>
       <div class="bar"><i style="width:${clamp(h.hp/D.maxhp*100,0,100)}%"></i></div>
-      ${h.hp}/${D.maxhp}<div class="gear">${bag} equipped · tap for gear ›</div>`;
-    c.appendChild(img); c.appendChild(info); partyEl.appendChild(c);
+      ${h.hp}/${D.maxhp}<div class="gear">${bag} equipped · tap for gear ›</div>`
+        : `<span class="fallen">${iconImg("skull",11)} Fallen — restore at the Temple</span>`}`;
+    c.appendChild(picWrap); c.appendChild(info); partyEl.appendChild(c);
   }
 }
 const ease=k=>k*k*(3-2*k);
@@ -154,15 +158,18 @@ function uyS(u){ const k=(u.moveT===undefined)?1:ease(u.moveT);
   return cy0g(0)+r*T+T/2; }
 
 /* ---------- room, party placement, waves ---------- */
+/* Place every living party member onto the field. Safe to call repeatedly: members already
+   on the field are left where they stand, so newly-hired or freshly-resurrected pals get added
+   without teleporting the rest of the party. */
 function placeParty(){
   const pcols=[2,5,3,6], prow=GROWS-2; // spread up to 4 heroes; GROWS-2 is the floor row
-  party.forEach((h,i)=>{ if(!h.alive) return; // fallen companions sit out until the Temple revives them
+  party.forEach((h,i)=>{ if(!h.alive) return;      // fallen companions sit out until the Temple revives them
+    if(state.units.includes(h)) return;            // already on the field — don't disturb it
     h.r=prow; h.c=pcols[i];
-    let guard=0; while((isBlocked(state.room,h.r,h.c)||state.units.some(u=>u.r===h.r&&u.c===h.c))&&guard++<10){
+    let guard=0; while((isBlocked(state.room,h.r,h.c)||state.units.some(u=>u.r===h.r&&u.c===h.c))&&guard++<12){
       h.r--; if(h.r<GROWS-3)h.r=GROWS-2, h.c=1+((h.c)%(GCOLS-2)); }
     h.rr=h.r; h.cc=h.c; h.moveT=1; h.next=state.t+0.5+0.2*i;
-    if(!state.units.includes(h)) state.units.push(h); });
-  party.forEach(figOf);
+    state.units.push(h); figOf(h); });
 }
 function spawnWave(){
   const spec=ROOMS_SPEC[state.roomIdx];
@@ -316,17 +323,22 @@ function openHero(h){
   });
 }
 /* ---------- scenes: town hub ⇄ dungeon ---------- */
-function enterTown(){
+function enterTown(fromWipe=false){
   state.scene="town"; townEl.classList.add("show");
   // the main hero always wakes at the Keep, free of charge
   const main=party[0];
   if(main && !main.alive){ main.alive=true; main.hp=Math.round(derive(main).maxhp*BAL.REVIVE_HEAL_FRAC);
-    renderParty(); log(`${iconImg("spark",14)} <span class="heal">You awaken at the Keep, battered but breathing.</span>`,"sys"); }
+    log(`${iconImg("spark",14)} <span class="heal">You awaken at the Keep, battered but breathing.</span>`,"sys"); }
+  // a wipe ends the delve: reset the battlefield so the next descent starts fresh (fallen pals stay
+  // dead until raised at the Temple; they simply won't be placed until then).
+  if(fromWipe){ state.phase="idle"; loadRoom(); }
+  renderParty();
   openTownScreen();
 }
 function enterDungeon(){
   state.scene="dungeon"; townEl.classList.remove("show");
   if(state.phase==="idle") seedBattle();
+  placeParty();               // pull in any pals hired or resurrected since the last delve
   state.phase="fight"; syncButtons();
 }
 function openTownScreen(){
@@ -356,7 +368,8 @@ function openTavernScreen(){
   if(!state.recruits.length) refreshRecruits(true); // first visit fills the tavern for free
   openTavern({ silver:()=>state.silver, party:()=>party, recruits:()=>state.recruits,
     hireCost:hireCostFor, refreshCost:BAL.TAVERN.REFRESH_COST,
-    hire:hireCompanion, refresh:()=>refreshRecruits(false), portrait:h=>heroPortrait(h), back:openTownScreen });
+    hire:hireCompanion, refresh:()=>refreshRecruits(false), portrait:h=>heroPortrait(h),
+    openHero, back:openTownScreen });
 }
 /* ---------- temple: resurrect fallen companions (fee scales with level) ---------- */
 const resurrectFee=h=>BAL.TEMPLE.RESURRECT_BASE + h.level*BAL.TEMPLE.RESURRECT_PER_LEVEL;
@@ -489,7 +502,7 @@ function loop(now){
     // endless map: respawn a fresh wave on its timer
     if(state.respawnAt!==null && state.t>=state.respawnAt){ state.respawnAt=null; spawnWave(); }
     // full wipe: pull back to the Keep (main revives free there; fallen pals need the Temple)
-    if(state.wipeAt!==null && state.t>=state.wipeAt){ state.wipeAt=null; enterTown(); }
+    if(state.wipeAt!==null && state.t>=state.wipeAt){ state.wipeAt=null; enterTown(true); }
     // prune slain units so the list doesn't grow without bound over endless waves
     state.units=state.units.filter(u=>u.alive);
   }

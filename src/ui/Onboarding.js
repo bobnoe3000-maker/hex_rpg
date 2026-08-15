@@ -6,7 +6,10 @@
 import { makeHeroPortrait } from "../engine/portraits.js";
 import { rollStats, makeHero } from "../models/units.js";
 import { HERO_BASES } from "../data/classes.js";
+import { COMPANION_NAMES } from "../data/names.js";
 import { iconImg } from "../engine/icons.js";
+
+const randomName = () => COMPANION_NAMES[(Math.random() * COMPANION_NAMES.length) | 0];
 
 const CLASS_INFO = {
   knight: { name: "Knight", icon: "sword", blurb: "Frontline bruiser — high HP &amp; armor. Soaks hits and holds the line." },
@@ -106,6 +109,7 @@ export function startOnboarding(onComplete) {
         <button class="fl-btn" data-go="create" ${S.cls ? "" : "disabled style='opacity:.45;pointer-events:none'"}>Next</button>
       </div>`;
     } else if (S.step === "create") {
+      if (!S.name) S.name = randomName();   // pre-fill a suggested name; the player can edit it
       const st = rollStats(S.cls, S.statSeed);
       el.innerHTML = `<div class="fl-wrap">
         <span class="fl-back" data-go="class">‹ class</span>
@@ -117,7 +121,10 @@ export function startOnboarding(onComplete) {
         </div>
         <div class="cr-stats">${STAT_ROWS.map(([k, key]) =>
           `<div><span class="k">${k}</span><span class="v">${key === "aspd" ? st[key].toFixed(2) : st[key]}</span></div>`).join("")}</div>
-        <input class="fl-in" id="fl-hero" placeholder="Name your hero" maxlength="16" value="${S.name}" autocomplete="off">
+        <div class="fl-row" style="width:min(300px,100%);flex-wrap:nowrap">
+          <input class="fl-in" id="fl-hero" placeholder="Name your hero" maxlength="16" value="${S.name}" autocomplete="off" style="flex:1">
+          <button class="fl-btn ghost" data-roll="name" title="Suggest a name">${iconImg("dice",15)}</button>
+        </div>
         <button class="fl-btn" data-finish>${iconImg("sword",16)} Begin the Descent</button>
       </div>`;
       drawPortrait();
@@ -132,7 +139,9 @@ export function startOnboarding(onComplete) {
     el.querySelectorAll("[data-cls]").forEach(c => c.onclick = () => { S.cls = c.getAttribute("data-cls"); render(); });
     el.querySelectorAll("[data-roll]").forEach(b => b.onclick = () => {
       const nm = el.querySelector("#fl-hero"); if (nm) S.name = nm.value;
-      if (b.getAttribute("data-roll") === "port") { S.portSeed = seed(); drawPortrait(); }
+      const kind = b.getAttribute("data-roll");
+      if (kind === "port") { S.portSeed = seed(); drawPortrait(); }
+      else if (kind === "name") { S.name = randomName(); render(); }
       else { S.statSeed = seed(); render(); }
     });
     const fin = el.querySelector("[data-finish]");

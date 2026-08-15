@@ -40,12 +40,17 @@
   #party{flex:0 0 auto;display:flex;gap:6px;margin-top:6px}
   .card{flex:1;display:flex;gap:6px;background:linear-gradient(#241b38,#1a1328);border:1px solid var(--line);
     border-radius:8px;padding:5px;font-size:9.5px;line-height:1.35}
-  .card .pic{width:36px;height:36px;border-radius:6px;border:1px solid #6e5a2a;flex:0 0 auto}
+  .card .picwrap{position:relative;flex:0 0 auto;width:36px;height:36px}
+  .card .pic{width:36px;height:36px;border-radius:6px;border:1px solid #6e5a2a;display:block}
+  .card .skull{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
   .card b{font-size:10.5px;color:var(--gold)} .card .lvl{color:#9ad1ff}
+  .card .cls{color:#9a8fb8;text-transform:capitalize;font-style:italic}
+  .card .fallen{color:#c98a8a;font-style:italic;display:inline-flex;align-items:center;gap:3px;margin-top:3px}
   .bar{height:5px;background:var(--hpbg);border-radius:3px;overflow:hidden;margin:2px 0}
   .bar i{display:block;height:100%;background:linear-gradient(#ff7a70,var(--hp));transition:width .25s}
   .card .gear{opacity:.8;font-style:italic}
-  .card.dead{filter:grayscale(1);opacity:.5}
+  .card.dead{opacity:.8;border-color:#5a2a2a}
+  .card.dead .pic{filter:grayscale(1) brightness(.7)}
 
   #controls{flex:0 0 auto;display:flex;gap:8px;margin-top:6px}
   button{font-family:inherit;font-weight:bold;letter-spacing:1px;font-size:12.5px;border:0;border-radius:8px;

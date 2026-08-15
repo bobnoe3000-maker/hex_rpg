@@ -24,6 +24,7 @@ function injectCss() {
   .cp-head{display:flex;align-items:center;gap:9px;margin-bottom:8px}
   .cp-head canvas{width:50px;height:50px;border-radius:8px;border:1px solid #6e5a2a;flex:0 0 auto}
   .cp-head .nm{flex:1;min-width:0}.cp-head b{font-size:15px;color:var(--gold)} .cp-head .lvl{color:#9ad1ff;font-size:12px}
+  .cp-head .cls{color:#9a8fb8;font-size:11.5px;font-style:italic}
   .cp-head .cur{font-size:11px;color:#d8c47a;white-space:nowrap;text-align:right;line-height:1.3}
   .cp-x{cursor:pointer;font-size:20px;color:#9a8fb8;padding:2px 6px;line-height:1}
   .cp-x:active{transform:translateY(1px)}
@@ -97,7 +98,7 @@ export function openCharacter(hero, ctx) {
     overlay.innerHTML = `<div class="cpanel">
       <div class="cp-head">
         <canvas width="96" height="96"></canvas>
-        <div class="nm"><b>${hero.name}</b> <span class="lvl">Lv ${hero.level}</span></div>
+        <div class="nm"><b>${hero.name}</b> <span class="lvl">Lv ${hero.level}</span><br><span class="cls">${cap(hero.cls)}</span></div>
         <span class="cur">${iconImg("coin", 13)} ${silver}<br>${iconImg("gem", 13)} ${gems}</span>
         <span class="cp-x" data-close="1">✕</span>
       </div>

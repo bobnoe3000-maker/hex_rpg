@@ -18,7 +18,10 @@ export function openTemple(ctx) {
     const row = ({ h, i }) => {
       const D = derive(h), fee = ctx.fee(h);
       return `<div class="shop-row">
-        <canvas width="96" height="96" style="width:42px;height:42px;border-radius:8px;border:1px solid #6e5a2a;flex:0 0 auto;filter:grayscale(1);opacity:.7"></canvas>
+        <span style="position:relative;flex:0 0 auto;width:42px;height:42px">
+          <canvas width="96" height="96" style="width:42px;height:42px;border-radius:8px;border:1px solid #5a2a2a;display:block;filter:grayscale(1) brightness(.7)"></canvas>
+          <span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">${iconImg("skull", 22)}</span>
+        </span>
         <span class="it"><b style="color:var(--gold)">${h.name}</b> · ${h.cls} · Lv ${h.level}<br>
           <small style="color:#9a8fb8">Fallen — HP ${D.maxhp} when restored</small></span>
         <span class="price">${iconImg("coin", 12)} ${fee}</span>
