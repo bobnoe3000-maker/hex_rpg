@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Dungeon Pals v2 — The Emberdeep</title>
+<style>
+  :root{ --ink:#0c0a12; --panel:#171221; --line:#332a48; --gold:#d8a24a; --parchment:#e8dcc4;
+    --hp:#e5484d; --hpbg:#4a1f26; --rare:#4da6ff; --epic:#c77dff; }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{background:radial-gradient(120% 90% at 50% -10%, #241b38 0%, var(--ink) 60%);
+    color:var(--parchment); font-family:Georgia,"Times New Roman",serif;
+    display:flex; justify-content:center; overflow:hidden; height:100dvh;}
+  #app{width:min(500px,100vw);height:100dvh;display:flex;flex-direction:column;
+    padding:calc(env(safe-area-inset-top) + 4px) 8px calc(env(safe-area-inset-bottom) + 6px)}
+
+  /* --- collapsible combat log at TOP --- */
+  #logwrap{flex:0 0 auto;background:#120d1c;border:1px solid var(--line);border-radius:8px;
+    display:flex;flex-direction:column;overflow:hidden;margin-bottom:6px}
+  #logbar{display:flex;align-items:center;justify-content:space-between;padding:4px 8px;cursor:pointer;
+    background:linear-gradient(#221a35,#191226);border-bottom:1px solid var(--line);flex:0 0 auto}
+  #logbar .t{font-size:10px;letter-spacing:2px;color:var(--gold);text-transform:uppercase}
+  #logbar .x{font-size:11px;color:#9a8fb8;font-family:monospace}
+  #log{overflow-y:auto;padding:5px 8px;font-size:10.5px;line-height:1.5;transition:height .18s ease}
+  /* three states via data-attr on #logwrap */
+  #logwrap[data-s="min"] #log{height:16px}
+  #logwrap[data-s="mid"] #log{height:70px}
+  #logwrap[data-s="max"] #log{height:calc(100dvh - 120px)}
+  #log .hit{color:#ffd166}#log .miss{color:#8b7fa8}#log .crit{color:#ff6b6b;font-weight:bold}
+  #log .heal{color:#7ee787}#log .sys{color:#9ad1ff}#log .dmg{color:#ff9b8a}
+
+  /* --- dungeon stage: flexes to fill remaining space --- */
+  #stage{flex:1 1 auto;min-height:0;background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:4px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  canvas#cv{max-width:100%;max-height:100%;display:block;border-radius:6px}
+  #logwrap[data-s="max"] ~ #stage{display:none} /* full-screen log hides the board */
+
+  /* --- party at BOTTOM --- */
+  #party{flex:0 0 auto;display:flex;gap:6px;margin-top:6px}
+  .card{flex:1;display:flex;gap:6px;background:linear-gradient(#241b38,#1a1328);border:1px solid var(--line);
+    border-radius:8px;padding:5px;font-size:9.5px;line-height:1.35}
+  .card .pic{width:36px;height:36px;border-radius:6px;border:1px solid #6e5a2a;flex:0 0 auto}
+  .card b{font-size:10.5px;color:var(--gold)} .card .lvl{color:#9ad1ff}
+  .bar{height:5px;background:var(--hpbg);border-radius:3px;overflow:hidden;margin:2px 0}
+  .bar i{display:block;height:100%;background:linear-gradient(#ff7a70,var(--hp));transition:width .25s}
+  .card .gear{opacity:.8;font-style:italic}
+  .card.dead{filter:grayscale(1);opacity:.5}
+
+  #controls{flex:0 0 auto;display:flex;gap:8px;margin-top:6px}
+  button{font-family:inherit;font-weight:bold;letter-spacing:1px;font-size:12.5px;border:0;border-radius:8px;
+    padding:11px 0;flex:1;cursor:pointer;background:linear-gradient(#e0b063,#a8722a);color:#241606;
+    box-shadow:0 3px 0 #6e4a14}
+  button:active{transform:translateY(2px);box-shadow:0 1px 0 #6e4a14}
+  button.ghost{flex:0 0 auto;padding:11px 16px;background:linear-gradient(#2c2342,#1c1630);color:var(--parchment);box-shadow:0 3px 0 #100b1c}
+  button[disabled]{opacity:.45;pointer-events:none}
+
+  #overlay{position:absolute;inset:0;background:rgba(8,5,14,.9);display:none;flex-direction:column;
+    align-items:center;justify-content:center;gap:12px;padding:20px;z-index:5;backdrop-filter:blur(2px)}
+  #overlay.show{display:flex}
+  #overlay h2{color:var(--gold);letter-spacing:2px;text-transform:uppercase;font-size:18px}
+  #overlay p{font-size:12px;opacity:.9;text-align:center;max-width:300px;line-height:1.5}
+  .loot{width:100%;max-width:320px;background:linear-gradient(#241b38,#181128);border:1px solid var(--line);
+    border-radius:10px;padding:10px 12px;text-align:left;cursor:pointer;font-size:12px;line-height:1.45;
+    box-shadow:0 3px 0 #000}
+  .loot:active{transform:translateY(2px)}
+  .loot b{display:block;font-size:13px} .loot small{opacity:.75;font-style:italic}
+  .r-common b{color:#e8e8e8}.r-rare b{color:var(--rare)}.r-epic b{color:var(--epic)}
+  .tag{display:inline-block;font-size:10px;padding:1px 6px;border-radius:4px;background:#00000055;margin-left:6px}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="logwrap" data-s="mid">
+    <div id="logbar">
+      <span class="t">Combat Log</span>
+      <span class="x" id="logToggle">▤ expand · ▁ min</span>
+    </div>
+    <div id="log"></div>
+  </div>
+  <div id="stage"><canvas id="cv" width="752" height="1128"></canvas></div>
+  <div id="party"></div>
+  <div id="controls">
+    <button id="btnStart">Fight!</button>
+    <button id="btnSpeed" class="ghost">1×</button>
+  </div>
+  <div id="overlay"></div>
+</div>
+<script src="engine/core.js"></script>
+<script src="engine/portraits.js"></script>
+<script src="engine/creatures.js"></script>
+<script src="engine/tiles.js"></script>
+<script src="engine/fx.js"></script>
+<script src="engine/dungeon.js"></script>
+<script src="engine/combat.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
