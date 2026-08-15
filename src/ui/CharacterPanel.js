@@ -7,11 +7,10 @@ import { derive } from "../systems/StatEngine.js";
 import { canEquip, equip, unequip, isUpgrade } from "../systems/Equipment.js";
 import { canUpgrade } from "../systems/ForgeSystem.js";
 import { SLOTS } from "../data/items/gearTypes.js";
+import { itemNameHtml as itemName } from "./itemView.js";
 
 const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
 const STAT_ROWS = [["ATK", "atk"], ["DEF", "def"], ["Dodge", "dodge"], ["Crit", "crit"]];
-const GRADE_COLOR = { plain: "#e8e8e8", fine: "#8fd39a", rare: "#4da6ff", epic: "#c77dff" };
-const itemName = it => `<b style="color:${GRADE_COLOR[it.grade] || "#e8e8e8"}">${it.n}${it.upgradeLevel ? " +" + it.upgradeLevel : ""}</b>`;
 
 function injectCss() {
   if (document.getElementById("cp-style")) return;

@@ -183,8 +183,8 @@ Individually downed heroes in a fight the party still **wins** are revived at ru
 
 ## 8. Meta Structure & Screens
 
-### 8.1 Keep / Town hub ✅ (Feature 6)
-The single currency is **silver** (used for shop purchases, companion hires, forge fees, and stored in the Bank). Home screen with services:
+### 8.1 Keep / Town hub ✅ (Feature 6) — implemented
+The game **boots into the Keep**, not a fight. The hub shows the party (tap a hero to manage gear/forge), currency (💰 silver, 💎 gems), and services; **Descend** enters the dungeon and 🏠 returns. The **Shop** is live (buy/sell gear priced by `systems/Economy.js`, reroll stock, trade silver for gems); **Bank** is a stub. The single currency is **silver**. Home screen with services:
 | Service | Function |
 |---|---|
 | **Shop** | Buy/sell gear, consumables, gems (rotating stock). |

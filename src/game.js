@@ -11,13 +11,17 @@ import { derive } from './systems/StatEngine.js';
 import { resolveAttack } from './systems/CombatSim.js';
 import { generate } from './systems/LootGenerator.js';
 import { upgrade as forgeUpgrade, canUpgrade } from './systems/ForgeSystem.js';
+import { priceOf, sellPriceOf } from './systems/Economy.js';
 import { openCharacter } from './ui/CharacterPanel.js';
+import { openTown } from './ui/TownScreen.js';
+import { openShop } from './ui/ShopScreen.js';
 /* ============ DP ENGINE :: game.js — endless auto-battle loop ============ */
 "use strict";
 const cvG=document.getElementById("cv"), G=cvG.getContext("2d");
 const logEl=document.getElementById("log"), partyEl=document.getElementById("party"),
       overlay=document.getElementById("overlay"), btnStart=document.getElementById("btnStart"),
       btnNext=document.getElementById("btnNext"), btnSpeed=document.getElementById("btnSpeed"),
+      btnTown=document.getElementById("btnTown"), townEl=document.getElementById("town"),
       logWrap=document.getElementById("logwrap"), logBar=document.getElementById("logbar"),
       logToggle=document.getElementById("logToggle");
 /* combat log: cycle min → mid → max → min */
@@ -28,8 +32,8 @@ logBar.onclick=()=>{ const i=LOG_STATES.indexOf(logWrap.dataset.s||"mid");
   setLogState(LOG_STATES[(i+1)%LOG_STATES.length]); };
 setLogState("mid");
 /* phase: idle → fight ⇄ paused. inventory holds dropped loot; respawn/revive are timers. */
-const state={ roomIdx:0, phase:"idle", room:null, units:[], t:0, speed:1,
-  inventory:[], gems:0, silver:0, respawnAt:null, reviveAt:null };
+const state={ roomIdx:0, scene:"town", phase:"idle", room:null, units:[], t:0, speed:1,
+  inventory:[], gems:0, silver:0, shopStock:[], respawnAt:null, reviveAt:null };
 const party=[makeHero("knight",11),makeHero("mage",22),makeHero("cleric",33)];
 const PARTY_CLASSES=[...new Set(party.map(h=>h.cls))]; // bias drops to classes we can use
 let combatRng=Math.random;  // reseeded deterministically when a fight starts / area changes
@@ -304,6 +308,45 @@ function openHero(h){
     close: ()=>{ state.phase=back; syncButtons(); },
   });
 }
+/* ---------- scenes: town hub ⇄ dungeon ---------- */
+function enterTown(){ state.scene="town"; townEl.classList.add("show"); openTownScreen(); }
+function enterDungeon(){
+  state.scene="dungeon"; townEl.classList.remove("show");
+  if(state.phase==="idle") seedBattle();
+  state.phase="fight"; syncButtons();
+}
+function openTownScreen(){
+  openTown({ silver:()=>state.silver, gems:()=>state.gems, party, portrait:cls=>PORTS[cls],
+    openHero, openShop:openShopScreen, enterDungeon });
+}
+function rerollStock(free){
+  const cost=free?0:BAL.SHOP.REROLL_COST;
+  if(state.silver<cost) return false;
+  state.silver-=cost;
+  state.shopStock=Array.from({length:BAL.SHOP.STOCK},()=>generate(Math.random,{classes:PARTY_CLASSES}));
+  updateHud(); return true;
+}
+function buyItem(item){
+  const p=priceOf(item), i=state.shopStock.indexOf(item);
+  if(i<0||state.silver<p) return false;
+  state.silver-=p; state.shopStock.splice(i,1); state.inventory.push(item); updateHud(); return true;
+}
+function sellItem(item){
+  const i=state.inventory.indexOf(item); if(i<0) return false;
+  state.silver+=sellPriceOf(item); state.inventory.splice(i,1); updateHud(); return true;
+}
+function buyGem(){
+  if(state.silver<BAL.SHOP.GEM_PRICE) return false;
+  state.silver-=BAL.SHOP.GEM_PRICE; state.gems++; updateHud(); return true;
+}
+function openShopScreen(){
+  if(!state.shopStock.length) rerollStock(true); // first visit fills the shelves for free
+  openShop({ silver:()=>state.silver, gems:()=>state.gems,
+    stock:()=>state.shopStock, inventory:()=>state.inventory,
+    priceOf, sellPriceOf, gemPrice:BAL.SHOP.GEM_PRICE, rerollCost:BAL.SHOP.REROLL_COST,
+    buy:buyItem, sell:sellItem, buyGem, reroll:()=>rerollStock(false),
+    back:openTownScreen });
+}
 function nextArea(){
   state.roomIdx=(state.roomIdx+1)%ROOMS_SPEC.length;
   const wasFighting = state.phase!=="idle";
@@ -318,6 +361,7 @@ btnStart.onclick=()=>{
   syncButtons();
 };
 btnNext.onclick=()=>{ if(state.phase!=="paused") nextArea(); };
+btnTown.onclick=()=>{ if(state.scene==="dungeon") enterTown(); };
 btnSpeed.onclick=()=>{ state.speed=state.speed===1?2:1; btnSpeed.textContent=`${state.speed}×`; };
 
 /* ---------- render ---------- */
@@ -379,7 +423,7 @@ let last=performance.now();
 function loop(now){
   let dt=Math.min(0.05,(now-last)/1000); last=now; dt*=state.speed;
   state.t+=dt;
-  if(state.phase==="fight"){
+  if(state.scene==="dungeon" && state.phase==="fight"){
     for(const u of state.units){
       if(!u.alive)continue;
       if(state.t>=u.next){ act(u); u.next=state.t+BAL.BASE_INTERVAL/derive(u).aspd+combatRng()*BAL.ASPD_JITTER; }
@@ -399,7 +443,8 @@ function loop(now){
   render(dt);
   requestAnimationFrame(loop);
 }
-log(`Welcome to <span class="sys">The Emberdeep</span>. Bram, Wren & Odo descend.`,"sys");
-log(`ATK vs DEF · loot drops from foes → your bag · <b>tap a hero</b> to equip · foes respawn · Area → goes deeper.`,"sys");
+log(`Welcome to <span class="sys">The Emberdeep</span>. Bram, Wren & Odo make camp at the Keep.`,"sys");
+log(`Gear up in town, then <b>Descend</b> to fight. Loot &amp; silver drop from foes · 🏠 returns to the Keep.`,"sys");
 loadRoom(); renderParty(); syncButtons(); updateHud();
+enterTown();          // boot into the hub, not straight into a fight
 requestAnimationFrame(loop);

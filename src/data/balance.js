@@ -34,6 +34,17 @@ export const BAL = {
   GEM_CHANCE: 0.06,       // chance a normal enemy drops a runic gem
   GEM_CHANCE_BOSS: 0.90,  // bosses almost always drop one
 
+  // Shop / economy (silver)
+  SHOP: {
+    STOCK: 6,           // items on offer at once
+    BASE_PRICE: 8,      // price = BASE_PRICE + score*PRICE_MULT + upgradeLevel*UPGRADE_PRICE
+    PRICE_MULT: 4,
+    UPGRADE_PRICE: 12,
+    SELL_FRAC: 0.4,     // sell value = this fraction of buy price
+    GEM_PRICE: 120,     // buy a runic gem for silver
+    REROLL_COST: 15,    // refresh the shop stock
+  },
+
   // Forge: spend a gem to attempt +1 to an item's primary stat.
   // SUCCESS[level] falls as the item's upgradeLevel rises; on failure, DESTROY[level]
   // is the chance the item shatters (else the attempt just fizzles). Data-driven per level.

@@ -6,6 +6,7 @@ import { resolveAttack } from "../src/systems/CombatSim.js";
 import { canEquip, equip, unequip, isUpgrade, itemScore } from "../src/systems/Equipment.js";
 import { generate } from "../src/systems/LootGenerator.js";
 import { upgrade, canUpgrade, primaryStat } from "../src/systems/ForgeSystem.js";
+import { priceOf, sellPriceOf } from "../src/systems/Economy.js";
 
 let fails = 0;
 const ok = (name, cond) => { console.log(`${cond ? "PASS" : "FAIL"}  ${name}`); if (!cond) fails++; };
@@ -113,6 +114,15 @@ ok("different seed diverges", seq(123) !== seq(777));
   ok("a higher-scoring item is an upgrade", isUpgrade(h, strong) && itemScore(strong) > itemScore(weak));
   ok("a lower-scoring item is not an upgrade", !isUpgrade(h, { n:"Rusty", slot:"weapon", use:"knight", atk:1 }));
   ok("wrong-class item is never an upgrade", !isUpgrade(h, { n:"Wand", slot:"weapon", use:"mage", atk:9 }));
+}
+
+// Economy: price scales with score/upgrades, sell < buy
+{
+  const cheap = { n: "Iron Sword", slot: "weapon", use: "knight", atk: 3, upgradeLevel: 0 };
+  const rich  = { n: "Epic Blade", slot: "weapon", use: "knight", atk: 9, crit: 6, upgradeLevel: 3 };
+  ok("a stronger item costs more", priceOf(rich) > priceOf(cheap));
+  ok("upgrades add to the price", priceOf({ ...cheap, upgradeLevel: 4 }) > priceOf(cheap));
+  ok("sell price is below buy price", sellPriceOf(rich) < priceOf(rich) && sellPriceOf(rich) >= 2);
 }
 
 console.log(fails ? `\n${fails} FAILED` : "\nall passed");
