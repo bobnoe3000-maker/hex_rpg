@@ -217,8 +217,10 @@ Drag-to-order each hero's skill rotation; set per-skill conditions.
 ### 8.5 Map loop — endless farm + optional advance ✅ (implemented)
 The battle map is a **continuous farm**, not a one-shot room clear:
 - **Stay as long as you like.** When a wave is cleared, a fresh wave respawns after a short delay — the fight never forces you onward.
+- **Enemies spawn at random spots** across the upper room each wave, so no two waves line up the same way.
 - **Loot drops into your bag mid-combat.** Slain foes have a drop chance (bosses always drop); items fall straight into a shared **inventory** (no more "pick 1 of 3" gate). Better materials/procs drop less often (§6.2).
-- **Tap a hero** to open a stats + gear panel; equipping/unequipping is done here and **pauses** the fight so you can theorycraft safely.
+- **Rally flag.** Tap the floor to plant a rally point; pals with **no foe engaged** regroup on it — a light-touch way to steer positioning between waves. (Full formation/command control is a later pass.)
+- **Tap a hero** to open a stats + gear panel; equipping/unequipping is done here. Opening any panel **fully freezes** the dungeon — combat, movement, and effects — and closing it resumes exactly where you left off. This freeze is **independent of the manual Fight/Pause button** (opening a panel no longer flips it), so theorycrafting never disturbs the run state.
 - **Area →** advances to the next room (Rat Warrens → Bone Gallery → Ashwing's Hoard) when *you* choose; the world map (§8.3) generalizes this later.
 - **On a party wipe** you're returned to **the Keep**: the **main hero auto-revives for free** at partial HP, while **fallen companions stay dead** until raised at the **Temple** for a level-scaled fee (§7.1). The roguelite item-loss penalty (§7.1) activates once the **Bank** exists to hold death-safe valuables.
 

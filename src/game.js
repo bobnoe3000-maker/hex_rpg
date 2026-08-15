@@ -37,7 +37,9 @@ logBar.onclick=()=>{ const i=LOG_STATES.indexOf(logWrap.dataset.s||"mid");
 setLogState("mid");
 /* phase: idle → fight ⇄ paused. inventory holds dropped loot; respawn/revive are timers. */
 const state={ roomIdx:0, scene:"town", phase:"idle", room:null, units:[], t:0, speed:1,
-  inventory:[], gems:0, silver:0, shopStock:[], recruits:[], respawnAt:null, wipeAt:null };
+  inventory:[], gems:0, silver:0, shopStock:[], recruits:[], respawnAt:null, wipeAt:null,
+  panelOpen:false,   // a stats/gear panel is open → the whole dungeon freezes (independent of manual pause)
+  rally:null };      // {r,c} flag heroes regroup on when no foe is engaged
 let party=[];               // filled by onboarding: [main, ...hired companions] (max 4)
 const partyClasses=()=>party.length?[...new Set(party.map(h=>h.cls))]:["knight","mage","cleric"];
 let combatRng=Math.random;  // reseeded deterministically when a fight starts / area changes
@@ -171,18 +173,25 @@ function placeParty(){
     h.rr=h.r; h.cc=h.c; h.moveT=1; h.next=state.t+0.5+0.2*i;
     state.units.push(h); figOf(h); });
 }
+/* a random open (non-blocked, unoccupied) cell within a row band */
+function randCell(minR,maxR){
+  let r,c,guard=0;
+  do{ r=minR+Math.floor(combatRng()*(maxR-minR+1)); c=1+Math.floor(combatRng()*(GCOLS-2)); }
+  while((isBlocked(state.room,r,c)||state.units.some(u=>u.r===r&&u.c===c))&&guard++<40);
+  return {r,c};
+}
 function spawnWave(){
   const spec=ROOMS_SPEC[state.roomIdx];
-  spec.spawn().forEach((f,i)=>{ f.next=state.t+0.7+0.2*i;
-    let guard=0; while((isBlocked(state.room,f.r,f.c)||state.units.some(u=>u.r===f.r&&u.c===f.c))&&guard++<20){
-      f.c=1+((f.c)%(GCOLS-2)); if(guard%8===0)f.r=Math.min(GROWS-3,f.r+1); }
-    f.rr=f.r; f.cc=f.c; f.moveT=1;
+  // NPCs appear at random spots across the upper room (kept off the hero line at the bottom)
+  spec.spawn().forEach((f,i)=>{
+    const cell=randCell(1,GROWS-4);
+    f.r=cell.r; f.c=cell.c; f.rr=f.r; f.cc=f.c; f.moveT=1; f.next=state.t+0.7+0.2*i;
     state.units.push(f); figOf(f); });
 }
 function loadRoom(){
   const spec=ROOMS_SPEC[state.roomIdx];
   state.room=buildGameRoom((Date.now()+state.roomIdx*7919)|0,spec);
-  state.units=[]; fxClear(); state.respawnAt=null; state.wipeAt=null;
+  state.units=[]; fxClear(); state.respawnAt=null; state.wipeAt=null; state.rally=null;
   placeParty(); spawnWave();
   log(`— <span class="sys">${spec.title.split("— ")[1]}</span> —`);
 }
@@ -266,9 +275,14 @@ function awardXP(xp){
 }
 function act(u){
   if(!u.alive)return;
-  const tg=nearest(u); if(!tg)return;
-  if(distU(u,tg)<=derive(u).rng) attack(u,tg);
-  else stepToward(u,tg);
+  const tg=nearest(u);
+  if(tg){
+    if(distU(u,tg)<=derive(u).rng) attack(u,tg);
+    else stepToward(u,tg);
+    return;
+  }
+  // no foe to engage — heroes regroup on the rally flag if one is planted
+  if(u.team===0 && state.rally && distU(u,state.rally)>0) stepToward(u,state.rally);
 }
 /* wave clears -> schedule respawn; party wipes -> schedule revive (endless map) */
 function updateWaves(){
@@ -310,8 +324,9 @@ function tryForge(item){
   return res;
 }
 function openHero(h){
-  const back = state.phase==="fight" ? "fight" : "idle";
-  state.phase="paused"; syncButtons();
+  // Opening a panel freezes the dungeon entirely (combat, movement, FX) without touching the
+  // manual Fight/Pause state — so closing the panel resumes exactly where the fight left off.
+  state.panelOpen=true;
   openCharacter(h, {
     inventory: state.inventory,
     portrait: heroPortrait(h),
@@ -319,7 +334,7 @@ function openHero(h){
     gems: ()=>state.gems,
     silver: ()=>state.silver,
     forge: tryForge,
-    close: ()=>{ state.phase=back; syncButtons(); },
+    close: ()=>{ state.panelOpen=false; },
   });
 }
 /* ---------- scenes: town hub ⇄ dungeon ---------- */
@@ -433,6 +448,15 @@ btnTown.innerHTML=iconImg("house",18);   // replace the emoji label with a sprit
   if(!fav){ fav=document.createElement("link"); fav.rel="icon"; document.head.appendChild(fav); }
   fav.href=iconCanvas("sword",64).toDataURL(); }
 btnSpeed.onclick=()=>{ state.speed=state.speed===1?2:1; btnSpeed.textContent=`${state.speed}×`; };
+/* tap the dungeon floor to plant a rally flag; idle pals (no foe engaged) regroup there */
+cvG.addEventListener("click", e=>{
+  if(state.scene!=="dungeon" || state.panelOpen || !state.room) return;
+  const rect=cvG.getBoundingClientRect();
+  const px=(e.clientX-rect.left)/rect.width*CW, py=(e.clientY-rect.top)/rect.height*CH;
+  const c=Math.floor((px-cx0g(0))/T), r=Math.floor((py-cy0g(0))/T);
+  if(r<1||r>GROWS-2||c<1||c>GCOLS-2||isBlocked(state.room,r,c)) return;
+  state.rally={r,c};
+});
 
 /* ---------- render ---------- */
 function drawUnit(u){
@@ -443,7 +467,7 @@ function drawUnit(u){
   const moving=(u.moveT!==undefined&&u.moveT<1);
   const hop=moving ? -Math.sin(u.moveT*Math.PI)*4 : Math.sin(state.t*2.4+u.c*1.7)*1.0;
   let ox=0,oy=0;
-  if(u.lunge){ u.lunge.t+=0.016*state.speed;
+  if(u.lunge){ if(!state.panelOpen) u.lunge.t+=0.016*state.speed;
     const k=Math.sin(Math.min(1,u.lunge.t/0.22)*Math.PI);
     ox=(u.lunge.tx-gx)*0.20*k; oy=(u.lunge.ty-gy)*0.20*k;
     if(u.lunge.t>0.24)u.lunge=null; }
@@ -453,7 +477,7 @@ function drawUnit(u){
   G.save(); G.shadowColor=pal.glow; G.shadowBlur=u.boss?14:8;
   G.drawImage(tile.canvas,px-S/2,py-S/2,S,S); G.restore();
   if(u.flash>0){ G.save(); G.globalAlpha=Math.min(1,u.flash*4)*.7; G.globalCompositeOperation="lighter";
-    G.drawImage(tile.canvas,px-S/2,py-S/2,S,S); G.restore(); u.flash-=0.016*state.speed; }
+    G.drawImage(tile.canvas,px-S/2,py-S/2,S,S); G.restore(); if(!state.panelOpen) u.flash-=0.016*state.speed; }
   // HP capsule under the tile (same schema for heroes and enemies now)
   const mh=derive(u).maxhp, hw=S*0.7, hh=Math.max(3.5,S*0.085);
   const hx=px-hw/2, hy=py+S*0.5+2;
@@ -473,10 +497,24 @@ function drawUnit(u){
   if(u.boss){ G.fillStyle="#ffdf6b"; G.font="bold 8px monospace"; G.textAlign="center";
     G.fillText("· BOSS ·",px,py-S/2-2); }
 }
+/* rally flag: a small planted pennant heroes regroup on between fights */
+function drawFlag(cx,cy){
+  const sway=Math.sin(state.t*3)*1.6;
+  G.save();
+  G.strokeStyle="rgba(216,162,74,.6)"; G.lineWidth=1.5;
+  G.beginPath(); G.ellipse(cx,cy+6,7,2.8,0,0,7); G.stroke();      // ground ring
+  G.strokeStyle="#c9b78a"; G.lineWidth=2;
+  G.beginPath(); G.moveTo(cx,cy+6); G.lineTo(cx,cy-16); G.stroke();  // pole
+  G.fillStyle="#d8a24a"; G.beginPath();
+  G.moveTo(cx,cy-16); G.lineTo(cx+13+sway,cy-12); G.lineTo(cx,cy-8); G.closePath(); G.fill();
+  G.strokeStyle="#6e4a14"; G.lineWidth=1; G.stroke();               // pennant
+  G.restore();
+}
 function render(dt){
   G.setTransform(2,0,0,2,0,0);
   G.drawImage(state.room.base,0,0,CW,CH);
   for(const p of state.room.parts) drawPartPx(G,p,state.t);
+  if(state.rally) drawFlag(cx0g(state.rally.c)+T/2, cy0g(state.rally.r)+T/2);
   const sorted=[...state.units].sort((a,b)=>a.r-b.r||a.c-b.c);
   for(const u of sorted) drawUnit(u);
   fxUpdateDraw(G,dt);
@@ -492,24 +530,28 @@ function render(dt){
 let last=performance.now();
 function loop(now){
   let dt=Math.min(0.05,(now-last)/1000); last=now; dt*=state.speed;
-  state.t+=dt;
-  if(state.scene==="dungeon" && state.phase==="fight"){
-    for(const u of state.units){
-      if(!u.alive)continue;
-      if(state.t>=u.next){ act(u); u.next=state.t+BAL.BASE_INTERVAL/derive(u).aspd+combatRng()*BAL.ASPD_JITTER; }
+  // A panel open over the dungeon freezes time completely: no combat, no animation, no FX advance.
+  const frozen=state.panelOpen;
+  if(!frozen){
+    state.t+=dt;
+    if(state.scene==="dungeon" && state.phase==="fight"){
+      for(const u of state.units){
+        if(!u.alive)continue;
+        if(state.t>=u.next){ act(u); u.next=state.t+BAL.BASE_INTERVAL/derive(u).aspd+combatRng()*BAL.ASPD_JITTER; }
+      }
+      updateWaves();
+      // endless map: respawn a fresh wave on its timer
+      if(state.respawnAt!==null && state.t>=state.respawnAt){ state.respawnAt=null; spawnWave(); }
+      // full wipe: pull back to the Keep (main revives free there; fallen pals need the Temple)
+      if(state.wipeAt!==null && state.t>=state.wipeAt){ state.wipeAt=null; enterTown(true); }
+      // prune slain units so the list doesn't grow without bound over endless waves
+      state.units=state.units.filter(u=>u.alive);
     }
-    updateWaves();
-    // endless map: respawn a fresh wave on its timer
-    if(state.respawnAt!==null && state.t>=state.respawnAt){ state.respawnAt=null; spawnWave(); }
-    // full wipe: pull back to the Keep (main revives free there; fallen pals need the Temple)
-    if(state.wipeAt!==null && state.t>=state.wipeAt){ state.wipeAt=null; enterTown(true); }
-    // prune slain units so the list doesn't grow without bound over endless waves
-    state.units=state.units.filter(u=>u.alive);
+    // advance grid-slide interpolation for every unit
+    for(const u of state.units){ if(u.moveT!==undefined&&u.moveT<1)
+      u.moveT=Math.min(1,u.moveT+dt*6.5); }
   }
-  // advance grid-slide interpolation for every unit
-  for(const u of state.units){ if(u.moveT!==undefined&&u.moveT<1)
-    u.moveT=Math.min(1,u.moveT+dt*6.5); }
-  render(dt);
+  render(frozen?0:dt);
   requestAnimationFrame(loop);
 }
 /* boot: splash → login → create the main character, then open the Keep */
