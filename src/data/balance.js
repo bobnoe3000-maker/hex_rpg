@@ -34,6 +34,9 @@ export const BAL = {
   GEM_CHANCE: 0.06,       // chance a normal enemy drops a runic gem
   GEM_CHANCE_BOSS: 0.90,  // bosses almost always drop one
 
+  // Tavern (hiring companions; party caps at 4 = main + 3)
+  TAVERN: { RECRUITS: 3, HIRE_COST: 60, REFRESH_COST: 10 },
+
   // Shop / economy (silver)
   SHOP: {
     STOCK: 6,           // items on offer at once

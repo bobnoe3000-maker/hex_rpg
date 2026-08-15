@@ -4,7 +4,6 @@ import { buildFigure } from './engine/creatures.js';
 import { fxUpdateDraw, fxClear, fxText, fxSlash, fxBolt, fxDissolve, fxRing, fxBlock } from './engine/fx.js';
 import { GCOLS, GROWS, buildGameRoom, cx0g, cy0g, isBlocked } from './engine/dungeon.js';
 import { XP_NEXT, ROOMS_SPEC } from './engine/combat.js';
-import { makeHero } from './models/units.js';
 import { HERO_BASES } from './data/classes.js';
 import { BAL } from './data/balance.js';
 import { derive } from './systems/StatEngine.js';
@@ -15,6 +14,9 @@ import { priceOf, sellPriceOf } from './systems/Economy.js';
 import { openCharacter } from './ui/CharacterPanel.js';
 import { openTown } from './ui/TownScreen.js';
 import { openShop } from './ui/ShopScreen.js';
+import { openTavern } from './ui/TavernScreen.js';
+import { startOnboarding } from './ui/Onboarding.js';
+import { makeCompanion } from './models/units.js';
 /* ============ DP ENGINE :: game.js — endless auto-battle loop ============ */
 "use strict";
 const cvG=document.getElementById("cv"), G=cvG.getContext("2d");
@@ -33,16 +35,22 @@ logBar.onclick=()=>{ const i=LOG_STATES.indexOf(logWrap.dataset.s||"mid");
 setLogState("mid");
 /* phase: idle → fight ⇄ paused. inventory holds dropped loot; respawn/revive are timers. */
 const state={ roomIdx:0, scene:"town", phase:"idle", room:null, units:[], t:0, speed:1,
-  inventory:[], gems:0, silver:0, shopStock:[], respawnAt:null, reviveAt:null };
-const party=[makeHero("knight",11),makeHero("mage",22),makeHero("cleric",33)];
-const PARTY_CLASSES=[...new Set(party.map(h=>h.cls))]; // bias drops to classes we can use
+  inventory:[], gems:0, silver:0, shopStock:[], recruits:[], respawnAt:null, reviveAt:null };
+let party=[];               // filled by onboarding: [main, ...hired companions] (max 4)
+const partyClasses=()=>party.length?[...new Set(party.map(h=>h.cls))]:["knight","mage","cleric"];
 let combatRng=Math.random;  // reseeded deterministically when a fight starts / area changes
 /* tiny currency readout in the log header */
 const hudEl=document.createElement("span");
 hudEl.style.cssText="font-size:10px;color:#d8c47a;letter-spacing:1px;margin:0 6px 0 auto";
 logBar.insertBefore(hudEl, logToggle);
 function updateHud(){ hudEl.textContent=`💰 ${state.silver}  💎 ${state.gems}`; }
-const FIGCACHE={}, PORTCACHE={}, TILECACHE={};
+const FIGCACHE={}, PORTCACHE={}, TILECACHE={}, HEROPORT={};
+/* per-hero portrait bust, cached by the hero's portrait seed (rolled at creation) */
+function heroPortrait(h){
+  const k=h.cls+":"+h.portraitSeed;
+  if(!HEROPORT[k]) HEROPORT[k]=makeHeroPortrait(h.cls,h.portraitSeed).canvas;
+  return HEROPORT[k];
+}
 function figOf(u){
   const key=(u.cls||u.fig)+":"+u.figSeed;
   if(!FIGCACHE[key]) FIGCACHE[key]=buildFigure(u.cls||u.fig,u.figSeed);
@@ -54,7 +62,7 @@ function portOf(u){
   const key=(u.cls||u.fig)+":"+u.figSeed;
   if(PORTCACHE[key]) return PORTCACHE[key];
   let src;
-  if(u.team===0){ src=PORTS[u.cls]; }
+  if(u.team===0){ src=heroPortrait(u); }
   else{
     const fig=figOf(u); // 384x384 (96-space @4x); heads sit around y 16..52 in 96-space
     const c=document.createElement("canvas"); c.width=c.height=96;
@@ -114,9 +122,6 @@ function tileOf(u){
   TILECACHE[key]={canvas:c,S,pal};
   return TILECACHE[key];
 }
-const PORTS={};
-for(const h of party){ const p=makeHeroPortrait(h.cls,h.seed*101+7); PORTS[h.cls]=p.canvas; }
-
 function log(msg,cls){ const p=document.createElement("div"); if(cls)p.className=cls; p.innerHTML=msg;
   logEl.appendChild(p); while(logEl.children.length>40)logEl.removeChild(logEl.firstChild);
   logEl.scrollTop=logEl.scrollHeight; }
@@ -128,7 +133,7 @@ function renderParty(){
     c.style.cursor="pointer"; c.title="Tap to view stats & gear";
     c.onclick=()=>openHero(h);
     const img=document.createElement("canvas"); img.width=img.height=96; img.className="pic";
-    img.getContext("2d").drawImage(PORTS[h.cls],0,0,96,96);
+    img.getContext("2d").drawImage(heroPortrait(h),0,0,96,96);
     const bag=Object.values(h.gear).filter(Boolean).length;
     const info=document.createElement("div");
     info.innerHTML=`<b>${h.name}</b> <span class="lvl">Lv${h.level}</span><br>
@@ -148,7 +153,7 @@ function uyS(u){ const k=(u.moveT===undefined)?1:ease(u.moveT);
 
 /* ---------- room, party placement, waves ---------- */
 function placeParty(){
-  const pcols=[2,4,6], prow=GROWS-2; // GROWS-1 is the south wall; GROWS-2 is floor
+  const pcols=[2,5,3,6], prow=GROWS-2; // spread up to 4 heroes; GROWS-2 is the floor row
   party.forEach((h,i)=>{ if(h.hp<=0){h.hp=1;h.alive=true;}
     h.r=prow; h.c=pcols[i];
     let guard=0; while((isBlocked(state.room,h.r,h.c)||state.units.some(u=>u.r===h.r&&u.c===h.c))&&guard++<10){
@@ -221,7 +226,7 @@ function hurt(u,dmg,src){
     if(u.team===1&&src&&src.team===0){
       awardXP(u.xp);
       if(u.boss||combatRng()<BAL.DROP_CHANCE){
-        const drop=generate(combatRng,{classes:PARTY_CLASSES});
+        const drop=generate(combatRng,{classes:partyClasses()});
         state.inventory.push(drop);
         log(`🎁 <b>${u.name}</b> drops <span class="sys">${drop.n}</span> <span style="opacity:.6">→ bag (${state.inventory.length})</span>`);
         fxText(uxS(u),uyS(u)-30,"+"+drop.n.split(" ").pop(),"#ffd166");
@@ -300,7 +305,7 @@ function openHero(h){
   state.phase="paused"; syncButtons();
   openCharacter(h, {
     inventory: state.inventory,
-    portrait: PORTS[h.cls],
+    portrait: heroPortrait(h),
     refresh: renderParty,
     gems: ()=>state.gems,
     silver: ()=>state.silver,
@@ -316,14 +321,36 @@ function enterDungeon(){
   state.phase="fight"; syncButtons();
 }
 function openTownScreen(){
-  openTown({ silver:()=>state.silver, gems:()=>state.gems, party, portrait:cls=>PORTS[cls],
-    openHero, openShop:openShopScreen, enterDungeon });
+  openTown({ silver:()=>state.silver, gems:()=>state.gems, party, portrait:h=>heroPortrait(h),
+    openHero, openShop:openShopScreen, openTavern:openTavernScreen, enterDungeon });
+}
+/* ---------- tavern: hire companions ---------- */
+function refreshRecruits(free){
+  const cost=free?0:BAL.TAVERN.REFRESH_COST;
+  if(state.silver<cost) return false;
+  state.silver-=cost;
+  state.recruits=Array.from({length:BAL.TAVERN.RECRUITS},()=>makeCompanion((Math.random()*1e9)>>>0));
+  updateHud(); return true;
+}
+function hireCompanion(recruit){
+  if(party.length>=4 || state.silver<BAL.TAVERN.HIRE_COST) return false;
+  const i=state.recruits.indexOf(recruit); if(i<0) return false;
+  state.silver-=BAL.TAVERN.HIRE_COST; state.recruits.splice(i,1); party.push(recruit);
+  renderParty(); updateHud();
+  log(`🍺 <b>${recruit.name}</b> the ${recruit.cls} joins the party!`,"sys");
+  return true;
+}
+function openTavernScreen(){
+  if(!state.recruits.length) refreshRecruits(true); // first visit fills the tavern for free
+  openTavern({ silver:()=>state.silver, party:()=>party, recruits:()=>state.recruits,
+    hireCost:BAL.TAVERN.HIRE_COST, refreshCost:BAL.TAVERN.REFRESH_COST,
+    hire:hireCompanion, refresh:()=>refreshRecruits(false), portrait:h=>heroPortrait(h), back:openTownScreen });
 }
 function rerollStock(free){
   const cost=free?0:BAL.SHOP.REROLL_COST;
   if(state.silver<cost) return false;
   state.silver-=cost;
-  state.shopStock=Array.from({length:BAL.SHOP.STOCK},()=>generate(Math.random,{classes:PARTY_CLASSES}));
+  state.shopStock=Array.from({length:BAL.SHOP.STOCK},()=>generate(Math.random,{classes:partyClasses()}));
   updateHud(); return true;
 }
 function buyItem(item){
@@ -443,8 +470,12 @@ function loop(now){
   render(dt);
   requestAnimationFrame(loop);
 }
-log(`Welcome to <span class="sys">The Emberdeep</span>. Bram, Wren & Odo make camp at the Keep.`,"sys");
-log(`Gear up in town, then <b>Descend</b> to fight. Loot &amp; silver drop from foes · 🏠 returns to the Keep.`,"sys");
-loadRoom(); renderParty(); syncButtons(); updateHud();
-enterTown();          // boot into the hub, not straight into a fight
-requestAnimationFrame(loop);
+/* boot: splash → login → create the main character, then open the Keep */
+startOnboarding(hero=>{
+  party=[hero];
+  log(`Welcome to <span class="sys">The Emberdeep</span>, <b>${hero.name}</b> the ${hero.cls}.`,"sys");
+  log(`Hire pals &amp; gear up at the Keep, then <b>Descend</b>. Loot &amp; silver drop from foes · 🏠 returns home.`,"sys");
+  loadRoom(); renderParty(); syncButtons(); updateHud();
+  enterTown();          // open the hub, not straight into a fight
+  requestAnimationFrame(loop);
+});

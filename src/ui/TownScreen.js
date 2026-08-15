@@ -80,6 +80,7 @@ export function openTown(ctx) {
     <div class="tw-party">${ctx.party.map(card).join("")}</div>
     <div class="tw-sec">Services</div>
     <div class="tw-svc">
+      <button class="tw-btn" data-tavern><span class="ic">🍺</span><span>Tavern<small>Hire pals to fill your party (up to 4)</small></span></button>
       <button class="tw-btn" data-shop><span class="ic">🛒</span><span>Shop<small>Buy &amp; sell gear · trade silver for runic gems</small></span></button>
       <button class="tw-btn" disabled><span class="ic">🏦</span><span>Bank<small>Coming soon — a death-safe vault</small></span></button>
       <button class="tw-btn primary" data-enter>⚔️ Descend into the Emberdeep</button>
@@ -88,9 +89,10 @@ export function openTown(ctx) {
 
   ctx.party.forEach((h, i) => {
     const cv = el.querySelectorAll(".tw-card canvas")[i];
-    cv.getContext("2d").drawImage(ctx.portrait(h.cls), 0, 0, 96, 96);
+    cv.getContext("2d").drawImage(ctx.portrait(h), 0, 0, 96, 96);
   });
   el.querySelectorAll("[data-hero]").forEach(c => c.onclick = () => ctx.openHero(ctx.party[+c.getAttribute("data-hero")]));
+  el.querySelector("[data-tavern]").onclick = () => ctx.openTavern();
   el.querySelector("[data-shop]").onclick = () => ctx.openShop();
   el.querySelector("[data-enter]").onclick = () => ctx.enterDungeon();
 }

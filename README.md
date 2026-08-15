@@ -14,8 +14,11 @@ automatically (`core` has no dependencies, everything imports from it).
 - `src/systems/LootGenerator.js` — procedural items: prefix + material + gear type (pure, DOM-free)
 - `src/systems/ForgeSystem.js`  — runic-gem upgrades: diminishing success + shatter risk (pure, DOM-free)
 - `src/systems/Economy.js`      — item buy/sell pricing (pure, DOM-free)
+- `src/core/rng.js`            — seeded PRNG (mulberry32), pure — used by the art kit and the models
+- `src/ui/Onboarding.js`        — splash → guest login → create main hero (class, roll stats, roll portrait, name)
 - `src/ui/TownScreen.js`        — the Keep: hub with party, currency, services, Descend / 🏠
 - `src/ui/ShopScreen.js`        — buy / sell gear, reroll stock, trade silver for gems
+- `src/ui/TavernScreen.js`      — hire randomly-generated companions (party of 4)
 - `src/ui/itemView.js`          — shared item-name / grade rendering
 - `src/data/items/`          — `prefixes.js`, `materials.js`, `gearTypes.js` (drop-weighted component tables)
 - `src/ui/CharacterPanel.js`  — tap-a-hero modal: stats + gear slots + bag (equip/unequip)

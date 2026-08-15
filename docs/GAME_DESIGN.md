@@ -121,8 +121,9 @@ The same pattern applies to every class (e.g. Fighter: *Guardian* tank vs *Berse
 - **XP & Levels:** kills grant shared party XP (prototype behavior, generalized). Level cap removed; XP curve is formula-driven in `data/xp-curve.js`.
 - **On level-up:** class-based stat growth + skill point(s).
 - **Skill points:** spent to unlock/upgrade skills.
-- **Main hero** is created by the player (name, starting stat allocation, starting skills). (Feature 1.)
+- **Main hero** is created by the player — **implemented**: splash → guest login → pick class → **roll stats** (seeded, re-rollable) → **roll portrait** → name. (Feature 1; skills come with Phase 3.)
 - **Companions** are randomly generated recruits (see §7).
+- **Starting kit:** every character (main + companions) begins with basic armor (wooden for martial, cloth for casters) and worn boots equipped.
 
 ---
 
@@ -165,7 +166,7 @@ There are **no labeled rarity tiers** (no common/rare/epic/legendary). Loot is a
 ## 7. Party & Companions ✅ (main + up to 3)
 
 - **Party = 4 slots:** the player's **main hero** + up to **3 hired companions**. (Feature 2.)
-- **Companions** are **randomly generated** (class, name, rolled base stats, starting skill(s), optional trait). Hired at the **Tavern** for silver (premium hire 🔶).
+- **Companions** are **randomly generated** (class, name, rolled stats, rolled portrait, starter gear) — **implemented** via the **Tavern** service (`ui/TavernScreen.js`, `models/makeCompanion`): hire for silver, refresh the recruits, party caps at 4 (main + 3).
 - Companions **earn XP and loot**, are **equippable**, and the player chooses **which of their skills to upgrade**. (Feature 2.)
 - Heroes are **not permanently deleted**, but death carries a real penalty (§7.1). A **roster cap** limits benched companions (expandable — monetization hook).
 

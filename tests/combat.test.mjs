@@ -1,6 +1,6 @@
 /* Headless regression tests for the pure combat + equipment layers (no DOM, no deps).
    Run: node tests/combat.test.mjs   — exits non-zero on failure. */
-import { makeHero, makeEnemy } from "../src/models/units.js";
+import { makeHero, makeEnemy, makeCompanion, rollStats } from "../src/models/units.js";
 import { derive, dodgeChance, critChance, mitigate } from "../src/systems/StatEngine.js";
 import { resolveAttack } from "../src/systems/CombatSim.js";
 import { canEquip, equip, unequip, isUpgrade, itemScore } from "../src/systems/Equipment.js";
@@ -123,6 +123,23 @@ ok("different seed diverges", seq(123) !== seq(777));
   ok("a stronger item costs more", priceOf(rich) > priceOf(cheap));
   ok("upgrades add to the price", priceOf({ ...cheap, upgradeLevel: 4 }) > priceOf(cheap));
   ok("sell price is below buy price", sellPriceOf(rich) < priceOf(rich) && sellPriceOf(rich) >= 2);
+}
+
+// Character creation: rolled stats, starter gear, companions
+{
+  const a = rollStats("knight", 123), b = rollStats("knight", 123), c = rollStats("knight", 999);
+  ok("rollStats is deterministic for a seed", JSON.stringify(a) === JSON.stringify(b));
+  ok("rollStats varies with the seed", JSON.stringify(a) !== JSON.stringify(c));
+  ok("rolled stats stay near the class base (±~20%)", a.hp > 40 && a.hp < 75 && a.atk >= 1);
+  const h = makeHero("knight", { statSeed: 7, portraitSeed: 42, name: "Test" });
+  ok("created hero keeps its name and rolled seed", h.name === "Test" && h.portraitSeed === 42);
+  ok("every hero starts with armor and boots", h.gear.armor && h.gear.boots && h.gear.weapon === null);
+  ok("caster starter gear is cloth, martial is wooden",
+     makeHero("mage", {}).gear.armor.n === "Cloth Robe" && makeHero("knight", {}).gear.armor.n === "Wooden Armor");
+  const comp = makeCompanion(555), comp2 = makeCompanion(555);
+  ok("companions are deterministic per seed", comp.name === comp2.name && comp.cls === comp2.cls);
+  ok("companion has a class, name, stats and starter gear",
+     ["knight","mage","cleric"].includes(comp.cls) && !!comp.name && comp.gear.boots && comp.team === 0);
 }
 
 console.log(fails ? `\n${fails} FAILED` : "\nall passed");
