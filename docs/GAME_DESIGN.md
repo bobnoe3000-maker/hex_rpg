@@ -46,8 +46,9 @@ This mirrors how **Defense** already works (`x/(x+…)` diminishing returns), so
 - `lifesteal%`, elemental/DoT proc magnitudes, buff/debuff values.
 
 ### 2.2 Action economy
+- **Combat is continuous, not turn-based.** There are no discrete global rounds — the battle flows in real time and every unit acts **independently on its own attack-speed cadence**. A high-`aspd` unit simply acts more often. This is the whole reason Attack Speed is a stat, and it keeps the fight visually continuous rather than a stop-start exchange.
 - Combat is a **fixed-timestep simulation** on a grid (inherits the prototype's 8×11 board and Manhattan movement).
-- Each unit has an **action timer**; interval = `BASE_INTERVAL / aspd`. When it fires, the unit takes **one action**.
+- Each unit has an **action timer**; interval = `BASE_INTERVAL / aspd`. When it fires, the unit takes **one action** — timers run in parallel, so actions interleave smoothly.
 - An action = resolve the unit's **skill priority list** (§4): fire the first eligible skill, else a **basic attack**.
 - Ranged units act at range; melee units path toward the nearest valid target first.
 
@@ -140,16 +141,16 @@ Every item is composed of **Prefix + Material + Gear Type + Upgrade Level**, and
 - **Gear Type** — defines the **slot**, the **class** it serves, and one stat bonus.
   - *Weapon types:* sword, dagger, mace (fighter); wand, staff, orb (mage); bow, blades (rogue)… 🔶 extend.
   - *Wearable types:* helm, chest, gloves, boots, cloak, ring, amulet, shield.
-- **Material** — defines **base stats** and rarity weighting; carries one stat bonus and may carry a **drawback**.
-  - *Weapon materials:* iron, steel, meteoric, emberglass… (e.g. *meteoric*: +ATK, −ASPD).
-  - *Wearable materials:* cotton, silk, leather, dragonhide… (e.g. *dragonhide*: +DEF, +HP).
-- **Prefix** — defines a **proc** (special effect) + one stat bonus + rarity weighting. `normal` = no proc.
+- **Material** — defines **base stats**; carries one stat bonus and may carry a **drawback**.
+  - *Weapon materials:* iron, steel, meteoric, emberglass… (e.g. *meteoric*: +ATK, −ASPD). **Better materials have a lower drop rate.**
+  - *Wearable materials:* cotton, silk, leather, dragonhide… (e.g. *dragonhide*: +DEF, +HP). **Better materials have a lower drop rate.**
+- **Prefix** — defines a **proc** (special effect) + one stat bonus. `normal` = no proc (the most common roll); **stronger procs have a lower drop rate**.
   - e.g. *fiery* (burn DoT), *icy* (slow/chill), *vampiric* (lifesteal), *keen* (+crit).
 
 Item's total stats = prefix bonus + material bonus + gear-type bonus + upgrade bonuses. **Benefits *and* drawbacks** emerge from materials/prefixes carrying negative modifiers. (Feature 9.)
 
-### 6.2 Rarity
-Rarity is **derived** from the drawn components' rarity weights (rarest component drives the item's tier), governing name color and drop rates. Tiers: 🔶 `common / rare / epic (/ legendary?)`.
+### 6.2 No rarity tiers — quality is emergent ✅
+There are **no labeled rarity tiers** (no common/rare/epic/legendary). Loot is a **random drop**: each item is an independent roll of prefix + material + gear type. **Better materials and stronger procs simply drop less often**, so a powerful item is one where scarce components happened to roll together. An item's power reads directly from its **components + upgrade level** (`+1`, `+2`, … via runic gems, §6.3) — not from a tier badge. Drop weights live in the component tables / `data/lootTables.js`; changing a weight changes how often that component appears. (UI may still tint an item by its best component for readability, but that's cosmetic, not a mechanical tier.)
 
 ### 6.3 Forge — gem upgrades ✅ (Feature 10)
 - **Runic gems** are rare drops.
@@ -161,20 +162,30 @@ Rarity is **derived** from the drawn components' rarity weights (rarest componen
 ## 7. Party & Companions ✅ (main + up to 3)
 
 - **Party = 4 slots:** the player's **main hero** + up to **3 hired companions**. (Feature 2.)
-- **Companions** are **randomly generated** (class, name, rolled base stats, starting skill(s), optional trait). Hired at the **Tavern** for gold (premium hire 🔶).
+- **Companions** are **randomly generated** (class, name, rolled base stats, starting skill(s), optional trait). Hired at the **Tavern** for silver (premium hire 🔶).
 - Companions **earn XP and loot**, are **equippable**, and the player chooses **which of their skills to upgrade**. (Feature 2.)
-- Roster persists (no permadeath by default 🔶); downed heroes revive between runs. A **roster cap** limits benched companions (expandable — monetization hook).
+- Heroes are **not permanently deleted**, but death carries a real penalty (§7.1). A **roster cap** limits benched companions (expandable — monetization hook).
+
+### 7.1 Death & Loss ✅ (roguelite stakes)
+Both the main hero and companions **can die**. A **party wipe** ends the run with real consequences — this is what gives combat and gearing weight:
+- **Lost:** every **item the party was carrying** — all equipped gear *and* run inventory. You come back stripped to nothing.
+- **Kept:** each hero themselves and all of their **progression — XP, level, stats, and skills**. Death is *"almost start fresh,"* not a wipe of who your heroes are.
+- **Safe:** anything in the **Bank** — items and silver — survives. Banking valuables before a risky delve becomes a core strategic decision, and gives the Bank a real purpose.
+
+Individually downed heroes in a fight the party still **wins** are revived at run's end with **no loss** — only a **full party wipe** strips carried items. This turns each dungeon into a risk/reward push: press deeper for better drops, or bank your haul and retreat.
+
+🔶 **Open:** on a wipe, does the party keep **silver carried on hand**, or only banked silver? *Default assumption: on-hand silver is kept — only carried **items** are lost.*
 
 ---
 
 ## 8. Meta Structure & Screens
 
 ### 8.1 Keep / Town hub ✅ (Feature 6)
-Home screen with services:
+The single currency is **silver** (used for shop purchases, companion hires, forge fees, and stored in the Bank). Home screen with services:
 | Service | Function |
 |---|---|
 | **Shop** | Buy/sell gear, consumables, gems (rotating stock). |
-| **Bank** | Store gold & items; stash tabs (extra tabs = monetization 🔶). |
+| **Bank** | Store silver & items; the only **death-safe** vault (§7.1); stash tabs (extra tabs = monetization 🔶). |
 | **Forge** | Gem upgrades (§6.3). |
 | **Tavern** | Hire randomly-generated companions. |
 | **Barracks/Roster** | Manage party & bench; view/equip characters. |
@@ -191,7 +202,7 @@ Keep-level upgrades (unlock/boost services) are 🔶 future.
 - **World map:** node graph of dungeons/regions, gated by level/progression/keys. Future open-world hunting areas 🔶.
 - **Dungeons:** **procedurally generated** rooms from a **dungeon config** (data-driven):
   - `theme, levelRange, enemyPool, lootBias, boss, roomCount, palette/tileset, npcTypes`.
-  - Low-level dungeons → rats/kobolds, low-tier loot, easier boss. Higher tiers scale enemy stats **and** loot tier.
+  - Low-level dungeons → rats/kobolds, a weaker drop pool, easier boss. Higher-level dungeons scale enemy stats **and** bias drops toward better materials/procs (via `data/lootTables.js` weights) — deeper delves = better *odds*, still no rarity tiers.
   - **Themes/regions** reskin enemies, loot bias, and visual styling for a distinct feel.
 
 ### 8.4 Skill Priority screen ✅ (Feature 3)
@@ -264,12 +275,13 @@ Keep the prototype's **procedural, seeded, hand-inked engine** (portraits, creat
 
 1. ~~Dedicated healer/support class~~ — **resolved:** Cleric is a core class (§3).
 2. ~~Crit as a stat vs proc-only~~ — **resolved:** Crit is a first-class stat (§2.1).
-3. **Rarity tiers** — 3 (common/rare/epic) or 4 (+legendary)? Colors/odds. (Affects Phase 2 loot tables.)
-4. **Permadeath** for companions? (current: no; revive between runs.)
+3. ~~Rarity tiers~~ — **resolved:** no tiers; random drops, better components drop less often, power via components + upgrade level (§6.2).
+4. ~~Permadeath~~ — **resolved:** party wipe strips all carried items but keeps XP/stats/skills; Bank is death-safe (§7.1).
 5. **Damage-formula constants** — needs a balance pass (placeholders in `balance.js`).
 6. **Live PvP / co-op** — async only for now; realtime is a later backend decision.
-7. **Skill-tree respec cost** — free experimentation vs gold/material sink (§4.1).
-8. **Energy/stamina** gating on dungeon runs? (Not in the feature list — omitted unless desired.)
-9. **Consumables** (potions, scrolls) — in scope? Implied by Shop; needs a small spec.
+7. **Skill-tree respec cost** — free experimentation vs silver/material sink (§4.1).
+8. **On-wipe silver** — keep silver carried on hand, or only banked silver? (default: keep on-hand; §7.1).
+9. **Energy/stamina** gating on dungeon runs? (Not in the feature list — omitted unless desired.)
+10. **Consumables** (potions, scrolls) — in scope? Implied by Shop; needs a small spec.
 
 See `docs/ARCHITECTURE.md` for the technical realization and the phased build roadmap.

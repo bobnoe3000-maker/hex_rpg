@@ -73,9 +73,9 @@ systems/│ pure game logic (no DOM,   │   │  engine/     │  ← canvas ar
     xpCurve.js               — level/XP formulas
     enemies.js               — enemy stat blocks by kind
     dungeons.js              — dungeon/region/theme configs (levelRange, pools, palette)
-    lootTables.js            — drop weighting by dungeon tier
-    items/prefixes.js        — prefix table (proc + stat + rarity)
-    items/materials.js       — material table (base stats + drawbacks + rarity)
+    lootTables.js            — per-component drop weights (rarer = lower rate); no tiers
+    items/prefixes.js        — prefix table (proc + stat + drop weight)
+    items/materials.js       — material table (base stats + drawbacks + drop weight)
     items/gearTypes.js       — gear-type table (slot + class + stat)
     shop.js                  — shop stock definitions
   /models/
@@ -86,14 +86,15 @@ systems/│ pure game logic (no DOM,   │   │  engine/     │  ← canvas ar
     Enemy.js                 — enemy instance
   /systems/                  — PURE LOGIC (deterministic, headless)
     StatEngine.js            — derive final six-stats from base+gear+skills+buffs
-    CombatSim.js             — fixed-step auto-battle; emits an event/log stream
+    CombatSim.js             — continuous fixed-step auto-battle (no rounds; per-unit
+                               ASPD timers); emits an event/log stream
     SkillEngine.js           — priority-list resolution, cooldowns, conditions, effects
-    LootGenerator.js         — roll prefix+material+type → Item; rarity derivation
+    LootGenerator.js         — roll prefix+material+type → Item (weighted drops, no tiers)
     ForgeSystem.js           — gem upgrade: success/destruction by level
     DungeonGenerator.js      — procedural rooms from dungeon config (seeded)
     ProgressionSystem.js     — xp award, level-up, skill points
     Roster.js                — companion generation, hiring, bench
-    Economy.js               — gold, shop buy/sell, bank
+    Economy.js               — silver, shop buy/sell, bank
     OfflineSim.js            — capped idle simulation (uses CombatSim/Economy)
     PvPSim.js                — snapshot vs snapshot (wraps CombatSim)
   /services/                 — SIDE EFFECTS (swap local↔server)
@@ -136,17 +137,19 @@ systems/│ pure game logic (no DOM,   │   │  engine/     │  ← canvas ar
 ```
 GameState {
   version, slotId,
-  profile:   { name, gold, premium, createdAt, lastSeenAt },
-  main:      Character,
+  profile:   { name, silver, premium, createdAt, lastSeenAt },
+  main:      Character,              // heroes keep XP/stats/skills through death
   roster:    Character[],           // benched + active companions
   party:     [slotRefs x4],         // main + up to 3 companion ids
-  inventory: Item[],
-  bank:      { gold, items[] },
+  inventory: Item[],                // CARRIED — lost entirely on a party wipe
+  bank:      { silver, items[] },   // DEATH-SAFE — survives a wipe
   progress:  { unlockedDungeons[], clears{}, arena{ elo, rank } },
   settings:  { ... }
 }
 ```
 Everything is plain data. Behavior lives in `systems/`. `SaveService` persists exactly this.
+
+**Death model (§7.1 of the design):** a party wipe clears `inventory` and every hero's equipped `gear`, but leaves each `Character`'s xp/level/stats/skills and the `bank` untouched. Run-resolution logic (in the dungeon run flow) owns this transition; `Character` progression is never touched by death.
 
 ### 4.2 Deterministic sim entry points
 ```
@@ -154,7 +157,7 @@ CombatSim.run({ partyA, partyB, dungeon?, seed }) -> { winner, log[], stateTimel
 StatEngine.derive(character) -> { hp, atk, def, dodge, crit, aspd, ...hidden }   // dodge/crit are ratings
 StatEngine.dodgeChance(defender, attacker) -> 0..1   // rating contested vs attacker level
 StatEngine.critChance(attacker, target)    -> 0..1   // rating contested vs target level
-LootGenerator.roll({ tier, classHint, seed }) -> Item
+LootGenerator.roll({ dungeonLevel, classHint, seed }) -> Item   // dungeonLevel biases drop weights
 OfflineSim.simulate({ state, elapsedMs, cap }) -> { rewards, log }
 PvPSim.resolve({ snapshotA, snapshotB, seed }) -> result   // == CombatSim.run
 ```
@@ -212,7 +215,7 @@ Each phase is independently shippable and leaves `main` runnable.
 | **3 — Skills** | `SkillEngine` + priority list + upgrades + `SkillPriorityScreen` | Player orders a rotation that drives combat |
 | **3.5 — Skill trees** 🔶 | Per-class `skillTrees.js` + point investment + respec | Same-class heroes build differently (e.g. Cleric: Devotion vs Wrath) |
 | **4 — Town hub** | `SceneManager` + `TownScreen`; Shop/Bank/Forge + `Economy` | Boot to Town; buy/sell/forge loop works |
-| **5 — Map & dungeons** | `WorldMapScreen` + themed procedural dungeons + uncapped progression | Choose dungeon → generated themed run → tiered loot |
+| **5 — Map & dungeons** | `WorldMapScreen` + themed procedural dungeons + uncapped progression + run resolution (wipe → strip carried items, keep progression) | Choose dungeon → generated themed run → weighted loot; wipe loses carried gear only |
 | **6 — Companions** | `Roster`: generate/hire/equip/upgrade; party of 4 | Full 4-slot party from hired randoms |
 | **7 — Save & offline** | `SaveService` + game slots + `OfflineSim` + modal | Multi-slot persistence + capped offline rewards |
 | **8 — PvP** | `PvPSim` + `NetService` mock (async snapshots) + `ArenaScreen` | Ranked async battles vs ghost snapshots |
