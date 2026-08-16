@@ -53,7 +53,7 @@ export const BAL = {
   // STEP = how much one point raises each assignable stat.
   POINTS: {
     PER_LEVEL: [{ upTo: 50, pts: 3 }, { upTo: 100, pts: 2 }, { upTo: Infinity, pts: 1 }],
-    STEP: { hp: 8, atk: 2, def: 2, dodge: 2, crit: 2 },
+    STEP: { hp: 1, atk: 1, def: 1, dodge: 1, crit: 1 },   // one point = one unit of the stat
   },
 
   WIPE_DELAY: 1.6,        // seconds after a full wipe before you're pulled back to the Keep
@@ -77,5 +77,9 @@ export const BAL = {
     SUCCESS: [0.95, 0.88, 0.80, 0.70, 0.60, 0.50, 0.42, 0.34, 0.27, 0.20],
     DESTROY: [0.00, 0.00, 0.05, 0.10, 0.16, 0.22, 0.28, 0.34, 0.40, 0.46],
     STEP: { atk: 1, def: 2, hp: 4, dodge: 2, crit: 2, aspd: 0.05 }, // stat gained per +1
+    // Each attempt costs runic gems AND silver, both rising with the item's current upgrade level.
+    // gems   = GEM_BASE + floor(level / GEM_PER)   (1 → +3 → +6 … buys another gem)
+    // silver = SILVER_BASE + level * SILVER_PER    (linear ramp)
+    COST: { GEM_BASE: 1, GEM_PER: 3, SILVER_BASE: 20, SILVER_PER: 15 },
   },
 };

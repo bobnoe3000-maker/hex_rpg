@@ -62,6 +62,7 @@ export function openTavern(ctx) {
     const emptySlots = Array.from({ length: Math.max(0, CAP - party.length) }, () => `<div class="tv-slot empty">empty</div>`).join("");
 
     el.innerHTML = `<div class="tw-wrap">
+      <button class="tv-return" data-back style="margin:0 0 10px">${iconImg("house",17)} Return to the Keep</button>
       <div class="shop-top" style="justify-content:flex-end">
         <span class="tw-cur"><span>${iconImg("coin",13)} ${silver}</span></span>
       </div>
@@ -74,7 +75,6 @@ export function openTavern(ctx) {
       <div class="tw-sec">Looking for work</div>
       ${recruits.length ? recruits.map(row).join("") : `<div class="shop-none">Nobody's here — check back later.</div>`}
       <button class="tw-btn" data-refresh style="justify-content:center" ${silver < ctx.refreshCost ? "disabled" : ""}>${iconImg("refresh",13)} New faces · ${iconImg("coin",12)} ${ctx.refreshCost}</button>
-      <button class="tv-return" data-back>${iconImg("house",17)} Return to the Keep</button>
     </div>`;
 
     party.forEach((h, i) => {

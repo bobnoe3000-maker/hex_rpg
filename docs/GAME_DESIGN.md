@@ -121,7 +121,7 @@ The same pattern applies to every class (e.g. Fighter: *Guardian* tank vs *Berse
 ## 5. Progression
 
 - **XP & Levels:** kills grant shared party XP (split among the living). **No level cap** — the XP curve is formula-driven (`engine/combat.js`: `xpToReach(L) = 10·(L²−1)`, keeping the classic early pacing L2=30, L3=80 and scaling forever). **Implemented.**
-- **On level-up (main hero):** **no automatic stat growth** — each level grants **assignable stat points**, starting at **level 2** (a fresh level-1 hero has none). Rate (`BAL.POINTS`): **3/level up to L50, 2 up to L100, then 1**. The player spends them in the character panel (add/remove with a live preview, then **Confirm**); each point raises a stat by `STAT_STEP` (HP +8, ATK/DEF/Dodge/Crit +2). Points live on the hero as `pts{}` and feed `StatEngine.derive`; the available pool is `earnedPoints(level) − spent` (summed from L2). `systems/Leveling.js` (pure). **Implemented.**
+- **On level-up (main hero):** **no automatic stat growth** — each level grants **assignable stat points**, starting at **level 2** (a fresh level-1 hero has none). Rate (`BAL.POINTS`): **3/level up to L50, 2 up to L100, then 1**. The player spends them in the character panel's **Stats tab** (add/remove with a live preview, then **Confirm**); **one point = one unit** of the stat (`STAT_STEP` all 1). Points live on the hero as `pts{}` and feed `StatEngine.derive`; the available pool is `earnedPoints(level) − spent` (summed from L2). `systems/Leveling.js` (pure). **Implemented.**
 - **On level-up (companions):** keep the **fixed per-class growth block** in `data/classes.js` (no point allocation) — they auto-scale so the player only micromanages the main hero. **Implemented.**
 - **Skill points:** spent to unlock/upgrade skills.
 - **Main hero** is created by the player — **implemented**: splash → guest login → pick class → **roll stats** (seeded, re-rollable) → **roll portrait** → name. (Feature 1; skills come with Phase 3.)
@@ -163,9 +163,10 @@ There are **no labeled rarity tiers** (no common/rare/epic/legendary). Loot is a
 
 ### 6.3 Forge — gem upgrades ✅ (Feature 10) — implemented
 - **Runic gems** are rare drops (`BAL.GEM_CHANCE`, bosses almost always drop one).
-- Spend a gem to attempt **+1 to the item's primary stat** (raises `upgradeLevel`; name shows `+N`).
-- **Diminishing success** as level rises; on failure, a growing **chance the item shatters** — all odds per level in `data/balance.js` (`FORGE.SUCCESS` / `FORGE.DESTROY` / `FORGE.STEP`). Logic in `systems/ForgeSystem.js` (pure).
-- Now a **dedicated Forge service** at the Keep (`ui/ForgeScreen.js`) — the **Runic Anvil**: seat a piece of gear, see its **success chance** + the exact **stat delta** and shatter risk for the next `+`, then **Fuse Gem** to attempt it (one gem each). The gear list spans every hero's equipped gear + the shared bag, filterable by **owner** (a portrait chip per hero + a Bag chip) and by **gear slot**. The character/gear panel no longer forges — it's town-only. Reached via the **Forge** service button (anvil icon).
+- Each attempt costs **runic gems AND silver**, both **rising with the item's current upgrade level** (`FORGE.COST`: gems = `1 + ⌊level/3⌋`, silver = `20 + level·15`) — so pushing a `+8` item further is a real gem-and-silver sink, not just a gem each.
+- Spend the cost to attempt **+1 to the item's primary stat** (raises `upgradeLevel`; name shows `+N`).
+- **Diminishing success** as level rises; on failure, a growing **chance the item shatters** — all odds per level in `data/balance.js` (`FORGE.SUCCESS` / `FORGE.DESTROY` / `FORGE.STEP` / `FORGE.COST`). Logic in `systems/ForgeSystem.js` (pure).
+- A **dedicated Forge service** at the Keep (`ui/ForgeScreen.js`) — the **Runic Anvil**: seat a piece of gear, see its **success chance**, the exact **stat delta**, the shatter risk, and the **gem + silver cost** for the next `+`, then **Fuse Gem** (disabled unless you can afford both). The gear list spans every hero's equipped gear + the shared bag, filterable by **owner** (a portrait chip per hero + a Bag chip) and by **gear slot**. The character/gear panel no longer forges — it's town-only. Reached via the **Forge** service button (anvil icon).
 
 ---
 

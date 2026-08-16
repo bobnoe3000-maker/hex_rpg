@@ -58,6 +58,7 @@ export function openShop(ctx) {
       ${inv.length ? inv.map(sellRow).join("") : `<div class="shop-none">Your bag is empty — find loot in the Emberdeep.</div>`}`;
 
     el.innerHTML = `<div class="tw-wrap">
+      <button class="tw-btn primary" data-back style="justify-content:center;margin-bottom:10px">${iconImg("house", 16)} Return to the Keep</button>
       <div class="shop-top" style="justify-content:flex-end">
         <span class="tw-cur"><span>${iconImg("coin", 12)} ${silver}</span> <span class="g">${iconImg("gem", 12)} ${ctx.gems()}</span></span>
       </div>
@@ -67,7 +68,6 @@ export function openShop(ctx) {
         <button class="shop-tab ${tab === "sell" ? "sel" : ""}" data-tab="sell">${iconImg("coin", 15)} Sell <span class="n">(${inv.length})</span></button>
       </div>
       ${tab === "buy" ? buyPane : sellPane}
-      <button class="tw-btn primary" data-back style="justify-content:center;margin-top:8px">${iconImg("house", 16)} Return to the Keep</button>
     </div>`;
 
     el.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => { tab = b.getAttribute("data-tab"); render(); });

@@ -20,9 +20,14 @@ function injectCss() {
   if (document.getElementById("cp-style")) return;
   const s = document.createElement("style"); s.id = "cp-style";
   s.textContent = `
-  .cpanel{width:100%;max-width:340px;max-height:calc(100dvh - 40px);overflow-y:auto;
+  .cpanel{width:100%;max-width:420px;max-height:calc(100dvh - 40px);overflow-y:auto;
     background:linear-gradient(#241b38,#181128);border:1px solid var(--line);border-radius:12px;
     padding:12px 13px;box-shadow:0 6px 24px #000;text-align:left}
+  .cp-tabs{display:flex;gap:8px;margin:2px 0 11px}
+  .cp-tab{flex:1;font-family:inherit;font-weight:bold;letter-spacing:1px;font-size:13px;border:1px solid var(--line);
+    border-radius:9px;padding:10px;cursor:pointer;background:#1c1630;color:#9a8fb8}
+  .cp-tab.sel{border-color:var(--gold);background:linear-gradient(#2c2342,#1c1630);color:var(--gold)}
+  .cp-tab:active{transform:translateY(1px)}
   .cp-head{display:flex;align-items:center;gap:9px;margin-bottom:8px}
   .cp-head canvas{width:50px;height:50px;border-radius:8px;border:1px solid #6e5a2a;flex:0 0 auto}
   .cp-head .nm{flex:1;min-width:0}.cp-head b{font-size:15px;color:var(--gold)} .cp-head .lvl{color:#9ad1ff;font-size:12px}
@@ -89,6 +94,7 @@ export function openCharacter(hero, ctx) {
   injectCss();
   const overlay = document.getElementById("overlay");
   let filterSlot = null; // when set, the bag lists only items for that slot
+  let tab = "stats";     // main-hero panel tab: "stats" | "equip"
   const draft = {};      // pending, unconfirmed point allocation (stat → signed count)
   for (const k of ASSIGNABLE) draft[k] = 0;
   const draftSum = () => ASSIGNABLE.reduce((a, k) => a + draft[k], 0);
@@ -151,6 +157,30 @@ export function openCharacter(hero, ctx) {
         </div>`;
     };
 
+    const statsBlock = `
+      <div class="cp-stats">
+        <div class="hp"><span class="k">HP</span><span class="v">${hero.hp} / ${D.maxhp}</span></div>
+        ${STAT_ROWS.map(([k, key]) => statCell(k, key)).join("")}
+        <div><span class="k">Speed</span><span class="v">${D.aspd.toFixed(2)}</span></div>
+        <div><span class="k">Range</span><span class="v">${D.rng > 1 ? "Ranged" : "Melee"}</span></div>
+      </div>
+      ${attrSection()}`;
+    const equipBlock = `
+      <div class="cp-sec"><span>Equipped</span><span class="hint">tap a slot to filter the bag</span></div>
+      ${SLOTS.map(slotRow).join("")}
+      <div class="cp-sec"><span>Bag${filterSlot ? ` — ${cap(filterSlot)}` : ""}${others > 0 && !filterSlot ? ` · ${others} for other heroes` : ""}</span>${filterSlot ? `<span class="cp-clear" data-clear="1">show all ✕</span>` : ""}</div>
+      ${usable.length ? usable.map(it => itemRow(it, ctx.inventory.indexOf(it))).join("")
+                      : `<div class="cp-none">${filterSlot ? "No " + cap(filterSlot) + " items in the bag." : "No items " + hero.name + " can equip yet — fight to find loot."}</div>`}`;
+
+    // Main hero gets two tabs (Stats+points / Equipment); companions show one combined view.
+    const tabbed = ctx.isMain;
+    const body = tabbed
+      ? `<div class="cp-tabs">
+           <button class="cp-tab ${tab === "stats" ? "sel" : ""}" data-tab="stats">Stats</button>
+           <button class="cp-tab ${tab === "equip" ? "sel" : ""}" data-tab="equip">Equipment</button>
+         </div>${tab === "stats" ? statsBlock : equipBlock}`
+      : statsBlock + equipBlock;
+
     overlay.innerHTML = `<div class="cpanel">
       <div class="cp-head">
         <canvas width="96" height="96"></canvas>
@@ -160,22 +190,12 @@ export function openCharacter(hero, ctx) {
       </div>
       ${xpBar()}
       ${msg ? `<div class="cp-msg ${msg[0]}">${msg[1]}</div>` : ""}
-      <div class="cp-stats">
-        <div class="hp"><span class="k">HP</span><span class="v">${hero.hp} / ${D.maxhp}</span></div>
-        ${STAT_ROWS.map(([k, key]) => statCell(k, key)).join("")}
-        <div><span class="k">Speed</span><span class="v">${D.aspd.toFixed(2)}</span></div>
-        <div><span class="k">Range</span><span class="v">${D.rng > 1 ? "Ranged" : "Melee"}</span></div>
-      </div>
-      ${attrSection()}
-      <div class="cp-sec"><span>Equipped</span><span class="hint">tap a slot to filter the bag</span></div>
-      ${SLOTS.map(slotRow).join("")}
-      <div class="cp-sec"><span>Bag${filterSlot ? ` — ${cap(filterSlot)}` : ""}${others > 0 && !filterSlot ? ` · ${others} for other heroes` : ""}</span>${filterSlot ? `<span class="cp-clear" data-clear="1">show all ✕</span>` : ""}</div>
-      ${usable.length ? usable.map(it => itemRow(it, ctx.inventory.indexOf(it))).join("")
-                      : `<div class="cp-none">${filterSlot ? "No " + cap(filterSlot) + " items in the bag." : "No items " + hero.name + " can equip yet — fight to find loot."}</div>`}
+      ${body}
     </div>`;
 
     overlay.querySelector(".cp-head canvas").getContext("2d").drawImage(ctx.portrait, 0, 0, 96, 96);
     overlay.querySelector("[data-close]").onclick = () => { overlay.classList.remove("show"); ctx.close(); };
+    overlay.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => { tab = b.getAttribute("data-tab"); render(); });
     const clr = overlay.querySelector("[data-clear]"); if (clr) clr.onclick = () => { filterSlot = null; render(); };
     overlay.querySelectorAll("[data-filter]").forEach(row => row.onclick = () => {
       const key = row.getAttribute("data-filter");

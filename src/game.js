@@ -11,7 +11,7 @@ import { BAL } from './data/balance.js';
 import { derive } from './systems/StatEngine.js';
 import { resolveAttack } from './systems/CombatSim.js';
 import { generate, describeItem } from './systems/LootGenerator.js';
-import { upgrade as forgeUpgrade, canUpgrade, forgePreview } from './systems/ForgeSystem.js';
+import { upgrade as forgeUpgrade, canUpgrade, forgePreview, forgeCost } from './systems/ForgeSystem.js';
 import { priceOf, sellPriceOf } from './systems/Economy.js';
 import { openCharacter } from './ui/CharacterPanel.js';
 import { openTown } from './ui/TownScreen.js';
@@ -424,9 +424,11 @@ function removeItem(item){
 }
 /* spend a gem to upgrade an item at the Forge; returns the outcome for the panel to show */
 function tryForge(item){
-  if(state.gems<=0) return {outcome:"nogem"};
   if(!canUpgrade(item)) return {outcome:"max"};
-  state.gems--;
+  const cost=forgeCost(item);
+  if(state.gems<cost.gems) return {outcome:"nogem"};
+  if(state.silver<cost.silver) return {outcome:"nosilver"};
+  state.gems-=cost.gems; state.silver-=cost.silver;
   const res=forgeUpgrade(item, Math.random);
   if(res.outcome==="success"){ item.d=describeItem(item);   // rebuild the stat text so rows/panels show the new value
     log(`${iconImg("hammer",14)} <span class="heal">+${item.upgradeLevel}!</span> ${item.n} strengthened.`,"heal"); }
@@ -494,7 +496,7 @@ function allGear(){
   return list;
 }
 function openForgeScreen(){
-  openForge({ gems:()=>state.gems, gear:allGear, party:()=>party, portrait:h=>heroPortrait(h),
+  openForge({ gems:()=>state.gems, silver:()=>state.silver, gear:allGear, party:()=>party, portrait:h=>heroPortrait(h),
     preview:forgePreview, forge:tryForge, back:openTownScreen });
 }
 /* ---------- tavern: hire companions (scale to the main hero's level) ---------- */

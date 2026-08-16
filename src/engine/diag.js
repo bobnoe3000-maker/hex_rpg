@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-16 · stat points from lv2 · temple main revive";
+export const APP_BUILD = "2026-08-16 · char tabs · 1-pt steps · forge silver cost";
 
 const BUF = [];
 const MAX = 400;

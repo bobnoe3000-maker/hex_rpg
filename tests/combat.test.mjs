@@ -5,7 +5,7 @@ import { derive, dodgeChance, critChance, mitigate } from "../src/systems/StatEn
 import { resolveAttack } from "../src/systems/CombatSim.js";
 import { canEquip, equip, unequip, isUpgrade, itemScore } from "../src/systems/Equipment.js";
 import { generate, describeItem } from "../src/systems/LootGenerator.js";
-import { upgrade, canUpgrade, primaryStat } from "../src/systems/ForgeSystem.js";
+import { upgrade, canUpgrade, primaryStat, forgeCost, forgePreview } from "../src/systems/ForgeSystem.js";
 import { priceOf, sellPriceOf } from "../src/systems/Economy.js";
 import { xpToReach, xpForNext } from "../src/engine/combat.js";
 import { earnedPoints, pointsForLevel, unspentPoints, pointBonus, STAT_STEP } from "../src/systems/Leveling.js";
@@ -166,6 +166,14 @@ ok("different seed diverges", seq(123) !== seq(777));
   ok("cannot upgrade past max", !canUpgrade(it3) && upgrade(it3, always).outcome === "max");
   // primaryStat fallback picks the biggest stat when none stored
   ok("primaryStat falls back to the largest stat", primaryStat({ def: 8, atk: 2, upgradeLevel: 0 }) === "def");
+
+  // forge cost rises with the item's upgrade level (gems step up, silver ramps linearly)
+  const c0 = forgeCost({ upgradeLevel: 0 }), c3 = forgeCost({ upgradeLevel: 3 }), c6 = forgeCost({ upgradeLevel: 6 });
+  ok("base forge cost is 1 gem + silver", c0.gems === 1 && c0.silver > 0);
+  ok("silver cost rises every level", c3.silver > c0.silver && c6.silver > c3.silver);
+  ok("gem cost steps up with level", c3.gems > c0.gems && c6.gems > c3.gems);
+  ok("preview surfaces the cost", forgePreview({ atk: 3, upgradeLevel: 2, primary: "atk" }).gemCost >= 1 &&
+     forgePreview({ atk: 3, upgradeLevel: 2, primary: "atk" }).silverCost > 0);
 }
 
 // isUpgrade: an item that scores higher than the equipped slot is flagged

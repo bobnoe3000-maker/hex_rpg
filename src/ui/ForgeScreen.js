@@ -18,7 +18,8 @@ const forgeMsg = res =>
   res.outcome === "success"   ? ["good", `${iconImg("hammer", 13)} Success — the item grows stronger!`]
   : res.outcome === "destroyed" ? ["bad",  `${iconImg("hammer", 13)} Shattered! The item was destroyed.`]
   : res.outcome === "max"       ? ["meh",  "Already at max upgrade."]
-  : res.outcome === "nogem"     ? ["meh",  "No runic gems — trade silver for gems at the Shop."]
+  : res.outcome === "nogem"     ? ["meh",  "Not enough runic gems — trade silver for gems at the Shop."]
+  : res.outcome === "nosilver"  ? ["meh",  "Not enough silver for this upgrade."]
   :                               ["meh",  `${iconImg("hammer", 13)} The gem fizzled — no change.`];
 
 let cssDone = false;
@@ -44,6 +45,8 @@ function ensureForgeCss() {
   .fg-gem-l{font-size:9px;letter-spacing:1px;text-transform:uppercase;color:#8f86a8}
   .fg-sec{display:flex;justify-content:space-between;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#8f86a8;margin-bottom:4px}
   .fg-pct{color:var(--gold)}
+  .fg-cost{color:var(--parchment);font-size:12px;display:inline-flex;gap:9px;align-items:center}
+  .fg-cost .fg-risk{color:#ff6b6b}
   .fg-bar{height:8px;background:#241a2e;border-radius:4px;overflow:hidden;border:1px solid var(--line)}
   .fg-bar i{display:block;height:100%;background:linear-gradient(#7ee787,#3fae4a);transition:width .2s}
   .fg-preview{font-size:11.5px;color:#c9c0e0;text-align:center;margin:9px 0}
@@ -111,7 +114,7 @@ export function openForge(ctx) {
   }
 
   function render() {
-    const gems = ctx.gems(), gearAll = ctx.gear(), party = ctx.party();
+    const gems = ctx.gems(), silver = ctx.silver ? ctx.silver() : 0, gearAll = ctx.gear(), party = ctx.party();
     if (seated && !gearAll.some(x => x.item === seated)) seated = null;   // seated item shattered → clear
 
     let list = gearAll;
@@ -136,15 +139,21 @@ export function openForge(ctx) {
         ${(x.item.upgradeLevel | 0) >= MAXLVL ? `<span class="fg-max">MAX</span>` : ""}
       </div>`;
 
+    const affordable = pv && !pv.max && gems >= pv.gemCost && silver >= pv.silverCost;
+    const costHtml = pv && !pv.max
+      ? `<span class="${gems < pv.gemCost ? "fg-risk" : ""}">${iconImg("gem", 12)} ${pv.gemCost}</span> ` +
+        `<span class="${silver < pv.silverCost ? "fg-risk" : ""}">${iconImg("coin", 12)} ${pv.silverCost}</span>`
+      : "—";
     const previewHtml = !seated ? "Seat gear to see the upgrade"
       : pv.max ? `This item is at max upgrade (+${pv.level}).`
       : `+${pv.level} → <b>+${pv.level + 1}</b> · ${STATL[pv.stat] || pv.stat} ${pv.curVal} → <b>${pv.nextVal}</b>` +
         (pv.destroy > 0 ? ` · <span class="fg-risk">${pct(pv.destroy)} shatter</span>` : "");
 
     el.innerHTML = `<div class="tw-wrap">
+      <button class="tw-btn primary" data-back style="justify-content:center;margin-bottom:10px">${iconImg("house", 16)} Return to the Keep</button>
       <div class="shop-top" style="justify-content:space-between">
         <span class="fg-title">The <b>Forge</b></span>
-        <span class="tw-cur"><span>${iconImg("gem", 13)} ${gems}</span></span>
+        <span class="tw-cur"><span>${iconImg("coin", 13)} ${silver}</span> <span>${iconImg("gem", 13)} ${gems}</span></span>
       </div>
       <div class="fg-anvil">
         <div class="fg-anvil-h">${iconImg("anvil", 13)} Runic Anvil</div>
@@ -158,14 +167,14 @@ export function openForge(ctx) {
         <div class="fg-sec"><span>Success chance</span><span class="fg-pct">${pv && !pv.max ? pct(pv.success) : pv && pv.max ? "MAX" : "—"}</span></div>
         <div class="fg-bar"><i style="width:${pv && !pv.max ? pct(pv.success) : "0%"}"></i></div>
         <div class="fg-preview">${previewHtml}</div>
-        <button class="fg-fuse" data-fuse ${(!seated || gems <= 0 || (pv && pv.max)) ? "disabled" : ""}>${iconImg("hammer", 15)} Fuse Gem</button>
+        <div class="fg-sec" style="margin-bottom:9px"><span>Cost</span><span class="fg-cost">${costHtml}</span></div>
+        <button class="fg-fuse" data-fuse ${(!seated || (pv && pv.max) || !affordable) ? "disabled" : ""}>${iconImg("hammer", 15)} Fuse Gem</button>
         ${msg ? `<div class="fg-msg ${msg[0]}">${msg[1]}</div>` : ""}
       </div>
       <div class="tw-sec" style="display:flex;justify-content:space-between"><span>Your Gear</span><span class="fg-hint">tap a piece to upgrade</span></div>
       <div class="fg-filters">${ownerChips}</div>
       <div class="fg-filters">${slotChips}</div>
       ${list.length ? list.map(row).join("") : `<div class="shop-none">No gear matches this filter.</div>`}
-      <button class="tw-btn primary" data-back style="justify-content:center;margin-top:8px">${iconImg("house", 16)} Return to the Keep</button>
     </div>`;
 
     party.forEach((h, i) => { const cv = el.querySelector(`[data-ochip="${i}"]`);
@@ -185,7 +194,7 @@ export function openForge(ctx) {
     });
     const fuse = el.querySelector("[data-fuse]");
     if (fuse) fuse.onclick = () => {
-      if (busy || !seated || ctx.gems() <= 0) return;
+      if (busy || !seated) return;   // affordability is enforced by the disabled state + tryForge
       busy = true; fuse.disabled = true;
       const seatEl = el.querySelector(".fg-seat"), gemEl = el.querySelector(".fg-gembox");
       seatEl.classList.add("charging"); if (gemEl) gemEl.classList.add("charging");

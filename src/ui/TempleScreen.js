@@ -30,6 +30,7 @@ export function openTemple(ctx) {
     };
 
     el.innerHTML = `<div class="tw-wrap">
+      <button class="tw-btn primary" data-back style="justify-content:center;margin-bottom:10px">${iconImg("house", 16)} Return to the Keep</button>
       <div class="shop-top" style="justify-content:flex-end">
         <span class="tw-cur"><span>${iconImg("coin", 13)} ${silver}</span></span>
       </div>
@@ -38,7 +39,6 @@ export function openTemple(ctx) {
         <span style="color:#8fd39a">If your whole party falls, your main hero wakes at the Keep for free.</span></p></div>
       <div class="tw-sec">Fallen heroes</div>
       ${fallen.length ? fallen.map(row).join("") : `<div class="shop-none">None of your heroes have fallen. Rest easy.</div>`}
-      <button class="tw-btn primary" data-back style="justify-content:center;margin-top:6px">${iconImg("house", 16)} Return to the Keep</button>
     </div>`;
 
     fallen.forEach((x, k) => {

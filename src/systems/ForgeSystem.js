@@ -21,18 +21,27 @@ export function canUpgrade(item) {
   return !!item && (item.upgradeLevel | 0) < BAL.FORGE.MAX_LEVEL;
 }
 
+/* gem + silver price of the next upgrade attempt — both rise with the item's current level */
+export function forgeCost(item) {
+  const lvl = (item && item.upgradeLevel | 0) || 0;
+  const C = BAL.FORGE.COST;
+  return { gems: C.GEM_BASE + Math.floor(lvl / C.GEM_PER), silver: C.SILVER_BASE + lvl * C.SILVER_PER };
+}
+
 /* preview of the next upgrade for the Forge UI (no mutation): success/shatter odds + stat delta */
 export function forgePreview(item) {
   const lvl = item.upgradeLevel | 0;
   const max = lvl >= BAL.FORGE.MAX_LEVEL;
   const i = Math.min(lvl, BAL.FORGE.SUCCESS.length - 1);
   const stat = primaryStat(item), step = BAL.FORGE.STEP[stat] || 1;
+  const cost = forgeCost(item);
   return {
     level: lvl, max, stat, step,
     success: max ? 0 : BAL.FORGE.SUCCESS[i],
     destroy: max ? 0 : BAL.FORGE.DESTROY[i],
     curVal: round1(item[stat] || 0),
     nextVal: round1((item[stat] || 0) + step),
+    gemCost: cost.gems, silverCost: cost.silver,
   };
 }
 
