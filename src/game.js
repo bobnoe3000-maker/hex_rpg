@@ -241,14 +241,24 @@ function occupied(r,c,except){
   for(const f of state.foes) if(f!==except&&f.alive&&f.r===r&&f.c===c) return true;
   return false;
 }
+/* free orthogonal neighbour cells (not walls, not occupied by another unit) */
+function stepOpts(u){
+  return [[1,0],[-1,0],[0,1],[0,-1]].map(([dr,dc])=>({r:u.r+dr,c:u.c+dc}))
+    .filter(p=>!isBlocked(state.room,p.r,p.c)&&!occupied(p.r,p.c,u));
+}
+function moveTo(u,p){ u.rr=u.r; u.cc=u.c; u.r=p.r; u.c=p.c; u.moveT=0; } // remember prev cell for the slide
 function stepToward(u,tg){
-  const opts=[[1,0],[-1,0],[0,1],[0,-1]].map(([dr,dc])=>({r:u.r+dr,c:u.c+dc}))
-    .filter(p=>!isBlocked(state.room,p.r,p.c)&&!occupied(p.r,p.c));
-  if(!opts.length)return;
+  const opts=stepOpts(u); if(!opts.length)return;
   opts.sort((a,b)=>(Math.abs(a.r-tg.r)+Math.abs(a.c-tg.c))-(Math.abs(b.r-tg.r)+Math.abs(b.c-tg.c)));
-  u.rr=u.r; u.cc=u.c;        // remember where we were (for the slide)
-  u.r=opts[0].r; u.c=opts[0].c;
-  u.moveT=0;                 // start the slide
+  moveTo(u,opts[0]);
+}
+/* kite: step to the neighbour that most increases distance from tg. Returns false if no cell is
+   actually farther than where the unit stands (cornered) so the caller can fall back to attacking. */
+function stepAway(u,tg){
+  const opts=stepOpts(u); if(!opts.length)return false;
+  opts.sort((a,b)=>(Math.abs(b.r-tg.r)+Math.abs(b.c-tg.c))-(Math.abs(a.r-tg.r)+Math.abs(a.c-tg.c)));
+  if((Math.abs(opts[0].r-tg.r)+Math.abs(opts[0].c-tg.c))<=distU(u,tg)) return false;
+  moveTo(u,opts[0]); return true;
 }
 /* one basic attack, resolved by the deterministic CombatSim; this layer only renders/logs */
 function attack(att,def){
@@ -315,8 +325,14 @@ function act(u){
   if(!u.alive)return;
   const tg=nearest(u);
   if(tg){
-    if(distU(u,tg)<=derive(u).rng) attack(u,tg);
-    else stepToward(u,tg);
+    const R=derive(u).rng, d=distU(u,tg);
+    if(R>1){                                  // ranged: kite
+      if(d<=BAL.KITE_MIN){ if(!stepAway(u,tg)) attack(u,tg); return; }  // foe too close → back off (or fight if cornered)
+      if(d<=R){ attack(u,tg); return; }        // in range with a safe buffer → shoot
+      stepToward(u,tg); return;                // too far → close the gap
+    }
+    if(d<=R) attack(u,tg);                     // melee: strike when adjacent
+    else stepToward(u,tg);                     // otherwise chase
     return;
   }
   // no foe to engage — heroes regroup on the rally flag if one is planted

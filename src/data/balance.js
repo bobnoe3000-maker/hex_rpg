@@ -7,6 +7,10 @@ export const BAL = {
   BASE_INTERVAL: 1.30,
   ASPD_JITTER:   0.20,   // small per-action randomization so units don't lock-step
 
+  // kiting: a ranged unit backs off (instead of shooting) when a foe closes within this distance,
+  // keeping the classic attack/retreat dance. Melee units ignore this.
+  KITE_MIN: 1,
+
   // damage
   CRIT_MULT: 1.5,        // critical hits deal x this
 

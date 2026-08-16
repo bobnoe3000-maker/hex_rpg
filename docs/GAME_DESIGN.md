@@ -144,6 +144,7 @@ Every item is composed of **Prefix + Material + Gear Type + Upgrade Level**, and
 - **Gear Type** — defines the **slot**, the **class** it serves, one stat bonus, and (weapons) a **range**.
   - *Weapon types:* sword, greatsword (knight, melee); wand, staff (mage, **ranged**); mace, scepter (cleric, melee); dagger, kris (rogue, melee), shortbow (rogue, **ranged**).
   - **Range is weapon-driven** (`StatEngine.derive`): equip a **ranged** weapon and the hero attacks/animates at range (projectile FX); a **melee** weapon (or an unarmed hero) fights up close. Unarmed heroes fall back to their class's innate range, so a fresh mage still casts at range. A rogue is melee with daggers but turns **ranged the moment they equip a shortbow**.
+  - **Ranged units kite** (`act()`): they close to firing range, shoot while a safe buffer holds, and **back off a step when a foe closes to melee** (`BAL.KITE_MIN`) — the classic attack/retreat dance. Cornered (no farther cell), they stand and fight. Melee units simply chase and strike.
   - *Wearable types:* helm, chest, gloves, boots, cloak, ring, amulet, shield.
 - **Material** — defines **base stats**; carries one stat bonus and may carry a **drawback**.
   - *Weapon materials:* iron, steel, meteoric, emberglass… (e.g. *meteoric*: +ATK, −ASPD). **Better materials have a lower drop rate.**
