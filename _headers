@@ -1,0 +1,7 @@
+# Zero-build native-ESM site: the browser caches every /src/*.js module, so after a deploy a
+# returning visitor can keep running old code until a hard refresh (this is why a newly added
+# feature like the rogue class or the companion picker can appear "missing"). Force revalidation
+# on the HTML and JS so a new deploy is always picked up. Content is tiny + all-procedural, so the
+# 304 round-trips are cheap.
+/*
+  Cache-Control: no-cache
