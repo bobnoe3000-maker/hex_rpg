@@ -5,7 +5,6 @@
 
 import { derive } from "../systems/StatEngine.js";
 import { canEquip, equip, unequip, isUpgrade } from "../systems/Equipment.js";
-import { canUpgrade } from "../systems/ForgeSystem.js";
 import { SLOTS } from "../data/items/gearTypes.js";
 import { itemNameHtml as itemName } from "./itemView.js";
 import { iconImg } from "../engine/icons.js";
@@ -51,23 +50,18 @@ function injectCss() {
   .cp-btn{font-family:inherit;font-weight:bold;font-size:11px;border:0;border-radius:6px;padding:6px 9px;
     cursor:pointer;background:linear-gradient(#e0b063,#a8722a);color:#241606;box-shadow:0 2px 0 #6e4a14;flex:0 0 auto}
   .cp-btn.off{background:linear-gradient(#2c2342,#1c1630);color:var(--parchment);box-shadow:0 2px 0 #100b1c}
-  .cp-btn.forge{background:linear-gradient(#7aa8ff,#2a4aa8);color:#06122e;box-shadow:0 2px 0 #14204a}
   .cp-btn:active{transform:translateY(1px)}
   .cp-none{opacity:.55;font-size:11.5px;font-style:italic;padding:2px}
   `;
   document.head.appendChild(s);
 }
 
-/* ctx = { inventory, portrait, refresh, gems:()=>n, silver:()=>n, forge:(item)=>result, close } */
+/* ctx = { inventory, portrait, refresh, gems:()=>n, silver:()=>n, isMain, close }
+   (Forging lives at the Keep's Forge now, not here.) */
 export function openCharacter(hero, ctx) {
   injectCss();
   const overlay = document.getElementById("overlay");
   let filterSlot = null; // when set, the bag lists only items for that slot
-  const forgeMsg = res => res.outcome === "success" ? ["good", `${iconImg("hammer",13)} Upgrade succeeded!`]
-    : res.outcome === "destroyed" ? ["bad", `${iconImg("hammer",13)} The item shattered!`]
-    : res.outcome === "max" ? ["meh", "Already at max upgrade."]
-    : res.outcome === "nogem" ? ["meh", "No runic gems."]
-    : ["meh", `${iconImg("hammer",13)} The gem fizzled — no change.`];
 
   function render(msg) {
     const D = derive(hero);
@@ -76,23 +70,19 @@ export function openCharacter(hero, ctx) {
     let usable = ctx.inventory.filter(it => canEquip(hero, it));
     const others = ctx.inventory.length - usable.length;
     if (filterSlot) usable = usable.filter(it => it.slot === filterSlot);
-    const canForge = it => ctx.forge && gems > 0 && canUpgrade(it);
 
-    const forgeBtn = attr => `<button class="cp-btn forge" ${attr}>${iconImg("hammer", 13)}</button>`;
     const statCell = (k, key) => `<div><span class="k">${k}</span><span class="v">${D[key]}</span></div>`;
     const slotRow = key => {
       const it = hero.gear[key];
       return `<div class="cp-slot ${filterSlot === key ? "sel" : ""}" data-filter="${key}"><span class="sl">${cap(key)}</span>` +
         (it
           ? `${gearIconImg(it, 26)}<span class="it">${itemName(it)}<br><small>${it.d}</small></span>` +
-            (canForge(it) ? forgeBtn(`data-fslot="${key}"`) : "") +
             `<button class="cp-btn off" data-uneq="${key}">✕</button>`
           : `<span class="it cp-empty">— empty —</span>`) +
         `</div>`;
     };
     const itemRow = (it, i) =>
       `<div class="cp-item">${gearIconImg(it, 26)}<span class="it">${isUpgrade(hero, it) ? `<span class="cp-up" title="Upgrade for an empty/weaker slot">${iconImg("chevron", 11)}</span>` : ""}${itemName(it)}<br><small>${it.d}</small></span>` +
-      (canForge(it) ? forgeBtn(`data-fbag="${i}"`) : "") +
       `<button class="cp-btn" data-eq="${i}">Equip</button></div>`;
 
     overlay.innerHTML = `<div class="cpanel">
@@ -129,14 +119,6 @@ export function openCharacter(hero, ctx) {
     overlay.querySelectorAll("[data-eq]").forEach(b => b.onclick = e => {
       e.stopPropagation(); const it = ctx.inventory[+b.getAttribute("data-eq")];
       if (it) { equip(hero, it, ctx.inventory); ctx.refresh(); render(); }
-    });
-    overlay.querySelectorAll("[data-fslot]").forEach(b => b.onclick = e => {
-      e.stopPropagation(); const it = hero.gear[b.getAttribute("data-fslot")];
-      if (it) render(forgeMsg(ctx.forge(it)));
-    });
-    overlay.querySelectorAll("[data-fbag]").forEach(b => b.onclick = e => {
-      e.stopPropagation(); const it = ctx.inventory[+b.getAttribute("data-fbag")];
-      if (it) render(forgeMsg(ctx.forge(it)));
     });
   }
 

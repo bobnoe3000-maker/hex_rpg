@@ -96,6 +96,7 @@ export function openTown(ctx) {
       <button class="tw-btn" data-tavern><span class="ic">${iconImg("tankard",20)}</span><span>Tavern<small>Recruit or replace a companion (party of 3)</small></span></button>
       <button class="tw-btn" data-temple><span class="ic">${iconImg("temple",20)}</span><span>Temple<small>Restore fallen companions (fee scales with level)</small></span></button>
       <button class="tw-btn" data-shop><span class="ic">${iconImg("pouch",20)}</span><span>Shop<small>Buy &amp; sell gear · trade silver for runic gems</small></span></button>
+      <button class="tw-btn" data-forge><span class="ic">${iconImg("anvil",20)}</span><span>Forge<small>Spend runic gems to upgrade gear (+1, +2 …)</small></span></button>
       <button class="tw-btn" disabled><span class="ic">${iconImg("vault",20)}</span><span>Bank<small>Coming soon — a death-safe vault</small></span></button>
     </div>
     <div class="tw-sec">Party — tap to manage gear</div>
@@ -112,6 +113,7 @@ export function openTown(ctx) {
   el.querySelector("[data-tavern]").onclick = () => ctx.openTavern();
   el.querySelector("[data-temple]").onclick = () => ctx.openTemple();
   el.querySelector("[data-shop]").onclick = () => ctx.openShop();
+  const fg = el.querySelector("[data-forge]"); if (fg && ctx.openForge) fg.onclick = () => ctx.openForge();
   el.querySelector("[data-enter]").onclick = () => ctx.enterDungeon();
   const dg = el.querySelector("[data-diag]"); if (dg && ctx.openDiag) dg.onclick = () => ctx.openDiag();
 }

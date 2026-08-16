@@ -69,6 +69,11 @@
   .card .gear{opacity:.8;font-style:italic}
   .card.dead{opacity:.8;border-color:#5a2a2a}
   .card.dead .pic{filter:grayscale(1) brightness(.7)}
+  /* main hero: centered, slightly larger, gold-framed so the leader stands out */
+  .card.main{flex:1.25;border-color:var(--gold);background:linear-gradient(#2c2440,#201636);
+    box-shadow:0 0 0 1px rgba(216,162,74,.5) inset, 0 2px 10px rgba(216,162,74,.22)}
+  .card.main .picwrap,.card.main .pic{width:44px;height:44px}
+  .card.main .pic{border-color:var(--gold)}
 
   #controls{flex:0 0 auto;display:flex;gap:8px;margin-top:6px}
   button{font-family:inherit;font-weight:bold;letter-spacing:1px;font-size:12.5px;border:0;border-radius:8px;

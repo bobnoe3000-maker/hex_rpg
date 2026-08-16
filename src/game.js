@@ -17,6 +17,7 @@ import { openTown } from './ui/TownScreen.js';
 import { openShop } from './ui/ShopScreen.js';
 import { openTavern } from './ui/TavernScreen.js';
 import { openTemple } from './ui/TempleScreen.js';
+import { openForge } from './ui/ForgeScreen.js';
 import { openDiag } from './ui/DiagScreen.js';
 import { startOnboarding } from './ui/Onboarding.js';
 import { makeCompanion } from './models/units.js';
@@ -160,11 +161,17 @@ function tileOf(u){
 function log(msg,cls){ const p=document.createElement("div"); if(cls)p.className=cls; p.innerHTML=msg;
   logEl.appendChild(p); while(logEl.children.length>40)logEl.removeChild(logEl.firstChild);
   logEl.scrollTop=logEl.scrollHeight; }
+/* display order for the party HUD: the MAIN hero sits in the middle, companions flank it
+   (mirrors the combat formation) */
+function hudOrder(){
+  const others=party.slice(1), mid=Math.floor(party.length/2);
+  return [...others.slice(0,mid), party[0], ...others.slice(mid)].filter(Boolean);
+}
 function renderParty(){
   partyEl.innerHTML="";
-  for(const h of party){
-    const D=derive(h);
-    const c=document.createElement("div"); c.className="card"+(h.alive?"":" dead");
+  for(const h of hudOrder()){
+    const D=derive(h), isMain=h===party[0];
+    const c=document.createElement("div"); c.className="card"+(h.alive?"":" dead")+(isMain?" main":"");
     c.style.cursor="pointer"; c.title="Tap to view stats & gear";
     c.onclick=()=>openHero(h);
     const picWrap=document.createElement("div"); picWrap.className="picwrap";
@@ -174,7 +181,7 @@ function renderParty(){
     if(!h.alive){ const sk=document.createElement("div"); sk.className="skull"; sk.innerHTML=iconImg("skull",22); picWrap.appendChild(sk); }
     const bag=Object.values(h.gear).filter(Boolean).length;
     const info=document.createElement("div");
-    info.innerHTML=`${h===party[0]?iconImg("crown",12)+" ":""}<b>${h.name}</b> <span class="lvl">Lv${h.level}</span> <span class="cls">${h.cls}</span><br>
+    info.innerHTML=`${isMain?iconImg("crown",12)+" ":""}<b>${h.name}</b> <span class="lvl">Lv${h.level}</span> <span class="cls">${h.cls}</span><br>
       ${h.alive ? `<span style="opacity:.7">ATK ${D.atk} · DEF ${D.def}</span>
       <div class="bar"><i style="width:${clamp(h.hp/D.maxhp*100,0,100)}%"></i></div>
       ${h.hp}/${D.maxhp}<div class="gear">${bag} equipped · tap for gear ›</div>`
@@ -389,7 +396,6 @@ function openHero(h){
     refresh: renderParty,
     gems: ()=>state.gems,
     silver: ()=>state.silver,
-    forge: tryForge,
     close: ()=>{},
   });
 }
@@ -417,9 +423,21 @@ function enterDungeon(){
 function openTownScreen(){
   openTown({ silver:()=>state.silver, gems:()=>state.gems, party, portrait:h=>heroPortrait(h),
     openHero, openShop:openShopScreen, openTavern:openTavernScreen, openTemple:openTempleScreen,
-    openDiag:openDiagScreen, enterDungeon });
+    openForge:openForgeScreen, openDiag:openDiagScreen, enterDungeon });
 }
 function openDiagScreen(){ openDiag({ text:buildDiagnostics, back:openTownScreen }); }
+/* ---------- forge: spend gems to upgrade gear (town service) ---------- */
+/* every upgradeable item across the party's equipped gear + the shared bag, with a source label */
+function forgeableItems(){
+  const list=[];
+  for(const h of party) for(const s in h.gear){ const it=h.gear[s];
+    if(it && canUpgrade(it)) list.push({item:it, where:`${h.name}'s ${s}`}); }
+  for(const it of state.inventory) if(canUpgrade(it)) list.push({item:it, where:"Bag"});
+  return list;
+}
+function openForgeScreen(){
+  openForge({ gems:()=>state.gems, items:forgeableItems, forge:tryForge, back:openTownScreen });
+}
 /* ---------- tavern: hire companions (scale to the main hero's level) ---------- */
 const mainLevel=()=>party[0]?party[0].level:1;
 const hireCostFor=h=>BAL.TAVERN.HIRE_BASE + h.level*BAL.TAVERN.HIRE_PER_LEVEL;
