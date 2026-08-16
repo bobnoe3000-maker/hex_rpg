@@ -30,21 +30,22 @@ export function openTemple(ctx) {
     };
 
     el.innerHTML = `<div class="tw-wrap">
-      <div class="shop-top">
-        <span class="shop-back" data-back>‹ The Keep</span>
+      <div class="shop-top" style="justify-content:flex-end">
         <span class="tw-cur"><span>${iconImg("coin", 13)} ${silver}</span></span>
       </div>
       <div class="tw-head"><h1>Temple</h1><p style="font-size:12px;color:#9a8fb8;font-style:italic">
-        Restore fallen pals to life. The fee rises with their level.</p></div>
+        Restore fallen pals to life. The fee rises with their level.<br>
+        <span style="color:#8fd39a">Your main hero always wakes at the Keep for free.</span></p></div>
       <div class="tw-sec">Fallen companions</div>
       ${fallen.length ? fallen.map(row).join("") : `<div class="shop-none">None of your pals have fallen. Rest easy.</div>`}
+      <button class="tw-btn primary" data-back style="justify-content:center;margin-top:6px">${iconImg("house", 16)} Return to the Keep</button>
     </div>`;
 
     fallen.forEach((x, k) => {
       const cv = el.querySelectorAll(".shop-row canvas")[k];
       if (cv) cv.getContext("2d").drawImage(ctx.portrait(x.h), 0, 0, 96, 96);
     });
-    el.querySelector("[data-back]").onclick = () => ctx.back();
+    el.querySelectorAll("[data-back]").forEach(b => b.onclick = () => ctx.back());
     el.querySelectorAll("[data-res]").forEach(b => b.onclick = () => {
       const h = ctx.party()[+b.getAttribute("data-res")];
       if (h && !h.alive && ctx.resurrect(h)) render();

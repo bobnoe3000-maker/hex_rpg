@@ -76,7 +76,7 @@ const DRAW = {
   },
   hammer(g) { // forge action
     g.save(); g.translate(12, 12); g.rotate(-0.5);
-    g.fillStyle = shade(SILVER, .8); g.fillRect(-8, -8, 12, 6); inkPath(gg => { }, 0);
+    g.fillStyle = shade(SILVER, .8); g.fillRect(-8, -8, 12, 6);
     inkPath(g, gg => gg.rect(-8, -8, 12, 6), 1.4); line(g, [[-2, -2], [2, 9]], 2.4, GOLD);
     inkPath(g, gg => { gg.moveTo(-2, -2); gg.lineTo(2, 9); }, 1.2, INK); g.restore();
   },
@@ -127,8 +127,16 @@ const DRAW = {
 const CANVAS = {}, URL = {};
 function build(name, px) {
   const c = document.createElement("canvas"); c.width = c.height = px;
-  const g = c.getContext("2d"); g.scale(px / 24, px / 24); g.lineCap = "round"; g.lineJoin = "round";
-  (DRAW[name] || DRAW.dot)(g); return c;
+  const g = c.getContext("2d");
+  // Error isolation: a bug in one glyph's draw must never throw into the caller and take down a
+  // whole screen render (as a stray inkPath() call once did). Fall back to a blank tile + log.
+  try {
+    g.scale(px / 24, px / 24); g.lineCap = "round"; g.lineJoin = "round";
+    (DRAW[name] || DRAW.dot)(g);
+  } catch (err) {
+    console.error(`icon "${name}" draw failed:`, err && err.message || err);
+  }
+  return c;
 }
 export function iconCanvas(name, px = 44) { const k = name + ":" + px; return CANVAS[k] || (CANVAS[k] = build(name, px)); }
 export function iconImg(name, size = 18, style = "") {

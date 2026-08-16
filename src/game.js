@@ -22,6 +22,19 @@ import { startOnboarding } from './ui/Onboarding.js';
 import { makeCompanion } from './models/units.js';
 import { installDiag, diag, diagText } from './engine/diag.js';
 installDiag(); // start capturing console errors / uncaught exceptions immediately
+/* Surface caught glitches instead of failing silently: a throttled toast points the player at the
+   Diagnostics export so any future issue is reportable rather than invisible. */
+{ let lastToast=0, toastEl=null, toastTimer=0;
+  const showToast=msg=>{ const now=performance.now(); if(now-lastToast<8000) return; lastToast=now;
+    if(!toastEl){ toastEl=document.createElement("div"); toastEl.id="toast";
+      toastEl.style.cssText="position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:40;"
+        +"max-width:90%;background:#2a1420;color:#ffd7cf;border:1px solid #7a3a3a;border-radius:10px;"
+        +"padding:9px 13px;font:12px Georgia,serif;box-shadow:0 4px 16px #000;text-align:center;"
+        +"opacity:0;transition:opacity .35s"; document.body.appendChild(toastEl); }
+    toastEl.textContent=msg; toastEl.style.opacity="1";
+    clearTimeout(toastTimer); toastTimer=setTimeout(()=>{ toastEl.style.opacity="0"; },5200); };
+  window.addEventListener("error", ()=>showToast("A glitch was caught & logged — open the Keep › Diagnostics to copy it."));
+}
 /* ============ DP ENGINE :: game.js — endless auto-battle loop ============ */
 "use strict";
 const cvG=document.getElementById("cv"), G=cvG.getContext("2d");
