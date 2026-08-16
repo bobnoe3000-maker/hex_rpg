@@ -18,7 +18,10 @@ function ensureTavernCss() {
   .tv-slot{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;
     background:linear-gradient(#241b38,#1a1328);border:1px solid var(--line);border-radius:9px;padding:7px 4px;font-size:10px}
   .tv-slot:active{transform:translateY(1px)}
-  .tv-slot canvas{width:40px;height:40px;border-radius:7px;border:1px solid #6e5a2a}
+  .tv-slot canvas{width:40px;height:40px;border-radius:7px;border:1px solid #6e5a2a;display:block}
+  .tv-portwrap{position:relative;width:40px;height:40px}
+  .tv-dot{position:absolute;top:-3px;right:-3px;width:11px;height:11px;border-radius:50%;
+    background:#e0b063;border:2px solid #1a1328;box-shadow:0 0 6px #e0b063;z-index:2}
   .tv-slot b{font-size:10.5px;color:var(--gold)} .tv-slot .cls{color:#9a8fb8;text-transform:capitalize;font-style:italic}
   .tv-slot .lv{color:#9ad1ff}
   .tv-slot.empty{opacity:.5;justify-content:center;color:#8fd39a;font-style:italic;cursor:default;min-height:74px}
@@ -61,9 +64,12 @@ export function openTavern(ctx) {
       </div>`;
     };
     // current party — mirrors the dungeon roster so you can see your class mix (and who has fallen)
-    const slot = (h, i) => `<div class="tv-slot ${h.alive ? "" : "dead"}" data-hero="${i}" title="View ${h.name}'s stats">
-        <canvas width="96" height="96"></canvas>
+    const slot = (h, i) => {
+      const dot = h.alive && ctx.needsPoints && ctx.needsPoints(h) ? `<span class="tv-dot" title="Points to spend"></span>` : "";
+      return `<div class="tv-slot ${h.alive ? "" : "dead"}" data-hero="${i}" title="View ${h.name}'s stats">
+        <div class="tv-portwrap"><canvas width="96" height="96"></canvas>${dot}</div>
         <b>${i === 0 ? iconImg("crown", 11) + " " : ""}${h.name}</b><span class="cls">${h.alive ? h.cls : "fallen"}</span><span class="lv">Lv ${h.level}</span></div>`;
+    };
     const emptySlots = Array.from({ length: Math.max(0, CAP - party.length) }, () => `<div class="tv-slot empty">empty</div>`).join("");
 
     el.innerHTML = `<div class="tw-wrap">

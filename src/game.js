@@ -82,6 +82,9 @@ let uiFrozen=false;
 const panelShown=()=>overlay.classList.contains("show");
 let party=[];               // filled by onboarding: [main, ...companions]
 const PARTY_CAP=3;          // main + 2 companions ("two companions only"); Tavern replaces the fallen
+/* true when the MAIN hero has unspent level-up or skill points waiting — drives the "spend me" dot on
+   character tiles. Only the main allocates, so companions never flag (they'd otherwise read earned>spent). */
+const heroHasPoints = h => h===party[0] && (unspentPoints(h) > 0 || unspentSkillPoints(h) > 0);
 /* ---------- persistence: one of three save slots ---------- */
 let activeSlot=null;        // which save slot this run writes to (set by onboarding)
 function snapshotState(){
@@ -205,6 +208,9 @@ function renderParty(){
     img.getContext("2d").drawImage(heroPortrait(h),0,0,96,96);
     picWrap.appendChild(img);
     if(!h.alive){ const sk=document.createElement("div"); sk.className="skull"; sk.innerHTML=iconImg("skull",22); picWrap.appendChild(sk); }
+    if(h.alive && heroHasPoints(h)){ const d=document.createElement("div"); d.title="Points to spend";
+      d.style.cssText="position:absolute;top:-3px;right:-3px;width:12px;height:12px;border-radius:50%;"
+        +"background:#e0b063;border:2px solid #181128;box-shadow:0 0 6px #e0b063;z-index:3"; picWrap.appendChild(d); }
     const bag=Object.values(h.gear).filter(Boolean).length;
     const info=document.createElement("div");
     info.innerHTML=`${isMain?iconImg("crown",12)+" ":""}<b>${h.name}</b> <span class="lvl">Lv${h.level}</span> <span class="cls">${h.cls}</span><br>
@@ -728,7 +734,7 @@ function openTownScreen(){
   openTown({ silver:()=>state.silver, gems:()=>state.gems, party, portrait:h=>heroPortrait(h),
     openHero, openShop:openShopScreen, openTavern:openTavernScreen, openTemple:openTempleScreen,
     openForge:openForgeScreen, openDiag:openDiagScreen, openDungeons:openDungeonBoard,
-    activeDungeon:()=>activeDungeon() });
+    needsPoints:heroHasPoints, activeDungeon:()=>activeDungeon() });
 }
 /* start a fresh delve of a chosen dungeon (resets to its first room) */
 function startDungeon(id){
@@ -789,7 +795,7 @@ function openTavernScreen(){
   openTavern({ silver:()=>state.silver, party:()=>party, recruits:()=>state.recruits,
     hireCost:hireCostFor, refreshCost:BAL.TAVERN.REFRESH_COST,
     hire:hireCompanion, refresh:()=>refreshRecruits(false), portrait:h=>heroPortrait(h),
-    openHero, back:openTownScreen });
+    openHero, needsPoints:heroHasPoints, back:openTownScreen });
 }
 /* ---------- temple: resurrect fallen companions (fee scales with level) ---------- */
 const resurrectFee=h=>BAL.TEMPLE.RESURRECT_BASE + h.level*BAL.TEMPLE.RESURRECT_PER_LEVEL;

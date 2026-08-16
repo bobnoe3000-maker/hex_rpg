@@ -213,6 +213,8 @@ Keep-level upgrades (unlock/boost services) are 🔶 future.
 
 ### 8.2 Character & Inventory ✅ (Features 13, 14)
 - **Character screen (implemented):** tap a hero → six stats, **8 gear slots** (weapon, offhand, helm, armor, gloves, boots, ring, amulet), and the bag. Equip/unequip/forge in place. **Tap a slot to filter** the bag to that slot; bag items show a **▲** hint when they'd upgrade the hero (score-based, `Equipment.isUpgrade`). Currency (💰 silver, 💎 gems) shown here and in a small HUD.
+  - **Tabs:** the **main hero** panel has three tabs — **Stats** (with the level-up point-buy), **Skills** (the tree), **Equipment**. A **companion** panel has two — **Stats & Skills** (their stats + read-only auto-cast kit) and **Equipment**.
+  - **Unspent-point dots:** a gold dot marks the main hero's **character tiles** (Keep, dungeon HUD, Tavern) and the panel's **Stats / Skills tabs** whenever level-up or skill points are waiting to be spent; it clears as you allocate them (only the main hero earns spendable points).
 - **Full inventory screen:** grid management, sort, side-by-side compare, sell — still ahead.
 
 ### 8.3 The Dungeons board & tiered descent ✅ (Features 11, 12) — implemented

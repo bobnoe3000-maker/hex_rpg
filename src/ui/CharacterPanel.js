@@ -29,6 +29,8 @@ function injectCss() {
     border-radius:9px;padding:10px;cursor:pointer;background:#1c1630;color:#9a8fb8}
   .cp-tab.sel{border-color:var(--gold);background:linear-gradient(#2c2342,#1c1630);color:var(--gold)}
   .cp-tab:active{transform:translateY(1px)}
+  .cp-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#e0b063;
+    box-shadow:0 0 5px #e0b063;margin-left:5px;vertical-align:middle}
   .cp-head{display:flex;align-items:center;gap:9px;margin-bottom:8px}
   .cp-head canvas{width:50px;height:50px;border-radius:8px;border:1px solid #6e5a2a;flex:0 0 auto}
   .cp-head .nm{flex:1;min-width:0}.cp-head b{font-size:15px;color:var(--gold)} .cp-head .lvl{color:#9ad1ff;font-size:12px}
@@ -297,17 +299,29 @@ export function openCharacter(hero, ctx) {
         ${kit.map(row).join("")}`;
     };
 
-    // Main hero gets tabs (Stats / Skills / Equipment); companions show one combined view + their kit.
-    const tabbed = ctx.isMain;
-    const hasSkills = !!ctx.skills;
-    const paneFor = t => t === "stats" ? statsBlock : t === "skills" ? skillsBlock() : equipBlock;
-    const body = tabbed
-      ? `<div class="cp-tabs">
-           <button class="cp-tab ${tab === "stats" ? "sel" : ""}" data-tab="stats">Stats</button>
-           ${hasSkills ? `<button class="cp-tab ${tab === "skills" ? "sel" : ""}" data-tab="skills">Skills</button>` : ""}
+    // A gold dot flags a tab (and character tile) with points waiting to be spent. Reflects points
+    // still unspent AFTER the current draft, so it clears as you allocate — before you even Confirm.
+    const skillDraftTotal = () => { let n = 0; for (const k in skillDraft) n += skillDraft[k]; return n; };
+    const statDot = ctx.points && (ctx.points() - draftSum()) > 0 ? `<span class="cp-dot"></span>` : "";
+    const skillDot = ctx.skills && (ctx.skills.points() - skillDraftTotal()) > 0 ? `<span class="cp-dot"></span>` : "";
+
+    // Main hero gets three tabs (Stats / Skills / Equipment). Companions get two: their stats + fixed
+    // skill kit share one tab, gear the other.
+    let body;
+    if (ctx.isMain) {
+      const paneFor = t => t === "stats" ? statsBlock : t === "skills" ? skillsBlock() : equipBlock;
+      body = `<div class="cp-tabs">
+           <button class="cp-tab ${tab === "stats" ? "sel" : ""}" data-tab="stats">Stats${statDot}</button>
+           ${ctx.skills ? `<button class="cp-tab ${tab === "skills" ? "sel" : ""}" data-tab="skills">Skills${skillDot}</button>` : ""}
            <button class="cp-tab ${tab === "equip" ? "sel" : ""}" data-tab="equip">Equipment</button>
-         </div>${paneFor(tab)}`
-      : statsBlock + kitSection() + equipBlock;
+         </div>${paneFor(tab)}`;
+    } else {
+      const ct = tab === "equip" ? "equip" : "stats";   // companion tabs are stats-&-skills | equipment
+      body = `<div class="cp-tabs">
+           <button class="cp-tab ${ct === "stats" ? "sel" : ""}" data-tab="stats">Stats &amp; Skills</button>
+           <button class="cp-tab ${ct === "equip" ? "sel" : ""}" data-tab="equip">Equipment</button>
+         </div>${ct === "equip" ? equipBlock : statsBlock + kitSection()}`;
+    }
 
     // keep the scroll position across a re-render (learning a rank shouldn't jump back to the top);
     // a main-tab switch resets to the top instead
