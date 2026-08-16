@@ -30,8 +30,7 @@ export function openShop(ctx) {
     };
 
     el.innerHTML = `<div class="tw-wrap">
-      <div class="shop-top">
-        <span class="shop-back" data-back>‹ The Keep</span>
+      <div class="shop-top" style="justify-content:flex-end">
         <span class="tw-cur"><span>${iconImg("coin",12)} ${silver}</span> <span class="g">${iconImg("gem",12)} ${ctx.gems()}</span></span>
       </div>
       <div class="tw-head"><h1>Shop</h1></div>
@@ -45,6 +44,7 @@ export function openShop(ctx) {
 
       <div class="tw-sec">Sell from your bag</div>
       ${inv.length ? inv.map(sellRow).join("") : `<div class="shop-none">Your bag is empty.</div>`}
+      <button class="tw-btn primary" data-back style="justify-content:center;margin-top:8px">${iconImg("house",16)} Return to the Keep</button>
     </div>`;
 
     el.querySelector("[data-back]").onclick = () => ctx.back();

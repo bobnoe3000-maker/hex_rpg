@@ -42,6 +42,7 @@ export function makeHero(cls, opts = {}) {
   const gear = {};
   for (const s of SLOTS) gear[s] = null;
   const kit = starterGear(cls);
+  gear.weapon = kit.weapon;
   gear.armor = kit.armor;
   gear.boots = kit.boots;
 

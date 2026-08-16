@@ -21,6 +21,21 @@ export function canUpgrade(item) {
   return !!item && (item.upgradeLevel | 0) < BAL.FORGE.MAX_LEVEL;
 }
 
+/* preview of the next upgrade for the Forge UI (no mutation): success/shatter odds + stat delta */
+export function forgePreview(item) {
+  const lvl = item.upgradeLevel | 0;
+  const max = lvl >= BAL.FORGE.MAX_LEVEL;
+  const i = Math.min(lvl, BAL.FORGE.SUCCESS.length - 1);
+  const stat = primaryStat(item), step = BAL.FORGE.STEP[stat] || 1;
+  return {
+    level: lvl, max, stat, step,
+    success: max ? 0 : BAL.FORGE.SUCCESS[i],
+    destroy: max ? 0 : BAL.FORGE.DESTROY[i],
+    curVal: round1(item[stat] || 0),
+    nextVal: round1((item[stat] || 0) + step),
+  };
+}
+
 /* Attempt one upgrade. Mutates `item` on success. Returns:
      { outcome: "success", stat, step } | { outcome: "fail" } | { outcome: "destroyed" } | { outcome: "max" } */
 export function upgrade(item, rng) {

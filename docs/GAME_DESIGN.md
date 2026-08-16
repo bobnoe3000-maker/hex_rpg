@@ -161,7 +161,7 @@ There are **no labeled rarity tiers** (no common/rare/epic/legendary). Loot is a
 - **Runic gems** are rare drops (`BAL.GEM_CHANCE`, bosses almost always drop one).
 - Spend a gem to attempt **+1 to the item's primary stat** (raises `upgradeLevel`; name shows `+N`).
 - **Diminishing success** as level rises; on failure, a growing **chance the item shatters** — all odds per level in `data/balance.js` (`FORGE.SUCCESS` / `FORGE.DESTROY` / `FORGE.STEP`). Logic in `systems/ForgeSystem.js` (pure).
-- Now a **dedicated Forge service** at the Keep (`ui/ForgeScreen.js`): it lists every upgradeable item across the party's equipped gear + the shared bag (with a source label), and each attempt spends one gem. The character/gear panel no longer forges — it's town-only. Reached via the **Forge** service button (anvil icon).
+- Now a **dedicated Forge service** at the Keep (`ui/ForgeScreen.js`) — the **Runic Anvil**: seat a piece of gear, see its **success chance** + the exact **stat delta** and shatter risk for the next `+`, then **Fuse Gem** to attempt it (one gem each). The gear list spans every hero's equipped gear + the shared bag, filterable by **owner** (a portrait chip per hero + a Bag chip) and by **gear slot**. The character/gear panel no longer forges — it's town-only. Reached via the **Forge** service button (anvil icon).
 
 ---
 

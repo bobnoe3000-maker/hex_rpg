@@ -133,9 +133,11 @@ ok("different seed diverges", seq(123) !== seq(777));
   ok("rolled stats stay near the class base (±~20%)", a.hp > 40 && a.hp < 75 && a.atk >= 1);
   const h = makeHero("knight", { statSeed: 7, portraitSeed: 42, name: "Test" });
   ok("created hero keeps its name and rolled seed", h.name === "Test" && h.portraitSeed === 42);
-  ok("every hero starts with armor and boots", h.gear.armor && h.gear.boots && h.gear.weapon === null);
+  ok("every hero starts with a weapon, armor and boots", h.gear.armor && h.gear.boots && h.gear.weapon);
   ok("caster starter gear is cloth, martial is wooden",
      makeHero("mage", {}).gear.armor.n === "Cloth Robe" && makeHero("knight", {}).gear.armor.n === "Wooden Armor");
+  ok("starter weapon is class-appropriate + carries range (mage ranged, knight melee)",
+     makeHero("mage", {}).gear.weapon.rng > 1 && makeHero("knight", {}).gear.weapon.rng === 1 && makeHero("rogue", {}).gear.weapon.n === "Worn Dagger");
   const comp = makeCompanion(555), comp2 = makeCompanion(555);
   ok("companions are deterministic per seed", comp.name === comp2.name && comp.cls === comp2.cls);
   ok("companion has a class, name, stats and starter gear",

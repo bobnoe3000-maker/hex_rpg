@@ -10,7 +10,7 @@ import { BAL } from './data/balance.js';
 import { derive } from './systems/StatEngine.js';
 import { resolveAttack } from './systems/CombatSim.js';
 import { generate } from './systems/LootGenerator.js';
-import { upgrade as forgeUpgrade, canUpgrade } from './systems/ForgeSystem.js';
+import { upgrade as forgeUpgrade, canUpgrade, forgePreview } from './systems/ForgeSystem.js';
 import { priceOf, sellPriceOf } from './systems/Economy.js';
 import { openCharacter } from './ui/CharacterPanel.js';
 import { openTown } from './ui/TownScreen.js';
@@ -427,16 +427,18 @@ function openTownScreen(){
 }
 function openDiagScreen(){ openDiag({ text:buildDiagnostics, back:openTownScreen }); }
 /* ---------- forge: spend gems to upgrade gear (town service) ---------- */
-/* every upgradeable item across the party's equipped gear + the shared bag, with a source label */
-function forgeableItems(){
+/* every gear item across the party's equipped slots + the shared bag, tagged with its owner/slot
+   so the Forge can filter by character (and the bag) and by gear slot */
+function allGear(){
   const list=[];
   for(const h of party) for(const s in h.gear){ const it=h.gear[s];
-    if(it && canUpgrade(it)) list.push({item:it, where:`${h.name}'s ${s}`}); }
-  for(const it of state.inventory) if(canUpgrade(it)) list.push({item:it, where:"Bag"});
+    if(it) list.push({item:it, owner:h, where:h.name, slot:it.slot}); }
+  for(const it of state.inventory) list.push({item:it, owner:null, where:"Bag", slot:it.slot});
   return list;
 }
 function openForgeScreen(){
-  openForge({ gems:()=>state.gems, items:forgeableItems, forge:tryForge, back:openTownScreen });
+  openForge({ gems:()=>state.gems, gear:allGear, party:()=>party, portrait:h=>heroPortrait(h),
+    preview:forgePreview, forge:tryForge, back:openTownScreen });
 }
 /* ---------- tavern: hire companions (scale to the main hero's level) ---------- */
 const mainLevel=()=>party[0]?party[0].level:1;
