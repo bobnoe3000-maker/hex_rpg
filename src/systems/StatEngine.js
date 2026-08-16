@@ -5,6 +5,7 @@
 
 import { BAL } from "../data/balance.js";
 import { pointBonus } from "./Leveling.js";
+import { skillFlat, skillMult, buffMult } from "./Skills.js";
 
 const clampN = (v, a, b) => Math.max(a, Math.min(b, v));
 
@@ -18,18 +19,20 @@ export function gearSum(u, key) {
   return t;
 }
 
-/* final six-stats for any unit = base + gear + spent level-up points (main hero only; others have
-   no points). The single stat source of truth. */
+/* final six-stats for any unit = base + gear + spent level-up points + skills/buffs. The single
+   stat source of truth. Skill passives fold in as flat bonuses; Berserker/Fortify and timed buffs
+   (Guard, Wrath, Momentum, Sunder shred, …) fold in as multipliers. */
 export function derive(u) {
+  const F = skillFlat(u);
+  const maxhp = Math.max(1, Math.round(u.maxhp + gearSum(u, "hp") + pointBonus(u, "hp") + F.hp));
+  const missing = 1 - clampN((u.hp != null ? u.hp : maxhp) / maxhp, 0, 1);
   return {
-    maxhp: Math.max(1,   Math.round(u.maxhp + gearSum(u, "hp")    + pointBonus(u, "hp"))),
-    atk:   Math.max(0,   u.atk   + gearSum(u, "atk")   + pointBonus(u, "atk")),
-    def:   Math.max(0,   u.def   + gearSum(u, "def")   + pointBonus(u, "def")),
-    dodge: Math.max(0,   u.dodge + gearSum(u, "dodge") + pointBonus(u, "dodge")),
-    crit:  Math.max(0,   u.crit  + gearSum(u, "crit")  + pointBonus(u, "crit")),
-    aspd:  Math.max(0.1, u.aspd  + gearSum(u, "aspd")),
-    // range comes from the equipped weapon (ranged weapon → ranged); unarmed falls back to the
-    // unit's innate range (mages still cast at range; enemies use their base rng).
+    maxhp,
+    atk:   Math.max(0,   (u.atk   + gearSum(u, "atk")   + pointBonus(u, "atk")   + F.atk)   * skillMult(u, "atk", missing) * buffMult(u, "atk")),
+    def:   Math.max(0,   (u.def   + gearSum(u, "def")   + pointBonus(u, "def")   + F.def)   * skillMult(u, "def", missing) * buffMult(u, "def")),
+    dodge: Math.max(0,   u.dodge + gearSum(u, "dodge") + pointBonus(u, "dodge") + F.dodge),
+    crit:  Math.max(0,   u.crit  + gearSum(u, "crit")  + pointBonus(u, "crit")  + F.crit),
+    aspd:  Math.max(0.1, (u.aspd + gearSum(u, "aspd")  + F.aspd) * buffMult(u, "aspd")),
     rng:   (u.gear && u.gear.weapon && u.gear.weapon.rng) || u.rng || 1,
     level: u.level || 1,
   };

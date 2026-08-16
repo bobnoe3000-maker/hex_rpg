@@ -100,13 +100,14 @@ Four base classes. Each defines: base stats, per-level growth, allowed gear type
 - **Upgrades:** skills level up (stronger effect / lower cooldown / added rider) via **skill points** (from leveling) and/or materials. Diminishing per level. (Features 1 & 2.)
 - No mana/energy — the knobs are **cooldown, condition, and order**. This is the heart of the theorycraft.
 
-### 4.1 Skill Trees & Specialization 🔶 (future depth)
+### 4.1 Skill Trees & Specialization ✅ (Phase 1: Fighter shipped)
 
-Each class owns a **skill tree**: a branching set of skills and passives the player unlocks with skill points as they level. Trees let two heroes of the same class play completely differently — the core of long-term theorycraft.
+Each class owns a **skill tree**: a branching set of skills and passives the main hero unlocks with skill points as they level. Trees let two heroes of the same class play completely differently — the core of long-term theorycraft. **Implemented** for the **Fighter** (`data/skills.js`, `systems/Skills.js`, Skills tab in the character panel); Mage/Cleric/Rogue reuse the same framework next.
 
-- **Branches** within a tree pull toward different roles; investing deeply in one branch (and its capstone) means investing less elsewhere — meaningful opportunity cost.
-- Points are **respec-able** (for a cost 🔶) so builds can be experimented with.
-- Trees feed the **priority list** (§4): specialization changes *which* skills you have to order, not just their numbers.
+- **Two branches per class**, one **offensive** and one **defensive**, of **13 skills each** (5 tiers: 3·3·3·3 + a capstone). 4 classes → 104 skills.
+- **Active or passive.** Passives fold into `StatEngine.derive` (flat + missing-HP multipliers) and per-hit `combatMods` (Executioner, Crushing Blows, Bulwark, Bloodthirst). Actives are cast by the battle AI on cooldown when their trigger fits (`Skills.activeSkills` + the game's `tryCast`) — Cleave, Sunder, Whirlwind, Rampage, Guard, Taunt, Shield Bash, Rallying Cry, and the capstones, all driven through a unified **timed-buff system** (shields, stuns, DEF shred, party auras, immunity, bleeds).
+- **Ranks 1→5**, breakpoints at 3 and 5. **1 skill point per level** (separate from stat points, from level 2). **Tier gates** (0·2·6·12·20 points-in-branch) make deep investment a real cost — respec is free by unlearning.
+- Companions get a fixed class-appropriate loadout that makes recruiting a build choice (Phase 3).
 
 **Flagship example — the Cleric:**
 | Branch | Focus | Playstyle it enables |

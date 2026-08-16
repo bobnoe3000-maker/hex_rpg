@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-16 · wall obstacles + doorway exits + tighter edge";
+export const APP_BUILD = "2026-08-16 · skills phase 1 · fighter tree";
 
 const BUF = [];
 const MAX = 400;

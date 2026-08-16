@@ -6,9 +6,12 @@ import { fxUpdateDraw, fxClear, fxText, fxSlash, fxBolt, fxDissolve, fxRing, fxB
 import { GCOLS, GROWS, buildGameRoom, cx0g, cy0g, isBlocked } from './engine/dungeon.js';
 import { xpToReach, ROOMS_SPEC } from './engine/combat.js';
 import { unspentPoints, earnedPoints, pointsForLevel, ASSIGNABLE, emptyPoints } from './systems/Leveling.js';
+import { combatMods, activeSkills, unspentSkillPoints, branchInvested, tierUnlocked, rankOf, allSkills,
+         reflectFrac, guardianFrac, waveHealFrac, lastStand, momentum } from './systems/Skills.js';
+import { CLASS_SKILLS, TIER_GATES, MAX_RANK } from './data/skills.js';
 import { HERO_BASES } from './data/classes.js';
 import { BAL } from './data/balance.js';
-import { derive } from './systems/StatEngine.js';
+import { derive, mitigate } from './systems/StatEngine.js';
 import { resolveAttack } from './systems/CombatSim.js';
 import { generate, describeItem } from './systems/LootGenerator.js';
 import { upgrade as forgeUpgrade, canUpgrade, forgePreview, forgeCost } from './systems/ForgeSystem.js';
@@ -81,7 +84,7 @@ function snapshotState(){
 }
 function saveGame(){ if(activeSlot!==null) writeSlot(activeSlot, snapshotState()); }
 function loadGame(save){
-  party=(save.party||[]).map(h=>({alive:true, pts:emptyPoints(), ...h}));   // defaults for older saves
+  party=(save.party||[]).map(h=>({alive:true, pts:emptyPoints(), skills:{}, ...h}));   // defaults for older saves
   state.silver=save.silver||0; state.gems=save.gems||0;
   state.inventory=save.inventory||[]; state.roomIdx=save.roomIdx||0;
 }
@@ -229,7 +232,7 @@ function placeHeroes(){
     while((isBlocked(state.room,h.r,h.c)||occupied(h.r,h.c,h))&&guard++<cells.length+2){
       const f=cells[(guard*7+i*13)%(cells.length||1)]; if(f){ h.r=f[0]; h.c=f[1]; } else break;
     }
-    h.rr=h.r; h.cc=h.c; h.moveT=1; h.next=state.t+0.5+0.2*i; figOf(h);
+    h.rr=h.r; h.cc=h.c; h.moveT=1; h.next=state.t+0.5+0.2*i; resetCombat(h); figOf(h);
   });
 }
 /* a random reachable floor cell (not blocked, not occupied). `pred(r,c)` optionally filters. */
@@ -248,7 +251,7 @@ function spawnWave(){
     const cell=randFloor((r,c)=>r<=GROWS-4) || randFloor();
     if(!cell) return;
     f.r=cell.r; f.c=cell.c; f.rr=f.r; f.cc=f.c; f.moveT=1; f.next=state.t+0.7+0.2*i;
-    f.level=state.roomIdx+1+(f.boss?1:0);
+    f.level=state.roomIdx+1+(f.boss?1:0); resetCombat(f);
     state.foes.push(f); figOf(f); });
 }
 function loadRoom(){
@@ -264,8 +267,11 @@ function seedBattle(){ combatRng=mulberry32((((state.room&&state.room.seed)||1)^
 /* a unit's enemies are the *other* team, derived live from the two owners */
 function livingFoes(team){ return team===0 ? liveFoes() : liveHeroes(); }
 function distU(a,b){ return Math.abs(a.r-b.r)+Math.abs(a.c-b.c); }
-function nearest(u){ let best=null,bd=99; for(const f of livingFoes(u.team)){ const dd=distU(u,f);
-  if(dd<bd){bd=dd;best=f;} } return best; }
+function nearest(u){
+  const foes=livingFoes(u.team);
+  if(u.team===1){ const taunters=foes.filter(f=>hasBuff(f,"taunt"));   // Taunt forces enemies onto the tank
+    if(taunters.length){ let b=null,bd=99; for(const f of taunters){ const d=distU(u,f); if(d<bd){bd=d;b=f;} } return b; } }
+  let best=null,bd=99; for(const f of foes){ const dd=distU(u,f); if(dd<bd){bd=dd;best=f;} } return best; }
 /* is a living unit (hero or foe) standing on this cell? `except` skips one unit (itself) */
 function occupied(r,c,except){
   for(const h of party) if(h!==except&&h.alive&&h.r===r&&h.c===c) return true;
@@ -291,9 +297,37 @@ function stepAway(u,tg){
   if((Math.abs(opts[0].r-tg.r)+Math.abs(opts[0].c-tg.c))<=distU(u,tg)) return false;
   moveTo(u,opts[0]); return true;
 }
-/* one basic attack, resolved by the deterministic CombatSim; this layer only renders/logs */
+/* ---------- skill runtime: timed buffs / debuffs / cooldowns (all units share this) ---------- */
+function hasBuff(u,k){ return u.buffs && u.buffs.some(b=>b.k===k); }
+function addBuff(u,b){ (u.buffs||(u.buffs=[])).push(b); }
+function resetCombat(u){ u.buffs=[]; u.cd={}; u.mLast=0; }
+function adjFoes(u){ return livingFoes(u.team).filter(f=>distU(f,u)<=1); }
+function guardianNear(u){ for(const h of party){ if(h===u||!h.alive)continue;
+  if(guardianFrac(h)>0 && distU(h,u)<=1) return h; } return null; }
+function applyBleed(target,src,bl){
+  const dps=Math.max(1, derive(src).atk*bl.pct);
+  const cur=(target.buffs||[]).filter(b=>b.k==="bleed");
+  if(cur.length>=bl.stacks){ cur.sort((a,b)=>a.until-b.until)[0].until=state.t+bl.dur; return; }
+  addBuff(target,{k:"bleed",dps,src,until:state.t+bl.dur,nextTick:state.t+0.5});
+}
+function addMomentum(u,mo){
+  const atkStacks=(u.buffs||[]).filter(b=>b.k==="mo"&&b.stat==="atk").length;
+  if(atkStacks<mo.stacks){ addBuff(u,{k:"mo",mult:true,stat:"atk", v:mo.pct,until:state.t+mo.dur});
+    addBuff(u,{k:"mo",mult:true,stat:"aspd",v:mo.pct,until:state.t+mo.dur}); }
+  (u.buffs||[]).forEach(b=>{ if(b.k==="mo") b.until=state.t+mo.dur; });
+  fxText(uxS(u),uyS(u)-40,"+momentum","#ff9a5c");
+}
+function tickBuffs(u){
+  if(!u.buffs||!u.buffs.length) return;
+  for(const b of u.buffs){ if(b.k==="bleed" && u.alive && state.t>=b.nextTick){ b.nextTick+=0.5;
+    hurt(u, Math.max(1,Math.round(b.dps*0.5)), b.src); } }
+  u.buffs = u.buffs.filter(b=> b.until==null || state.t<b.until);
+}
+/* one basic attack, resolved by the deterministic CombatSim (+ this hero's skill modifiers) */
 function attack(att,def){
-  const res=resolveAttack(att,def,combatRng);
+  const dhf=def.hp/Math.max(1,derive(def).maxhp);
+  const mods=combatMods(att,def,dhf);
+  const res=resolveAttack(att,def,combatRng,mods);
   const who=`<b>${att.name}</b>`;
   att.lunge={tx:uxS(def),ty:uyS(def),t:0};
   if(res.type==="dodge"){
@@ -308,14 +342,89 @@ function attack(att,def){
     fxText(uxS(def),uyS(def)-40,String(res.dmg),res.crit?"#ff6b6b":"#ffd166",res.crit);
     if(res.heal && att.alive){ const mh=derive(att).maxhp; att.hp=Math.min(mh,att.hp+res.heal);
       fxText(uxS(att),uyS(att)-30,"+"+res.heal,"#7ee787"); if(att.team===0) renderParty(); }
+    if(mods.bleed && def.alive) applyBleed(def,att,mods.bleed);                 // Rend
+    if(mods.cleaveTargets>0){                                                    // Cleave
+      let hitN=0; for(const f of livingFoes(att.team)){ if(f===def) continue; if(distU(f,att)>1) continue;
+        if(hitN>=mods.cleaveTargets) break; hitN++;
+        const cd=Math.max(1,Math.round(mitigate(derive(att).atk*mods.cleavePct, derive(f).def)));
+        fxSlash(uxS(f),uyS(f)-14,false); fxText(uxS(f),uyS(f)-36,String(cd),"#ffb066"); hurt(f,cd,att); } }
   };
   if(derive(att).rng>1){
     const col=att.cls==="mage"?"#b48bff":att.cls==="rogue"?"#d8c088":(att.fig==="kobold"?"#c8ccd6":"#7ee787");
     fxBolt(uxS(att),uyS(att)-18,uxS(def),uyS(def)-14,col,deliver);
   } else { fxSlash(uxS(def),uyS(def)-14,res.crit); deliver(); }
 }
-function hurt(u,dmg,src){
+/* an active skill the battle AI chose to cast this action */
+function castActive(u,s,tg){
+  const a=s.a, r=s.rank, atk=derive(u).atk, def=derive(u).def;
+  const say=(txt,col)=>{ fxText(uxS(u),uyS(u)-46,txt,col||"#ffd166",true);
+    log(`${iconImg("spark",14)} <b>${u.name}</b> — <span class="sys">${s.name}</span>`,"sys"); };
+  const hit=(foe,dmg)=>{ if(!foe.alive)return; const d=Math.max(1,Math.round(mitigate(dmg,derive(foe).def)));
+    fxSlash(uxS(foe),uyS(foe)-14,false); fxText(uxS(foe),uyS(foe)-38,String(d),"#ffd166"); hurt(foe,d,u); };
+  switch(a.kind){
+    case "sunder":{ say("SUNDER","#ff9a5c"); hit(tg,atk*a.dmg);
+      const sh=a.shred[r-1]; addBuff(tg,{k:"shred",mult:true,stat:"def",v:-sh,until:state.t+a.dur});
+      if(r>=5) adjFoes(u).forEach(f=>{ if(f!==tg) addBuff(f,{k:"shred",mult:true,stat:"def",v:-sh,until:state.t+a.dur}); }); break; }
+    case "whirl":{ say("WHIRLWIND","#ff9a5c"); fxRing(uxS(u),uyS(u)+6,"#ff9a5c");
+      adjFoes(u).forEach(f=>{ hit(f,atk*a.dmg[r-1]); if(r>=a.bleedAt) applyBleed(f,u,{pct:.06,dur:4,stacks:1}); }); break; }
+    case "rampage":{ say("RAMPAGE","#ff9a5c"); for(let i=0;i<a.hits;i++) hit(tg,atk*a.dmg[r-1]); break; }
+    case "wrath":{ say("WARLORD'S WRATH","#ffdf6b"); fxRing(uxS(u),uyS(u)+6,"#ffdf6b");
+      adjFoes(u).forEach(f=>hit(f,atk*a.dmg));
+      const bf=a.buff[r-1]; party.forEach(h=>{ if(h.alive) addBuff(h,{k:"wrath",mult:true,stat:"atk",v:bf,until:state.t+a.dur}); }); break; }
+    case "guard":{ say("GUARD","#9ad1ff"); addBuff(u,{k:"guard",mult:true,stat:"def",v:a.def[r-1],until:state.t+a.dur}); fxBlock(uxS(u),uyS(u)-18); break; }
+    case "taunt":{ say("TAUNT","#9ad1ff"); const dur=a.dur[r-1]; addBuff(u,{k:"taunt",until:state.t+dur});
+      if(a.defBuff[r-1]>0) addBuff(u,{k:"taunt",mult:true,stat:"def",v:a.defBuff[r-1],until:state.t+dur}); break; }
+    case "bash":{ say("SHIELD BASH","#9ad1ff"); hit(tg,def*a.dmg); if(tg.alive){ addBuff(tg,{k:"stun",until:state.t+a.stun[r-1]}); fxText(uxS(tg),uyS(tg)-30,"stun","#9ad1ff"); } break; }
+    case "rally":{ say("RALLYING CRY","#9ad1ff"); const sh=Math.round(derive(u).maxhp*a.shield[r-1]);
+      party.forEach(h=>{ if(h.alive){ addBuff(h,{k:"shield",v:sh,until:state.t+12}); fxText(uxS(h),uyS(h)-30,"shield","#9ad1ff"); } }); break; }
+    case "unbreak":{ say("UNBREAKABLE","#ffdf6b"); const dur=a.dur[r-1];
+      addBuff(u,{k:"immune",until:state.t+dur}); addBuff(u,{k:"taunt",until:state.t+dur});
+      const heal=Math.round(derive(u).maxhp*a.heal[r-1]); u.hp=Math.min(derive(u).maxhp,u.hp+heal);
+      fxText(uxS(u),uyS(u)-30,"+"+heal,"#7ee787"); break; }
+  }
+  if(u.team===0) renderParty();
+}
+/* try to spend this action on a ready, situationally-appropriate active. Returns true if one fired. */
+function tryCast(u,tg){
+  const acts=activeSkills(u); if(!acts.length) return false;
+  u.cd=u.cd||{};
+  const R=derive(u).rng, d=distU(u,tg);
+  for(const s of acts){
+    if(state.t < (u.cd[s.id]||0)) continue;
+    const k=s.a.kind, fits =
+      k==="rally"   ? true :
+      k==="unbreak" ? (u.hp/derive(u).maxhp<0.55 || adjFoes(u).length>=2) :
+      (k==="guard"||k==="taunt") ? d<=2 :
+      d<=Math.max(1,R);                       // melee strikes need a foe in reach
+    if(!fits) continue;
+    u.cd[s.id]=state.t+s.a.cd[s.rank-1];
+    castActive(u,s,tg);
+    return true;
+  }
+  return false;
+}
+function hurt(u,dmg,src,opt){
+  if(!u.alive) return;
+  opt=opt||{};
+  if(hasBuff(u,"immune")){ fxText(uxS(u),uyS(u)-30,"immune","#9ad1ff"); return; }   // Unbreakable
+  // Guardian — an adjacent ally soaks part of the blow
+  if(!opt.noGuard && u.team===0){ const g=guardianNear(u); if(g){ const gd=Math.max(1,Math.round(dmg*guardianFrac(g)));
+    dmg-=gd; hurt(g,gd,src,{noGuard:true,noReflect:true}); } }
+  // Shield (Rallying Cry) absorbs before HP
+  if(dmg>0 && u.buffs){ for(const b of u.buffs){ if(b.k==="shield"&&b.v>0){ const a=Math.min(b.v,dmg); b.v-=a; dmg-=a;
+    if(a>0) fxText(uxS(u),uyS(u)-26,"absorb","#9ad1ff"); if(dmg<=0) break; } }
+    u.buffs=u.buffs.filter(b=>b.k!=="shield"||b.v>0); }
+  if(dmg<=0){ if(u.team===0) renderParty(); return; }
+  // Retaliation — reflect melee damage back to the attacker
+  if(!opt.noReflect && src && src.alive && src.team!==u.team && derive(src).rng<=1){ const rfr=reflectFrac(u);
+    if(rfr>0){ hurt(src,Math.max(1,Math.round(dmg*rfr)),u,{noReflect:true,noGuard:true}); } }
   u.hp-=dmg; u.flash=0.18;
+  // Last Stand — cheat death
+  if(u.hp<=0){ const ls=lastStand(u); if(ls && (u.mLast||0)<ls.uses){ u.mLast=(u.mLast||0)+1;
+    u.hp=Math.max(1,Math.round(derive(u).maxhp*ls.heal)); u.flash=0.18;
+    fxText(uxS(u),uyS(u)-44,"LAST STAND!","#ffd166",true);
+    log(`${iconImg("spark",14)} <b>${u.name}</b> refuses to fall!`,"heal");
+    if(u.team===0) renderParty(); return; } }
   if(u.hp<=0){ u.hp=0; u.alive=false;
     log(`${iconImg("skull",14)} <b>${u.name}</b> falls!`, u.team===0?"crit":"sys");
     const f=figOf(u), S=u.boss?76:54;
@@ -337,6 +446,7 @@ function hurt(u,dmg,src){
       if(combatRng()<0.5) fxText(uxS(u),uyS(u)-14,"+"+sv,"#d8c47a");
       updateHud();
     }
+    if(src && src.alive){ const mo=momentum(src); if(mo) addMomentum(src,mo); }   // Momentum snowball
   }
   if(u.team===0) renderParty();
 }
@@ -387,10 +497,36 @@ function assignPoints(h, deltas){
   renderParty(); updateHud(); saveGame();
   return true;
 }
+/* Learn (+1) or unlearn (−1) a skill rank for the main hero. Validated against tier gates and the
+   available skill-point pool; unlearning cascades a refund of any rank left stranded above a gate. */
+function assignSkill(h, id, delta){
+  if(h!==party[0]) return false;
+  const sk=allSkills(h.cls).find(s=>s.id===id); if(!sk) return false;
+  h.skills=h.skills||{};
+  const cur=h.skills[id]||0;
+  if(delta>0){
+    if(cur>=MAX_RANK) return false;
+    if(!tierUnlocked(h,h.cls,sk.br,sk.tier)) return false;
+    if(unspentSkillPoints(h)<=0) return false;
+    h.skills[id]=cur+1;
+  } else {
+    if(cur<=0) return false;
+    h.skills[id]=cur-1; if(h.skills[id]===0) delete h.skills[id];
+  }
+  // refund any rank whose tier is no longer unlocked
+  let changed=true;
+  while(changed){ changed=false;
+    for(const s of allSkills(h.cls)){ const r=h.skills[s.id]||0;
+      if(r>0 && !tierUnlocked(h,h.cls,s.br,s.tier)){ delete h.skills[s.id]; changed=true; } } }
+  renderParty(); updateHud(); saveGame();
+  return true;
+}
 function act(u){
   if(!u.alive)return;
+  if(hasBuff(u,"stun")) return;               // stunned → skip this action entirely
   const tg=nearest(u);
   if(tg){
+    if(tryCast(u,tg)) return;                  // spend the action on a ready skill when one fits
     const R=derive(u).rng, d=distU(u,tg);
     if(R>1){                                  // ranged: kite
       if(d<=BAL.KITE_MIN){ if(!stepAway(u,tg)) attack(u,tg); return; }  // foe too close → back off (or fight if cornered)
@@ -416,7 +552,8 @@ function updateWaves(){
   if(!foesAlive && state.respawnAt===null){
     state.respawnAt=state.t+BAL.RESPAWN_DELAY;
     for(const h of party) if(h.alive){ const mh=derive(h).maxhp;
-      h.hp=Math.min(mh,h.hp+Math.round(mh*BAL.WAVE_HEAL_FRAC)); }
+      const heal=Math.round(mh*BAL.WAVE_HEAL_FRAC)+Math.round(mh*waveHealFrac(h));   // + Second Wind
+      h.hp=Math.min(mh,h.hp+heal); }
     renderParty();
     log(`${iconImg("check",14)} <span class="sys">Wave cleared.</span> Another approaches…`);
   }
@@ -457,6 +594,15 @@ function openHero(h){
     xp: xpProgress,
     points: h===party[0] ? ()=>unspentPoints(h) : null,   // only the main hero allocates points
     assign: h===party[0] ? d=>assignPoints(h, d) : null,
+    skills: h===party[0] && CLASS_SKILLS[h.cls] ? {
+      tree: CLASS_SKILLS[h.cls],
+      ranks: ()=>h.skills||{},
+      points: ()=>unspentSkillPoints(h),
+      invested: br=>branchInvested(h,h.cls,br),
+      unlocked: (br,tier)=>tierUnlocked(h,h.cls,br,tier),
+      gates: TIER_GATES, maxRank: MAX_RANK,
+      learn: (id,d)=>assignSkill(h,id,d),
+    } : null,
     refresh: renderParty,
     gems: ()=>state.gems,
     silver: ()=>state.silver,
@@ -731,6 +877,8 @@ function loop(now){
       if(state.scene==="dungeon" && state.phase==="fight"){
         for(const u of liveUnits()){
           if(!u.alive)continue;   // a unit killed earlier this same tick shouldn't still act
+          tickBuffs(u);           // advance bleeds / expire timed buffs
+          if(!u.alive)continue;   // a bleed may have finished it off
           if(state.t>=u.next){ act(u); u.next=state.t+BAL.BASE_INTERVAL/derive(u).aspd+combatRng()*BAL.ASPD_JITTER; }
         }
         updateWaves();

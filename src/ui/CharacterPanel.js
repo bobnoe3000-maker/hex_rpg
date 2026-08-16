@@ -83,6 +83,32 @@ function injectCss() {
   .cp-confirm{background:linear-gradient(#e0b063,#a8722a);color:#241606;box-shadow:0 2px 0 #6e4a14}
   .cp-reset{background:#2c2342;color:var(--parchment);box-shadow:0 2px 0 #100b1c}
   .cp-pts-act button:active{transform:translateY(1px)}
+  .skhint{font-size:10.5px;color:#6f6486;margin-top:5px}
+  .cp-branch{margin-bottom:12px}
+  .cbh{font-family:inherit;font-size:11px;letter-spacing:1px;text-transform:uppercase;font-weight:bold;
+    padding:7px 9px;border-radius:8px;margin-bottom:7px;display:flex;justify-content:space-between;align-items:center}
+  .cp-branch.off .cbh{color:#ff8a5a;background:rgba(255,138,90,.08);border:1px solid rgba(255,138,90,.35)}
+  .cp-branch.def .cbh{color:#79c7e6;background:rgba(121,199,230,.08);border:1px solid rgba(121,199,230,.35)}
+  .cbh .inv{font-size:9.5px;color:#9a8fb8;letter-spacing:.5px}
+  .ctier{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:#6f6486;margin:8px 2px 4px}
+  .cp-skill{background:#1c1630;border:1px solid var(--line);border-radius:9px;padding:7px 9px;margin-bottom:5px}
+  .cp-skill.on.off{border-color:rgba(255,138,90,.55);background:linear-gradient(180deg,rgba(255,138,90,.09),#1c1630)}
+  .cp-skill.on.def{border-color:rgba(121,199,230,.55);background:linear-gradient(180deg,rgba(121,199,230,.09),#1c1630)}
+  .cp-skill.lk{opacity:.5}
+  .cp-skill .sh{display:flex;justify-content:space-between;align-items:baseline;gap:6px}
+  .cp-skill .sn{font-size:12.5px;font-weight:bold;color:var(--parchment)}
+  .cp-skill .stype{font-size:8px;letter-spacing:.08em;text-transform:uppercase;font-weight:bold;padding:1px 5px;border-radius:4px}
+  .cp-skill .stype.a{color:#2a0f08;background:#ff8a5a}.cp-skill .stype.p{color:#06121a;background:#79c7e6}
+  .cp-skill .sd{font-size:11px;color:#9a8fb8;margin:3px 0 6px;line-height:1.35}
+  .cp-skill .sr{display:flex;align-items:center;gap:7px}
+  .spips{display:flex;gap:3px;flex:1}
+  .spips i{flex:1;height:5px;border-radius:2px;background:#2a2338}
+  .cp-skill.off .spips i.f{background:#ff8a5a}.cp-skill.def .spips i.f{background:#79c7e6}
+  .sbtn{width:26px;height:24px;flex:0 0 auto;font-family:inherit;font-size:15px;font-weight:bold;line-height:1;
+    border:1px solid var(--line);border-radius:6px;background:#241a2e;color:var(--gold);cursor:pointer;padding:0}
+  .sbtn:disabled{opacity:.3;cursor:default;color:#6f6486}
+  .sbtn:active:not(:disabled){transform:translateY(1px)}
+  .slock{font-size:9.5px;color:#8a6a4a;margin-top:5px;font-style:italic}
   `;
   document.head.appendChild(s);
 }
@@ -172,13 +198,47 @@ export function openCharacter(hero, ctx) {
       ${usable.length ? usable.map(it => itemRow(it, ctx.inventory.indexOf(it))).join("")
                       : `<div class="cp-none">${filterSlot ? "No " + cap(filterSlot) + " items in the bag." : "No items " + hero.name + " can equip yet — fight to find loot."}</div>`}`;
 
-    // Main hero gets two tabs (Stats+points / Equipment); companions show one combined view.
+    // Skills tree (main hero only, when the class has a tree). Two branches × 5 tiers, learn ranks
+    // immediately (allocation persists); tiers gate on branch investment.
+    const skillsBlock = () => {
+      const sk = ctx.skills; if (!sk) return "";
+      const R = sk.ranks(), avail = sk.points();
+      const branch = (br) => {
+        const b = sk.tree[br];
+        const rows = b.skills.map(s => {
+          const r = R[s.id] || 0, un = sk.unlocked(br, s.tier), canAdd = un && r < sk.maxRank && avail > 0;
+          const txt = r > 0 ? s.text[r - 1] : s.text[0];
+          return `<div class="cp-skill ${r > 0 ? "on" : ""} ${un ? "" : "lk"} ${br}">
+            <div class="sh"><span class="sn">${s.name}</span><span class="stype ${s.type[0]}">${s.type === "active" ? "Active" : "Passive"}</span></div>
+            <div class="sd">${txt}</div>
+            <div class="sr">
+              <span class="spips">${[0,1,2,3,4].map(i => `<i class="${i < r ? "f" : ""}"></i>`).join("")}</span>
+              <button class="sbtn" data-sk-dec="${s.id}" ${r <= 0 ? "disabled" : ""}>−</button>
+              <button class="sbtn add" data-sk-inc="${s.id}" ${canAdd ? "" : "disabled"}>+</button>
+            </div>${un ? "" : `<div class="slock">Locked · needs ${sk.gates[s.tier]} in ${b.name}</div>`}</div>`;
+        });
+        // group by tier with a divider
+        let out = `<div class="cp-branch ${br}"><div class="cbh">${br === "off" ? "Offensive" : "Defensive"} · ${b.name} <span class="inv">${sk.invested(br)} pts</span></div>`;
+        let lastT = 0;
+        b.skills.forEach((s, i) => { if (s.tier !== lastT) { lastT = s.tier;
+          out += `<div class="ctier">${s.tier === 5 ? "Capstone" : "Tier " + s.tier}</div>`; } out += rows[i]; });
+        return out + "</div>";
+      };
+      return `<div class="cp-pts" style="margin-bottom:12px"><div class="cp-pts-h"><span>Skill points</span><span class="av ${avail ? "" : "none"}">${avail}</span></div>
+        <div class="skhint">Learn ranks below · deeper tiers unlock as you invest in a branch</div></div>
+        ${branch("off")}${branch("def")}`;
+    };
+
+    // Main hero gets tabs (Stats / Skills / Equipment); companions show one combined view.
     const tabbed = ctx.isMain;
+    const hasSkills = !!ctx.skills;
+    const paneFor = t => t === "stats" ? statsBlock : t === "skills" ? skillsBlock() : equipBlock;
     const body = tabbed
       ? `<div class="cp-tabs">
            <button class="cp-tab ${tab === "stats" ? "sel" : ""}" data-tab="stats">Stats</button>
+           ${hasSkills ? `<button class="cp-tab ${tab === "skills" ? "sel" : ""}" data-tab="skills">Skills</button>` : ""}
            <button class="cp-tab ${tab === "equip" ? "sel" : ""}" data-tab="equip">Equipment</button>
-         </div>${tab === "stats" ? statsBlock : equipBlock}`
+         </div>${paneFor(tab)}`
       : statsBlock + equipBlock;
 
     overlay.innerHTML = `<div class="cpanel">
@@ -216,6 +276,13 @@ export function openCharacter(hero, ctx) {
     overlay.querySelectorAll("[data-dec]").forEach(b => b.onclick = () => {
       const k = b.getAttribute("data-dec"); const committed = (hero.pts && hero.pts[k]) || 0;
       if (committed + draft[k] > 0) { draft[k]--; render(); }
+    });
+    // skill tree: learn / unlearn a rank (persists immediately)
+    overlay.querySelectorAll("[data-sk-inc]").forEach(b => b.onclick = () => {
+      if (ctx.skills && ctx.skills.learn(b.getAttribute("data-sk-inc"), +1)) render();
+    });
+    overlay.querySelectorAll("[data-sk-dec]").forEach(b => b.onclick = () => {
+      if (ctx.skills && ctx.skills.learn(b.getAttribute("data-sk-dec"), -1)) render();
     });
     const rst = overlay.querySelector("[data-preset]"); if (rst) rst.onclick = () => { clearDraft(); render(); };
     const cf = overlay.querySelector("[data-pconfirm]"); if (cf) cf.onclick = () => {

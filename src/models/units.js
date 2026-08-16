@@ -50,7 +50,8 @@ export function makeHero(cls, opts = {}) {
   return {
     name: opts.name || b.name, cls: b.cls, team: 0, level: 1, xp: 0, rng: b.rng,
     hp: stats.hp, maxhp: stats.hp, atk: stats.atk, def: stats.def, dodge: stats.dodge, crit: stats.crit, aspd: stats.aspd,
-    pts: emptyPoints(),   // spent level-up points (only the main hero ever allocates these)
+    pts: emptyPoints(),   // spent level-up stat points (only the main hero allocates these)
+    skills: {},           // learned skills → rank (main hero; companions get a loadout in a later phase)
     gear, alive: true, seed, figSeed: pSeed, portraitSeed: pSeed,
   };
 }

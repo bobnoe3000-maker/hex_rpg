@@ -9,6 +9,8 @@ import { upgrade, canUpgrade, primaryStat, forgeCost, forgePreview } from "../sr
 import { priceOf, sellPriceOf } from "../src/systems/Economy.js";
 import { xpToReach, xpForNext } from "../src/engine/combat.js";
 import { earnedPoints, pointsForLevel, unspentPoints, pointBonus, STAT_STEP } from "../src/systems/Leveling.js";
+import { earnedSkillPoints, unspentSkillPoints, branchInvested, tierUnlocked, combatMods,
+         skillFlat, skillMult, buffMult, activeSkills, allSkills } from "../src/systems/Skills.js";
 
 let fails = 0;
 const ok = (name, cond) => { console.log(`${cond ? "PASS" : "FAIL"}  ${name}`); if (!cond) fails++; };
@@ -260,6 +262,52 @@ ok("different seed diverges", seq(123) !== seq(777));
 
   // enemies never carry points, so derive stays clean for them
   ok("enemies get no point bonus", pointBonus(rat, "atk") === 0 && !rat.pts);
+}
+
+// Skills: economy, tier gates, passive stat mods, combat mods, actives
+{
+  const h = makeHero("fighter", 1);
+  // point economy — 1/level from level 2
+  ok("skill points start at level 2", earnedSkillPoints(1) === 0 && earnedSkillPoints(2) === 1 && earnedSkillPoints(30) === 29);
+  ok("fresh hero has no skill points", unspentSkillPoints(h) === 0);
+
+  // Fighter tree exists: 2 branches × 13
+  ok("fighter tree is 13 + 13", allSkills("fighter").filter(s=>s.br==="off").length === 13 && allSkills("fighter").filter(s=>s.br==="def").length === 13);
+
+  // tier gating
+  ok("tier 1 open, tier 3 gated at 0 invest", tierUnlocked(h,"fighter","off",1) && !tierUnlocked(h,"fighter","off",3));
+  h.level = 10; h.skills = { fury: 5, reckless: 1 };   // 6 invested in Onslaught
+  ok("investing unlocks tier 3", branchInvested(h,"fighter","off") === 6 && tierUnlocked(h,"fighter","off",3));
+
+  // passive flat stats fold into derive (Battle Fury +15 ATK at r5)
+  const base = makeHero("fighter", 1); const atk0 = derive(base).atk;
+  base.skills = { fury: 5 };
+  ok("Battle Fury r5 adds +15 ATK via derive", derive(base).atk === atk0 + 15);
+  ok("skillFlat reports the same", skillFlat(base).atk === 15);
+
+  // Berserker (missing-HP mult) raises ATK when hurt
+  const b2 = makeHero("fighter", 1); b2.skills = { berserk: 5 }; const full = derive(b2).atk;
+  b2.hp = Math.round(derive(b2).maxhp * 0.2);   // ~80% missing
+  ok("Berserker scales ATK with missing HP", derive(b2).atk > full);
+  ok("skillMult>1 when wounded", skillMult(b2,"atk",0.8) > 1);
+
+  // buffs fold into derive too (a +50% def guard buff)
+  const g = makeHero("fighter", 1); const d0 = derive(g).def;
+  g.buffs = [{ k:"guard", mult:true, stat:"def", v:0.5 }];
+  ok("a defMult buff raises derived DEF ~1.5×", Math.abs(derive(g).def - d0*1.5) < 1.5 && buffMult(g,"def") === 1.5);
+
+  // combatMods: Executioner adds damage only to low-HP targets; Crushing Blows ignores DEF on crit
+  const att = makeHero("fighter", 1); att.skills = { exec: 1, crush: 1, blood: 1 };
+  const lowDef = { hp: 5, maxhp: 100, cls:"rat", team:1 };
+  const m1 = combatMods(att, lowDef, 0.1), m2 = combatMods(att, lowDef, 0.9);
+  ok("Executioner fires under threshold, not over", m1.dmgMult > 1 && m2.dmgMult === 1);
+  ok("Crushing Blows + Bloodthirst reported", m1.critDefIgnore === 0.25 && m1.lifesteal === 0.08);
+
+  // active skills surface for casting (Guard/Sunder/etc), highest tier first
+  att.skills = { guard: 1, unbreak: 1, cleave: 1 };
+  const acts = activeSkills(att);
+  ok("active skills list only actives, capstone first", acts[0].id === "unbreak" && acts.some(a=>a.id==="guard"));
+  ok("passive-only heroes have no actives", activeSkills(makeHero("fighter",{})).length === 0);
 }
 
 console.log(fails ? `\n${fails} FAILED` : "\nall passed");
