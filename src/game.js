@@ -52,9 +52,17 @@ logBar.onclick=()=>{ const i=LOG_STATES.indexOf(logWrap.dataset.s||"mid");
   setLogState(LOG_STATES[(i+1)%LOG_STATES.length]); };
 setLogState("mid");
 /* phase: idle → fight ⇄ paused. inventory holds dropped loot; respawn/revive are timers. */
-const state={ roomIdx:0, scene:"town", phase:"idle", room:null, units:[], t:0, speed:1,
+const state={ roomIdx:0, scene:"town", phase:"idle", room:null, foes:[], t:0, speed:1,
   inventory:[], gems:0, silver:0, shopStock:[], recruits:[], respawnAt:null, wipeAt:null,
   rally:null };      // {r,c} flag heroes regroup on when no foe is engaged
+/* Combatants are DERIVED, never a synced parallel array: the living heroes come straight from
+   `party` (the roster's source of truth) and the enemies from `state.foes`. This makes a whole
+   bug class impossible — a hired/resurrected pal is a combatant simply by being alive in `party`,
+   and a dead hero leaves combat simply by being `!alive` (it is never pruned from anywhere). */
+const liveHeroes=()=>party.filter(h=>h.alive);
+const liveFoes=()=>state.foes.filter(f=>f.alive);
+const liveUnits=()=>{ const a=[]; for(const h of party) if(h.alive) a.push(h);
+  for(const f of state.foes) if(f.alive) a.push(f); return a; };
 /* The dungeon freezes while the character/gear panel is open. We derive that from whether the
    overlay is actually on-screen (a single source of truth) rather than a separate boolean —
    so the freeze can never get "stuck" if the overlay is dismissed by any path. */
@@ -182,24 +190,24 @@ function uyS(u){ const k=(u.moveT===undefined)?1:ease(u.moveT);
   return cy0g(0)+r*T+T/2; }
 
 /* ---------- room, party placement, waves ---------- */
-/* Place every living party member onto the field. Safe to call repeatedly: members already
-   on the field are left where they stand, so newly-hired or freshly-resurrected pals get added
-   without teleporting the rest of the party. */
-function placeParty(){
+/* Form the living party up at the start line for the current room. Re-places all living heroes
+   (unique start columns, nudged only off walls/foes), so hires and resurrections just work — a
+   living party member is a combatant by definition; there's no roster/battlefield list to sync. */
+function placeHeroes(){
   const pcols=[2,5,3,6], prow=GROWS-2; // spread up to 4 heroes; GROWS-2 is the floor row
-  party.forEach((h,i)=>{ if(!h.alive) return;      // fallen companions sit out until the Temple revives them
-    if(state.units.includes(h)) return;            // already on the field — don't disturb it
-    h.r=prow; h.c=pcols[i];
-    let guard=0; while((isBlocked(state.room,h.r,h.c)||state.units.some(u=>u.r===h.r&&u.c===h.c))&&guard++<12){
+  const alive=liveHeroes();
+  alive.forEach((h,i)=>{ h.r=prow; h.c=pcols[i%4]; });   // assign first so nudges see real positions
+  alive.forEach((h,i)=>{
+    let guard=0; while((isBlocked(state.room,h.r,h.c)||occupied(h.r,h.c,h))&&guard++<12){
       h.r--; if(h.r<GROWS-3)h.r=GROWS-2, h.c=1+((h.c)%(GCOLS-2)); }
-    h.rr=h.r; h.cc=h.c; h.moveT=1; h.next=state.t+0.5+0.2*i;
-    state.units.push(h); figOf(h); });
+    h.rr=h.r; h.cc=h.c; h.moveT=1; h.next=state.t+0.5+0.2*i; figOf(h);
+  });
 }
 /* a random open (non-blocked, unoccupied) cell within a row band */
 function randCell(minR,maxR){
   let r,c,guard=0;
   do{ r=minR+Math.floor(combatRng()*(maxR-minR+1)); c=1+Math.floor(combatRng()*(GCOLS-2)); }
-  while((isBlocked(state.room,r,c)||state.units.some(u=>u.r===r&&u.c===c))&&guard++<40);
+  while((isBlocked(state.room,r,c)||occupied(r,c))&&guard++<40);
   return {r,c};
 }
 function spawnWave(){
@@ -208,23 +216,29 @@ function spawnWave(){
   spec.spawn().forEach((f,i)=>{
     const cell=randCell(1,GROWS-4);
     f.r=cell.r; f.c=cell.c; f.rr=f.r; f.cc=f.c; f.moveT=1; f.next=state.t+0.7+0.2*i;
-    state.units.push(f); figOf(f); });
+    state.foes.push(f); figOf(f); });
 }
 function loadRoom(){
   const spec=ROOMS_SPEC[state.roomIdx];
   state.room=buildGameRoom((Date.now()+state.roomIdx*7919)|0,spec);
-  state.units=[]; fxClear(); state.respawnAt=null; state.wipeAt=null; state.rally=null;
-  placeParty(); spawnWave();
+  state.foes=[]; fxClear(); state.respawnAt=null; state.wipeAt=null; state.rally=null;
+  placeHeroes(); spawnWave();
   log(`— <span class="sys">${spec.title.split("— ")[1]}</span> —`);
 }
 function seedBattle(){ combatRng=mulberry32((((state.room&&state.room.seed)||1)^0x9e3779b9)>>>0); }
 
 /* ---------- sim (continuous act-timer autobattle on the room grid) ---------- */
-function livingFoes(team){ return state.units.filter(u=>u.alive&&u.team!==team); }
+/* a unit's enemies are the *other* team, derived live from the two owners */
+function livingFoes(team){ return team===0 ? liveFoes() : liveHeroes(); }
 function distU(a,b){ return Math.abs(a.r-b.r)+Math.abs(a.c-b.c); }
 function nearest(u){ let best=null,bd=99; for(const f of livingFoes(u.team)){ const dd=distU(u,f);
   if(dd<bd){bd=dd;best=f;} } return best; }
-function occupied(r,c){ return state.units.some(u=>u.alive&&u.r===r&&u.c===c); }
+/* is a living unit (hero or foe) standing on this cell? `except` skips one unit (itself) */
+function occupied(r,c,except){
+  for(const h of party) if(h!==except&&h.alive&&h.r===r&&h.c===c) return true;
+  for(const f of state.foes) if(f!==except&&f.alive&&f.r===r&&f.c===c) return true;
+  return false;
+}
 function stepToward(u,tg){
   const opts=[[1,0],[-1,0],[0,1],[0,-1]].map(([dr,dc])=>({r:u.r+dr,c:u.c+dc}))
     .filter(p=>!isBlocked(state.room,p.r,p.c)&&!occupied(p.r,p.c));
@@ -309,7 +323,7 @@ function act(u){
 /* wave clears -> schedule respawn; party wipes -> schedule revive (endless map) */
 function updateWaves(){
   const heroesAlive=party.some(h=>h.alive);
-  const foesAlive=state.units.some(u=>u.team===1&&u.alive);
+  const foesAlive=state.foes.some(f=>f.alive);
   if(!heroesAlive){
     if(state.wipeAt===null){ state.wipeAt=state.t+BAL.WIPE_DELAY;
       log(`${iconImg("skull",14)} <span class="crit">The party falls…</span> retreating to the Keep.`); }
@@ -376,7 +390,7 @@ function enterTown(fromWipe=false){
 function enterDungeon(){
   state.scene="dungeon"; townEl.classList.remove("show");
   if(state.phase==="idle") seedBattle();
-  placeParty();               // pull in any pals hired or resurrected since the last delve
+  placeHeroes();              // form up the living party (incl. any pals hired/resurrected since)
   state.phase="fight"; syncButtons();
   diag("scene", `descend · room ${state.roomIdx} · party ${party.filter(h=>h.alive).length}`);
 }
@@ -487,6 +501,7 @@ cvG.addEventListener("click", e=>{
 /* ---------- render ---------- */
 function drawUnit(u){
   if(!u.alive) return;
+  if(u.r==null||u.c==null) return;  // alive but not on the field yet (e.g. a pal just hired in town)
   const tile=tileOf(u), S=tile.S, pal=tile.pal;
   const gx=uxS(u), gy=uyS(u);
   // little hop while sliding between cells, tiny idle breath while standing
@@ -541,7 +556,8 @@ function render(dt){
   G.drawImage(state.room.base,0,0,CW,CH);
   for(const p of state.room.parts) drawPartPx(G,p,state.t);
   if(state.rally) drawFlag(cx0g(state.rally.c)+T/2, cy0g(state.rally.r)+T/2);
-  const sorted=[...state.units].sort((a,b)=>a.r-b.r||a.c-b.c);
+  // draw heroes + foes together, back-to-front; drawUnit skips the dead so fallen pals don't render
+  const sorted=[...party,...state.foes].sort((a,b)=>a.r-b.r||a.c-b.c);
   for(const u of sorted) drawUnit(u);
   fxUpdateDraw(G,dt);
   if(state.phase==="idle"){
@@ -565,8 +581,8 @@ function loop(now){
     if(!frozen){
       state.t+=dt;
       if(state.scene==="dungeon" && state.phase==="fight"){
-        for(const u of state.units){
-          if(!u.alive)continue;
+        for(const u of liveUnits()){
+          if(!u.alive)continue;   // a unit killed earlier this same tick shouldn't still act
           if(state.t>=u.next){ act(u); u.next=state.t+BAL.BASE_INTERVAL/derive(u).aspd+combatRng()*BAL.ASPD_JITTER; }
         }
         updateWaves();
@@ -574,11 +590,11 @@ function loop(now){
         if(state.respawnAt!==null && state.t>=state.respawnAt){ state.respawnAt=null; spawnWave(); }
         // full wipe: pull back to the Keep (main revives free there; fallen pals need the Temple)
         if(state.wipeAt!==null && state.t>=state.wipeAt){ state.wipeAt=null; enterTown(true); }
-        // prune slain units so the list doesn't grow without bound over endless waves
-        state.units=state.units.filter(u=>u.alive);
+        // prune slain FOES only (heroes are never pruned — they live in `party`, dead or alive)
+        state.foes=state.foes.filter(f=>f.alive);
       }
-      // advance grid-slide interpolation for every unit
-      for(const u of state.units){ if(u.moveT!==undefined&&u.moveT<1)
+      // advance grid-slide interpolation for every live unit
+      for(const u of liveUnits()){ if(u.moveT!==undefined&&u.moveT<1)
         u.moveT=Math.min(1,u.moveT+dt*6.5); }
     }
     render(frozen?0:dt);
@@ -588,7 +604,7 @@ function loop(now){
     loop._errs=(loop._errs||0)+1;
     if(loop._errs<=3){ console.error("DP loop frame error (recovered):",err);
       diag("state", JSON.stringify({scene:state.scene,phase:state.phase,frozen:uiFrozen,
-        units:state.units.length,roomIdx:state.roomIdx,rally:state.rally,t:+state.t.toFixed(1)})); }
+        foes:state.foes.length,heroes:liveHeroes().length,roomIdx:state.roomIdx,rally:state.rally,t:+state.t.toFixed(1)})); }
   }
   requestAnimationFrame(loop);
 }
@@ -596,7 +612,7 @@ function loop(now){
 function buildDiagnostics(){
   const snap={ scene:state.scene, phase:state.phase, panelShown:panelShown(), frozen:uiFrozen,
     speed:state.speed, roomIdx:state.roomIdx, rally:state.rally, silver:state.silver, gems:state.gems,
-    units:state.units.length, inventory:state.inventory.length, recruits:state.recruits.length,
+    foes:state.foes.length, heroesAlive:liveHeroes().length, inventory:state.inventory.length, recruits:state.recruits.length,
     respawnAt:state.respawnAt, wipeAt:state.wipeAt, loopErrs:loop._errs||0,
     party:party.map(h=>({name:h.name,cls:h.cls,lv:h.level,hp:h.hp,alive:h.alive})) };
   const logLines=[...logEl.children].slice(-40).map(d=>d.textContent).join("\n");
