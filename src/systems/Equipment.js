@@ -14,11 +14,19 @@ export function canEquip(hero, item) {
 }
 
 /* Equip `item` (which must be in `inventory`) into its slot on `hero`.
-   Any item already in that slot returns to the inventory. Returns true on success. */
+   Any item already in that slot returns to the inventory. A two-handed weapon (staff, greatsword,
+   shortbow) can't share the hero with an offhand: equipping one frees the offhand, and equipping an
+   offhand frees a two-handed weapon. Returns true on success. */
 export function equip(hero, item, inventory) {
   if (!canEquip(hero, item)) return false;
   const idx = inventory.indexOf(item);
   if (idx >= 0) inventory.splice(idx, 1);
+  // enforce the two-handed / offhand exclusion before seating the new item
+  if (item.slot === "weapon" && item.twoH && hero.gear.offhand) {
+    inventory.push(hero.gear.offhand); hero.gear.offhand = null;
+  } else if (item.slot === "offhand" && hero.gear.weapon && hero.gear.weapon.twoH) {
+    inventory.push(hero.gear.weapon); hero.gear.weapon = null;
+  }
   const prev = hero.gear[item.slot];
   hero.gear[item.slot] = item;
   if (prev) inventory.push(prev);

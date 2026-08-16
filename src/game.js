@@ -9,7 +9,7 @@ import { HERO_BASES } from './data/classes.js';
 import { BAL } from './data/balance.js';
 import { derive } from './systems/StatEngine.js';
 import { resolveAttack } from './systems/CombatSim.js';
-import { generate } from './systems/LootGenerator.js';
+import { generate, describeItem } from './systems/LootGenerator.js';
 import { upgrade as forgeUpgrade, canUpgrade, forgePreview } from './systems/ForgeSystem.js';
 import { priceOf, sellPriceOf } from './systems/Economy.js';
 import { openCharacter } from './ui/CharacterPanel.js';
@@ -402,7 +402,8 @@ function tryForge(item){
   if(!canUpgrade(item)) return {outcome:"max"};
   state.gems--;
   const res=forgeUpgrade(item, Math.random);
-  if(res.outcome==="success") log(`${iconImg("hammer",14)} <span class="heal">+${item.upgradeLevel}!</span> ${item.n} strengthened.`,"heal");
+  if(res.outcome==="success"){ item.d=describeItem(item);   // rebuild the stat text so rows/panels show the new value
+    log(`${iconImg("hammer",14)} <span class="heal">+${item.upgradeLevel}!</span> ${item.n} strengthened.`,"heal"); }
   else if(res.outcome==="destroyed"){ removeItem(item); log(`${iconImg("hammer",14)} <span class="crit">Shattered!</span> ${item.n} was destroyed.`,"crit"); }
   else log(`${iconImg("hammer",14)} <span class="miss">The gem fizzles</span> — ${item.n} is unharmed.`);
   renderParty(); updateHud(); saveGame();

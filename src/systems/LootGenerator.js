@@ -26,6 +26,16 @@ function fmtVal(stat, v) {
   return `${v >= 0 ? "+" : ""}${num} ${STAT_LABEL[stat]}`;
 }
 
+/* Build an item's description string from its CURRENT stats + tags. Used at generation time and
+   again after the Forge upgrades a stat, so the text never drifts from the numbers. */
+export function describeItem(item) {
+  const parts = STAT_ORDER.filter(s => item[s] !== undefined).map(s => fmtVal(s, item[s]));
+  if (item.rng > 1) parts.push("Ranged");
+  if (item.twoH) parts.push("Two-handed");
+  if (item.proc) parts.push(cap(item.proc.kind));
+  return parts.join(", ");
+}
+
 /* Generate one item. opts.classes (array) restricts gear types to those the party can use:
    family armour (fam) only drops in families the party wears; weapons/jewellery gate by `use`. */
 export function generate(rng, opts = {}) {
@@ -50,9 +60,6 @@ export function generate(rng, opts = {}) {
   add(prefix.stat, prefix.val);
 
   const name = [prefix.name, material.name, type.name].filter(Boolean).join(" ");
-  const descParts = STAT_ORDER.filter(s => stats[s] !== undefined).map(s => fmtVal(s, stats[s]));
-  if (type.rng > 1) descParts.push("Ranged");
-  if (prefix.proc) descParts.push(cap(prefix.proc.kind));
 
   // cosmetic grade from the rarest component (colour only — not a mechanical tier)
   const minW = Math.min(type.w, material.w, prefix.w);
@@ -61,11 +68,12 @@ export function generate(rng, opts = {}) {
   const item = {
     n: name, slot: type.slot, use: type.use, primary: type.stat,
     proc: prefix.proc || null, upgradeLevel: 0, grade,
-    d: descParts.join(", "),
     parts: { prefix: prefix.id, material: material.id, type: type.id },
   };
   if (type.fam) item.family = type.fam; // armour family gates who can wear it (Equipment.canEquip)
   if (type.rng) item.rng = type.rng;   // weapons carry their range (drives melee vs ranged combat)
+  if (type.twoH) item.twoH = true;     // two-handers block the offhand slot (Equipment.equip)
   for (const s in stats) item[s] = stats[s];
+  item.d = describeItem(item);
   return item;
 }

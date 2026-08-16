@@ -14,14 +14,14 @@ export const GEAR_TYPES = [
   // weapons carry `rng`: >1 = ranged, 1 = melee. A hero's effective range comes from the
   // equipped weapon (StatEngine.derive), falling back to the class's innate range when unarmed.
   { id: "sword",      name: "Sword",      slot: "weapon",  use: "fighter", stat: "atk",  val: 3,  w: 6, mat: "weapon", rng: 1 },
-  { id: "greatsword", name: "Greatsword", slot: "weapon",  use: "fighter", stat: "atk",  val: 5,  w: 3, mat: "weapon", rng: 1 },
+  { id: "greatsword", name: "Greatsword", slot: "weapon",  use: "fighter", stat: "atk",  val: 5,  w: 3, mat: "weapon", rng: 1, twoH: true },
   { id: "wand",       name: "Wand",       slot: "weapon",  use: "mage",    stat: "atk",  val: 3,  w: 6, mat: "weapon", rng: 4 },
-  { id: "staff",      name: "Staff",      slot: "weapon",  use: "mage",    stat: "atk",  val: 5,  w: 3, mat: "weapon", rng: 5 },
+  { id: "staff",      name: "Staff",      slot: "weapon",  use: "mage",    stat: "atk",  val: 5,  w: 3, mat: "weapon", rng: 5, twoH: true },
   { id: "mace",       name: "Mace",       slot: "weapon",  use: "cleric",  stat: "atk",  val: 3,  w: 6, mat: "weapon", rng: 1 },
   { id: "scepter",    name: "Scepter",    slot: "weapon",  use: "cleric",  stat: "hp",   val: 8,  w: 4, mat: "weapon", rng: 1 },
   { id: "dagger",     name: "Dagger",     slot: "weapon",  use: "rogue",   stat: "crit", val: 5,  w: 6, mat: "weapon", rng: 1 },
   { id: "kris",       name: "Kris",       slot: "weapon",  use: "rogue",   stat: "atk",  val: 4,  w: 4, mat: "weapon", rng: 1 },
-  { id: "shortbow",   name: "Shortbow",   slot: "weapon",  use: "rogue",   stat: "dodge",val: 5,  w: 3, mat: "weapon", rng: 4 },
+  { id: "shortbow",   name: "Shortbow",   slot: "weapon",  use: "rogue",   stat: "dodge",val: 5,  w: 3, mat: "weapon", rng: 4, twoH: true },
   // --- offhand ---
   { id: "shield",     name: "Shield",     slot: "offhand", use: "any", fam: "metal", stat: "def",  val: 7, w: 4, mat: "metal" },
   { id: "orb",        name: "Orb",        slot: "offhand", use: "mage",   stat: "crit",  val: 5, w: 4, mat: "trinket" },

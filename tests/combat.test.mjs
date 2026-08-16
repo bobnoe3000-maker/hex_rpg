@@ -4,7 +4,7 @@ import { makeHero, makeEnemy, makeCompanion, rollStats, growTo } from "../src/mo
 import { derive, dodgeChance, critChance, mitigate } from "../src/systems/StatEngine.js";
 import { resolveAttack } from "../src/systems/CombatSim.js";
 import { canEquip, equip, unequip, isUpgrade, itemScore } from "../src/systems/Equipment.js";
-import { generate } from "../src/systems/LootGenerator.js";
+import { generate, describeItem } from "../src/systems/LootGenerator.js";
 import { upgrade, canUpgrade, primaryStat } from "../src/systems/ForgeSystem.js";
 import { priceOf, sellPriceOf } from "../src/systems/Economy.js";
 
@@ -61,6 +61,36 @@ ok("different seed diverges", seq(123) !== seq(777));
   ok("swapping returns the previous item to the bag", h.gear.weapon === sword2 && inv.includes(sword));
   ok("unequip clears the slot and returns to the bag",
     unequip(h, "weapon", inv) && h.gear.weapon === null && inv.includes(sword2));
+}
+
+// Two-handed weapons and offhands are mutually exclusive
+{
+  const h = makeHero("fighter", 1);
+  const shield  = { n: "Iron Shield",  slot: "offhand", use: "any", family: "metal", def: 7 };
+  const greatsw = { n: "Steel Greatsword", slot: "weapon", use: "fighter", atk: 8, twoH: true };
+  const sword   = { n: "Iron Sword",   slot: "weapon", use: "fighter", atk: 3 };
+  const inv = [shield, greatsw, sword];
+  equip(h, shield, inv);
+  ok("offhand equips normally", h.gear.offhand === shield);
+  equip(h, greatsw, inv);
+  ok("equipping a two-handed weapon frees the offhand", h.gear.weapon === greatsw && h.gear.offhand === null && inv.includes(shield));
+  equip(h, shield, inv);
+  ok("equipping an offhand frees a two-handed weapon", h.gear.offhand === shield && h.gear.weapon === null && inv.includes(greatsw));
+  equip(h, sword, inv); equip(h, shield, inv);
+  ok("a one-handed weapon coexists with an offhand", h.gear.weapon === sword && h.gear.offhand === shield);
+}
+
+// describeItem tracks the numbers: a forged stat shows up in the description text
+{
+  const it = generate(mb(88));
+  ok("generated description matches describeItem", it.d === describeItem(it));
+  // force it to a known stat and re-describe
+  it.atk = 99; it.d = describeItem(it);
+  ok("rebuilt description reflects the new stat", /\+99 ATK/.test(it.d));
+  // a rolled staff is two-handed and says so
+  let staff = null; const r = mb(4);
+  for (let i = 0; i < 500 && !staff; i++) { const g = generate(r, { classes: ["mage"] }); if (g.parts.type === "staff") staff = g; }
+  ok("a staff is flagged two-handed and labelled", !!staff && staff.twoH === true && /Two-handed/.test(staff.d));
 }
 
 // LootGenerator: deterministic, valid shape, class-respecting
