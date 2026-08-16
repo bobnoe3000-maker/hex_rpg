@@ -85,6 +85,10 @@ const PARTY_CAP=3;          // main + 2 companions ("two companions only"); Tave
 /* true when the MAIN hero has unspent level-up or skill points waiting — drives the "spend me" dot on
    character tiles. Only the main allocates, so companions never flag (they'd otherwise read earned>spent). */
 const heroHasPoints = h => h===party[0] && (unspentPoints(h) > 0 || unspentSkillPoints(h) > 0);
+/* whichever screen currently owns #town re-renders itself here, so spending points/gear from the
+   character panel updates the portrait tiles (and their point-dots) underneath in realtime. */
+let townRefresh = null;
+function refreshParty(){ renderParty(); if(state.scene==="town" && townRefresh) townRefresh(); }
 /* ---------- persistence: one of three save slots ---------- */
 let activeSlot=null;        // which save slot this run writes to (set by onboarding)
 function snapshotState(){
@@ -699,7 +703,7 @@ function openHero(h){
       reset: ()=>resetSkills(h),
       silver: ()=>state.silver,
     } : null,
-    refresh: renderParty,
+    refresh: refreshParty,   // scene-aware: updates the HUD and the visible Keep/Tavern portrait dots
     gems: ()=>state.gems,
     silver: ()=>state.silver,
     close: ()=>{},
@@ -731,6 +735,7 @@ function enterDungeon(){
   diag("scene", `descend · room ${state.roomIdx} · party ${party.filter(h=>h.alive).length}`);
 }
 function openTownScreen(){
+  townRefresh=openTownScreen;
   openTown({ silver:()=>state.silver, gems:()=>state.gems, party, portrait:h=>heroPortrait(h),
     openHero, openShop:openShopScreen, openTavern:openTavernScreen, openTemple:openTempleScreen,
     openForge:openForgeScreen, openDiag:openDiagScreen, openDungeons:openDungeonBoard,
@@ -742,13 +747,14 @@ function startDungeon(id){
   loadRoom(); saveGame(); enterDungeon();
 }
 function openDungeonBoard(){
+  townRefresh=openDungeonBoard;
   openDungeonSelect({
     dungeons:DUNGEONS, active:state.dungeonId, cleared:state.cleared, roomIdx:state.roomIdx,
     resumable:state.roomIdx>0, partyLevel:party[0]?party[0].level:1,
     silver:state.silver, gems:state.gems,
     select:id=>startDungeon(id), resume:()=>enterDungeon(), back:openTownScreen });
 }
-function openDiagScreen(){ openDiag({ text:buildDiagnostics, back:openTownScreen }); }
+function openDiagScreen(){ townRefresh=openDiagScreen; openDiag({ text:buildDiagnostics, back:openTownScreen }); }
 /* ---------- forge: spend gems to upgrade gear (town service) ---------- */
 /* every gear item across the party's equipped slots + the shared bag, tagged with its owner/slot
    so the Forge can filter by character (and the bag) and by gear slot */
@@ -760,6 +766,7 @@ function allGear(){
   return list;
 }
 function openForgeScreen(){
+  townRefresh=openForgeScreen;
   openForge({ gems:()=>state.gems, silver:()=>state.silver, gear:allGear, party:()=>party, portrait:h=>heroPortrait(h),
     preview:forgePreview, forge:tryForge, back:openTownScreen });
 }
@@ -791,6 +798,7 @@ function hireCompanion(recruit){
   return true;
 }
 function openTavernScreen(){
+  townRefresh=openTavernScreen;
   if(!state.recruits.length) refreshRecruits(true); // first visit fills the tavern for free
   openTavern({ silver:()=>state.silver, party:()=>party, recruits:()=>state.recruits,
     hireCost:hireCostFor, refreshCost:BAL.TAVERN.REFRESH_COST,
@@ -808,6 +816,7 @@ function resurrectHero(h){
   return true;
 }
 function openTempleScreen(){
+  townRefresh=openTempleScreen;
   openTemple({ silver:()=>state.silver, party:()=>party, fee:resurrectFee,
     resurrect:resurrectHero, portrait:h=>heroPortrait(h), back:openTownScreen });
 }
@@ -832,6 +841,7 @@ function buyGem(){
   state.silver-=BAL.SHOP.GEM_PRICE; state.gems++; updateHud(); saveGame(); return true;
 }
 function openShopScreen(){
+  townRefresh=openShopScreen;
   if(!state.shopStock.length) rerollStock(true); // first visit fills the shelves for free
   openShop({ silver:()=>state.silver, gems:()=>state.gems,
     stock:()=>state.shopStock, inventory:()=>state.inventory,

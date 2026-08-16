@@ -373,17 +373,17 @@ export function openCharacter(hero, ctx) {
       const id = b.getAttribute("data-sk-dec"); if (skillDraft[id] > 0) { skillDraft[id]--; if (!skillDraft[id]) delete skillDraft[id]; } render();
     });
     const skCommit = overlay.querySelector("[data-sk-commit]"); if (skCommit) skCommit.onclick = () => {
-      if (ctx.skills && ctx.skills.commit({ ...skillDraft })) { for (const k in skillDraft) delete skillDraft[k]; render(["good", "Skills learned."]); }
+      if (ctx.skills && ctx.skills.commit({ ...skillDraft })) { for (const k in skillDraft) delete skillDraft[k]; ctx.refresh && ctx.refresh(); render(["good", "Skills learned."]); }
     };
     const skDiscard = overlay.querySelector("[data-sk-discard]"); if (skDiscard) skDiscard.onclick = () => { for (const k in skillDraft) delete skillDraft[k]; render(); };
     const skReset = overlay.querySelector("[data-sk-reset]"); if (skReset) skReset.onclick = () => {
       if (!skillResetArm) { skillResetArm = true; render(); return; }        // first tap arms
       skillResetArm = false;
-      if (ctx.skills && ctx.skills.reset()) render(["meh", "Skill tree reset."]); else render();
+      if (ctx.skills && ctx.skills.reset()) { ctx.refresh && ctx.refresh(); render(["meh", "Skill tree reset."]); } else render();
     };
     const rst = overlay.querySelector("[data-preset]"); if (rst) rst.onclick = () => { clearDraft(); render(); };
     const cf = overlay.querySelector("[data-pconfirm]"); if (cf) cf.onclick = () => {
-      if (ctx.assign && ctx.assign({ ...draft })) { clearDraft(); render(["good", "Attributes updated."]); }
+      if (ctx.assign && ctx.assign({ ...draft })) { clearDraft(); ctx.refresh && ctx.refresh(); render(["good", "Attributes updated."]); }
     };
   }
 

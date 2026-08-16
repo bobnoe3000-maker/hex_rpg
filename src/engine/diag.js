@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-16 · companion stats/skills+gear tabs · unspent-point dots";
+export const APP_BUILD = "2026-08-16 · point-dots refresh in realtime when points are spent";
 
 const BUF = [];
 const MAX = 400;
