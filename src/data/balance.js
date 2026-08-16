@@ -53,7 +53,7 @@ export const BAL = {
   // STEP = how much one point raises each assignable stat.
   POINTS: {
     PER_LEVEL: [{ upTo: 50, pts: 3 }, { upTo: 100, pts: 2 }, { upTo: Infinity, pts: 1 }],
-    STEP: { hp: 1, atk: 1, def: 1, dodge: 1, crit: 1 },   // one point = one unit of the stat
+    STEP: { hp: 4, atk: 1, def: 1, dodge: 1, crit: 1 },   // one point = +4 HP, or +1 to any other stat
   },
 
   WIPE_DELAY: 1.6,        // seconds after a full wipe before you're pulled back to the Keep

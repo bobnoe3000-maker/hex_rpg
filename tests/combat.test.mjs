@@ -254,6 +254,9 @@ ok("different seed diverges", seq(123) !== seq(777));
   h.pts.atk = 1;
   ok("a committed ATK point adds STEP.atk to derived ATK", derive(h).atk === atk0 + STAT_STEP.atk);
   ok("committing reduces the unspent pool", unspentPoints(h) === 2);
+  // HP points are worth +4 each; other stats +1
+  const hp0 = derive(h).maxhp; h.pts.hp = 1;
+  ok("an HP point adds +4 to derived max HP", STAT_STEP.hp === 4 && derive(h).maxhp === hp0 + 4);
 
   // enemies never carry points, so derive stays clean for them
   ok("enemies get no point bonus", pointBonus(rat, "atk") === 0 && !rat.pts);
