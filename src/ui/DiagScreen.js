@@ -53,7 +53,8 @@ export function openDiag(ctx) {
     <textarea class="diag-ta" readonly>${text.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</textarea>
     <button class="tw-btn primary" data-copy>${iconImg("check", 15)} Copy diagnostics</button>
     <button class="tw-btn reset" data-reset style="justify-content:center">${iconImg("refresh", 15)} Clear cache &amp; reload</button>
-    <p class="diag-note" style="text-align:center">Not seeing a recent change? This wipes cached code &amp; data and reloads fresh.</p>
+    <p class="diag-note" style="text-align:center">Not seeing a recent change? This wipes cached code &amp; data and reloads fresh.<br>
+      Or open the site with <b>?reset</b> on the URL (e.g. <code>…/?reset</code>) to do the same from a stale tab.</p>
     <button class="tw-btn" data-back style="justify-content:center">Back to the Keep</button>
   </div>`;
 

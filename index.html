@@ -4,6 +4,24 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Dungeon Pals v2 — The Emberdeep</title>
+<script>
+  /* URL escape hatch for stale caches: open the site with ?reset (or #reset) to wipe cached data
+     + code and reload fresh. Inline so it runs before any module loads and works even when the
+     cached app JS is old (index.html?reset is a fresh document fetch). */
+  (function () {
+    if (/[?&#]reset\b/.test(location.search + location.hash)) {
+      var done = function () { location.replace(location.pathname + "?fresh=" + Date.now()); };
+      try { localStorage.clear(); } catch (e) {}
+      try { sessionStorage.clear(); } catch (e) {}
+      var jobs = [];
+      try { if (window.caches) jobs.push(caches.keys().then(function (ks) { return Promise.all(ks.map(function (k) { return caches.delete(k); })); })); } catch (e) {}
+      try { if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) jobs.push(navigator.serviceWorker.getRegistrations().then(function (rs) { return Promise.all(rs.map(function (r) { return r.unregister(); })); })); } catch (e) {}
+      if (jobs.length) Promise.all(jobs).then(done, done); else done();
+    } else if (/[?&]fresh=/.test(location.search)) {
+      try { history.replaceState(null, "", location.pathname); } catch (e) {}   /* tidy the URL after a reset */
+    }
+  })();
+</script>
 <style>
   :root{ --ink:#0c0a12; --panel:#171221; --line:#332a48; --gold:#d8a24a; --parchment:#e8dcc4;
     --hp:#e5484d; --hpbg:#4a1f26; --rare:#4da6ff; --epic:#c77dff; }
