@@ -22,6 +22,7 @@ function ensureTavernCss() {
   .tv-portwrap{position:relative;width:40px;height:40px}
   .tv-dot{position:absolute;top:-3px;right:-3px;width:11px;height:11px;border-radius:50%;
     background:#e0b063;border:2px solid #1a1328;box-shadow:0 0 6px #e0b063;z-index:2}
+  .tv-dot.roll{background:#8fd39a;box-shadow:0 0 6px #8fd39a}
   .tv-slot b{font-size:10.5px;color:var(--gold)} .tv-slot .cls{color:#9a8fb8;text-transform:capitalize;font-style:italic}
   .tv-slot .lv{color:#9ad1ff}
   .tv-slot.empty{opacity:.5;justify-content:center;color:#8fd39a;font-style:italic;cursor:default;min-height:74px}
@@ -65,7 +66,8 @@ export function openTavern(ctx) {
     };
     // current party — mirrors the dungeon roster so you can see your class mix (and who has fallen)
     const slot = (h, i) => {
-      const dot = h.alive && ctx.needsPoints && ctx.needsPoints(h) ? `<span class="tv-dot" title="Points to spend"></span>` : "";
+      const flag = h.alive && ctx.tileFlag && ctx.tileFlag(h);
+      const dot = flag ? `<span class="tv-dot ${flag}" title="${flag === "roll" ? "Level-up roll ready" : "Points to spend"}"></span>` : "";
       return `<div class="tv-slot ${h.alive ? "" : "dead"}" data-hero="${i}" title="View ${h.name}'s stats">
         <div class="tv-portwrap"><canvas width="96" height="96"></canvas>${dot}</div>
         <b>${i === 0 ? iconImg("crown", 11) + " " : ""}${h.name}</b><span class="cls">${h.alive ? h.cls : "fallen"}</span><span class="lv">Lv ${h.level}</span></div>`;

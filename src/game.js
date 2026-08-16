@@ -8,9 +8,8 @@ import { xpToReach } from './engine/combat.js';
 import { DUNGEONS, LAYOUTS, ROOM_COUNT, BOSS_ROOM, dungeonById, isUnlocked, nextDungeon } from './data/dungeons.js';
 import { unspentPoints, earnedPoints, pointsForLevel, ASSIGNABLE, emptyPoints } from './systems/Leveling.js';
 import { combatMods, activeSkills, unspentSkillPoints, earnedSkillPoints, spentSkillPoints, branchInvested, tierUnlocked, rankOf, allSkills,
-         reflectFrac, guardianFrac, waveHealFrac, lastStand, momentum } from './systems/Skills.js';
+         reflectFrac, guardianFrac, waveHealFrac, lastStand, momentum, heroKit } from './systems/Skills.js';
 import { CLASS_SKILLS, TIER_GATES, MAX_RANK } from './data/skills.js';
-import { HERO_BASES } from './data/classes.js';
 import { BAL } from './data/balance.js';
 import { derive, mitigate } from './systems/StatEngine.js';
 import { resolveAttack } from './systems/CombatSim.js';
@@ -27,6 +26,7 @@ import { openDiag } from './ui/DiagScreen.js';
 import { startOnboarding } from './ui/Onboarding.js';
 import { makeCompanion, makeEnemy } from './models/units.js';
 import { openDungeonSelect } from './ui/DungeonSelect.js';
+import { openCompanionRoll } from './ui/CompanionLevelUp.js';
 import { readSlot, writeSlot, SAVE_VERSION } from './state/save.js';
 import { installDiag, diag, diagText, APP_BUILD } from './engine/diag.js';
 installDiag(); // start capturing console errors / uncaught exceptions immediately
@@ -85,6 +85,10 @@ const PARTY_CAP=3;          // main + 2 companions ("two companions only"); Tave
 /* true when the MAIN hero has unspent level-up or skill points waiting — drives the "spend me" dot on
    character tiles. Only the main allocates, so companions never flag (they'd otherwise read earned>spent). */
 const heroHasPoints = h => h===party[0] && (unspentPoints(h) > 0 || unspentSkillPoints(h) > 0);
+/* a companion with unresolved level-up rolls waiting */
+const heroHasRoll = h => h!==party[0] && (h.pendRolls||0) > 0;
+/* what "attention" indicator a hero's tile should show: gold point-dot, green roll-dot, or none */
+const heroTileFlag = h => heroHasPoints(h) ? "points" : heroHasRoll(h) ? "roll" : null;
 /* whichever screen currently owns #town re-renders itself here, so spending points/gear from the
    character panel updates the portrait tiles (and their point-dots) underneath in realtime. */
 let townRefresh = null;
@@ -212,9 +216,12 @@ function renderParty(){
     img.getContext("2d").drawImage(heroPortrait(h),0,0,96,96);
     picWrap.appendChild(img);
     if(!h.alive){ const sk=document.createElement("div"); sk.className="skull"; sk.innerHTML=iconImg("skull",22); picWrap.appendChild(sk); }
-    if(h.alive && heroHasPoints(h)){ const d=document.createElement("div"); d.title="Points to spend";
+    const flag = h.alive && heroTileFlag(h);
+    if(flag){ const d=document.createElement("div");
+      const col = flag==="roll" ? "#8fd39a" : "#e0b063";
+      d.title = flag==="roll" ? "Level-up roll ready" : "Points to spend";
       d.style.cssText="position:absolute;top:-3px;right:-3px;width:12px;height:12px;border-radius:50%;"
-        +"background:#e0b063;border:2px solid #181128;box-shadow:0 0 6px #e0b063;z-index:3"; picWrap.appendChild(d); }
+        +`background:${col};border:2px solid #181128;box-shadow:0 0 6px ${col};z-index:3`; picWrap.appendChild(d); }
     const bag=Object.values(h.gear).filter(Boolean).length;
     const info=document.createElement("div");
     info.innerHTML=`${isMain?iconImg("crown",12)+" ":""}<b>${h.name}</b> <span class="lvl">Lv${h.level}</span> <span class="cls">${h.cls}</span><br>
@@ -527,8 +534,9 @@ function xpProgress(h){
   return {cur:Math.max(0,(h.xp||0)-prev), need:next-prev, nextLevel:h.level+1};
 }
 /* Award XP to the living party. No level cap. The MAIN hero (party[0]) gains no automatic stats —
-   each level grants assignable points instead (spent in the character panel). Companions keep the
-   fixed per-class growth block. */
+   each level grants assignable points instead (spent in the character panel). COMPANIONS no longer
+   auto-grow either: each level queues a "level-up roll" (slot-machine of 0–2 stat points + one skill
+   rank) the player resolves at a portrait — see companionRollData / applyCompanionRoll. */
 function awardXP(xp){
   const share=Math.ceil(xp/Math.max(1,party.filter(p=>p.alive).length));
   let leveled=false;
@@ -541,15 +549,59 @@ function awardXP(xp){
         const pts=pointsForLevel(h.level);
         log(`${iconImg("spark",14)} <b>${h.name}</b> reaches <span class="sys">level ${h.level}</span>! <span class="heal">+${pts} stat point${pts>1?"s":""}</span> to spend.`,"heal");
       } else {
-        const gr=HERO_BASES[h.cls].growth;
-        h.atk+=gr.atk; h.def+=gr.def; h.dodge+=gr.dodge; h.crit+=gr.crit; h.maxhp+=gr.hp;
-        h.hp=derive(h).maxhp;
-        log(`${iconImg("spark",14)} <b>${h.name}</b> reaches <span class="sys">level ${h.level}</span>! (+${gr.hp} HP, +${gr.atk} ATK)`,"heal");
+        h.pendRolls=(h.pendRolls||0)+1;   // stats/skill are rolled later, not applied now
+        log(`${iconImg("spark",14)} <b>${h.name}</b> reaches <span class="sys">level ${h.level}</span>! <span class="heal">Level-up roll ready.</span>`,"heal");
       }
       fxRing(uxS(h),uyS(h)+6,"#7ee787"); fxText(uxS(h),uyS(h)-44,"LEVEL UP!","#7ee787",true);
     } }
   renderParty();
   if(leveled) saveGame();   // persist a level-up so hard-won progress survives a reload mid-run
+}
+/* ---- companion level-up roll ---- */
+const companionRerollCost = n => Math.round(30*Math.pow(1.6, n|0));   // climbs per reroll of one level
+/* one rolled level: 0–2 points per stat (weighted, never all-zero) + one kit skill for +1 (if any
+   isn't already maxed). Uses Math.random — it's an interactive draw, not deterministic combat. */
+function companionRollData(h){
+  const stats={};
+  for(const k of ASSIGNABLE){ const x=Math.random(); stats[k]= x<0.34?0 : x<0.80?1:2; }
+  if(ASSIGNABLE.every(k=>!stats[k])) stats[ASSIGNABLE[(Math.random()*ASSIGNABLE.length)|0]]=1+Math.round(Math.random());
+  const pool=heroKit(h).filter(s=>(h.skills[s.id]||0)<MAX_RANK);
+  const skillId=pool.length ? pool[(Math.random()*pool.length)|0].id : null;
+  return { stats, skillId };
+}
+/* make sure a hero with pending levels has a current (uncommitted) roll to show/reroll */
+function ensureRoll(h){ if(!h.pendRoll && (h.pendRolls||0)>0) h.pendRoll=companionRollData(h); return h.pendRoll; }
+/* apply the current roll: fold points into pts (derive handles the rest), bump the skill, grant new
+   HP, decrement the queue and pre-roll the next level. Returns pending rolls remaining. */
+function applyCompanionRoll(h){
+  const roll=h.pendRoll; if(!roll) return h.pendRolls||0;
+  const before=derive(h).maxhp;
+  const next={...emptyPoints(), ...(h.pts||{})};
+  for(const k of ASSIGNABLE) next[k]=(next[k]||0)+(roll.stats[k]||0);
+  h.pts=next;
+  if(roll.skillId) h.skills[roll.skillId]=Math.min(MAX_RANK,(h.skills[roll.skillId]||0)+1);
+  const after=derive(h).maxhp;
+  if(after>before) h.hp=Math.min(after, h.hp+(after-before));
+  h.pendRolls=Math.max(0,(h.pendRolls||0)-1);
+  h.pendRoll=null; h.rerollN=0;
+  if(h.pendRolls>0) h.pendRoll=companionRollData(h);   // queue up the next level's fresh roll
+  renderParty(); updateHud(); saveGame();
+  return h.pendRolls;
+}
+function openCompanionRollScreen(h){
+  ensureRoll(h);
+  openCompanionRoll(h, {
+    portrait: heroPortrait(h),
+    kit: ()=>heroKit(h),
+    silver: ()=>state.silver,
+    getRoll: ()=>h.pendRoll,
+    levelFor: ()=> h.level - (h.pendRolls||0) + 1,
+    rerollCost: ()=>companionRerollCost(h.rerollN||0),
+    reroll: ()=>{ const cost=companionRerollCost(h.rerollN||0); if(state.silver<cost) return false;
+      state.silver-=cost; h.rerollN=(h.rerollN||0)+1; h.pendRoll=companionRollData(h); updateHud(); saveGame(); return true; },
+    confirm: ()=>applyCompanionRoll(h),
+    close: ()=>refreshParty(),
+  });
 }
 /* Commit a pending point allocation for the main hero. `deltas` maps stat→signed count (add/remove).
    Validated against available points; grants any HP increase, clamps current HP on a refund. */
@@ -682,6 +734,8 @@ function tryForge(item){
   return res;
 }
 function openHero(h){
+  // A companion with pending level-ups opens the slot-machine roll instead of the stat panel.
+  if(h!==party[0] && (h.pendRolls||0)>0){ openCompanionRollScreen(h); return; }
   // Opening the panel shows the overlay, which the loop reads to freeze the dungeon entirely
   // (combat, movement, FX) without touching the manual Fight/Pause state — so closing the panel
   // resumes exactly where the fight left off. No separate flag to leak.
@@ -739,7 +793,7 @@ function openTownScreen(){
   openTown({ silver:()=>state.silver, gems:()=>state.gems, party, portrait:h=>heroPortrait(h),
     openHero, openShop:openShopScreen, openTavern:openTavernScreen, openTemple:openTempleScreen,
     openForge:openForgeScreen, openDiag:openDiagScreen, openDungeons:openDungeonBoard,
-    needsPoints:heroHasPoints, activeDungeon:()=>activeDungeon() });
+    tileFlag:heroTileFlag, activeDungeon:()=>activeDungeon() });
 }
 /* start a fresh delve of a chosen dungeon (resets to its first room) */
 function startDungeon(id){
@@ -803,7 +857,7 @@ function openTavernScreen(){
   openTavern({ silver:()=>state.silver, party:()=>party, recruits:()=>state.recruits,
     hireCost:hireCostFor, refreshCost:BAL.TAVERN.REFRESH_COST,
     hire:hireCompanion, refresh:()=>refreshRecruits(false), portrait:h=>heroPortrait(h),
-    openHero, needsPoints:heroHasPoints, back:openTownScreen });
+    openHero, tileFlag:heroTileFlag, back:openTownScreen });
 }
 /* ---------- temple: resurrect fallen companions (fee scales with level) ---------- */
 const resurrectFee=h=>BAL.TEMPLE.RESURRECT_BASE + h.level*BAL.TEMPLE.RESURRECT_PER_LEVEL;

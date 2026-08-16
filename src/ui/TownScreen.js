@@ -32,6 +32,7 @@ export function ensureTownCss() {
   .tw-card .tw-portwrap{position:relative;width:46px;height:46px}
   .tw-dot{position:absolute;top:-3px;right:-3px;width:12px;height:12px;border-radius:50%;
     background:#e0b063;border:2px solid #1a1328;box-shadow:0 0 6px #e0b063;z-index:2}
+  .tw-dot.roll{background:#8fd39a;box-shadow:0 0 6px #8fd39a}
   .tw-card canvas{width:46px;height:46px;border-radius:8px;border:1px solid #6e5a2a;display:block}
   .tw-card .tw-skull{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
   .tw-card b{font-size:11px;color:var(--gold)} .tw-card .lv{color:#9ad1ff}
@@ -82,7 +83,8 @@ export function openTown(ctx) {
     const foot = h.alive
       ? `<div class="bar"><i style="width:${Math.max(0, Math.min(100, h.hp / mh * 100))}%"></i></div>`
       : `<span class="fallen">${iconImg("skull",10)} fallen</span>`;
-    const dot = h.alive && ctx.needsPoints && ctx.needsPoints(h) ? `<span class="tw-dot" title="Points to spend"></span>` : "";
+    const flag = h.alive && ctx.tileFlag && ctx.tileFlag(h);
+    const dot = flag ? `<span class="tw-dot ${flag}" title="${flag === "roll" ? "Level-up roll ready" : "Points to spend"}"></span>` : "";
     return `<div class="tw-card ${h.alive ? "" : "dead"}" data-hero="${i}">
       <div class="tw-portwrap"><canvas width="96" height="96"></canvas>${skull}${dot}</div>
       <b>${i === 0 ? iconImg("crown", 11) + " " : ""}${h.name}</b><span class="cls">${h.cls}</span><span class="lv">Lv ${h.level}</span>
