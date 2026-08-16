@@ -26,13 +26,17 @@ export function derive(u) {
   const F = skillFlat(u);
   const maxhp = Math.max(1, Math.round(u.maxhp + gearSum(u, "hp") + pointBonus(u, "hp") + F.hp));
   const missing = 1 - clampN((u.hp != null ? u.hp : maxhp) / maxhp, 0, 1);
+  // atk/def/dodge/crit are whole-number stats (multipliers can make them fractional, and float math
+  // leaves noise like 23.7999997) — round them here, the single source of truth, so every readout is
+  // clean and combat works in integers. aspd stays a fine-grained speed, trimmed to 2 dp to kill float dust.
+  const r2 = v => Math.round(v * 100) / 100;
   return {
     maxhp,
-    atk:   Math.max(0,   (u.atk   + gearSum(u, "atk")   + pointBonus(u, "atk")   + F.atk)   * skillMult(u, "atk", missing) * buffMult(u, "atk")),
-    def:   Math.max(0,   (u.def   + gearSum(u, "def")   + pointBonus(u, "def")   + F.def)   * skillMult(u, "def", missing) * buffMult(u, "def")),
-    dodge: Math.max(0,   u.dodge + gearSum(u, "dodge") + pointBonus(u, "dodge") + F.dodge),
-    crit:  Math.max(0,   u.crit  + gearSum(u, "crit")  + pointBonus(u, "crit")  + F.crit),
-    aspd:  Math.max(0.1, (u.aspd + gearSum(u, "aspd")  + F.aspd) * buffMult(u, "aspd")),
+    atk:   Math.round(Math.max(0, (u.atk + gearSum(u, "atk") + pointBonus(u, "atk") + F.atk) * skillMult(u, "atk", missing) * buffMult(u, "atk"))),
+    def:   Math.round(Math.max(0, (u.def + gearSum(u, "def") + pointBonus(u, "def") + F.def) * skillMult(u, "def", missing) * buffMult(u, "def"))),
+    dodge: Math.round(Math.max(0, u.dodge + gearSum(u, "dodge") + pointBonus(u, "dodge") + F.dodge)),
+    crit:  Math.round(Math.max(0, u.crit  + gearSum(u, "crit")  + pointBonus(u, "crit")  + F.crit)),
+    aspd:  Math.max(0.1, r2((u.aspd + gearSum(u, "aspd") + F.aspd) * buffMult(u, "aspd"))),
     rng:   (u.gear && u.gear.weapon && u.gear.weapon.rng) || u.rng || 1,
     level: u.level || 1,
   };

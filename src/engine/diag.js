@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-16 · dungeon balance pass + per-theme palettes & tilesets";
+export const APP_BUILD = "2026-08-16 · round derived stats (no more float dust on tiles)";
 
 const BUF = [];
 const MAX = 400;
