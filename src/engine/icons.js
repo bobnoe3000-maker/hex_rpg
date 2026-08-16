@@ -116,6 +116,19 @@ const DRAW = {
   },
   chevron(g) { line(g, [[6, 15], [12, 9], [18, 15]], 2.6, "#7ee787"); },
   check(g) { line(g, [[4, 13], [10, 19], [20, 5]], 2.8, "#7ee787"); },
+  dagger(g) { // rogue glyph
+    poly(g, [[12, 2], [13.4, 7], [13, 13], [12, 15], [11, 13], [10.6, 7]], shade(SILVER, 1.05));
+    inkPoly(g, [[12, 2], [13.4, 7], [13, 13], [12, 15], [11, 13], [10.6, 7]], 1.3);
+    line(g, [[8, 15], [16, 15]], 2.2, GOLD); inkPath(g, gg => { gg.moveTo(8, 15); gg.lineTo(16, 15); }, 1.2, INK);
+    line(g, [[12, 15], [12, 21]], 2, shade(GOLD, .6)); ell(g, 12, 22, 1.5, 1.5, GOLDH);
+  },
+  crown(g) { // main-hero marker
+    const p = [[4, 18], [5, 9], [8.5, 13.5], [12, 6], [15.5, 13.5], [19, 9], [20, 18]];
+    poly(g, p, GOLD); inkPoly(g, p, 1.3);
+    for (const x of [5, 12, 19]) ell(g, x, 8.5, 1.3, 1.3, GOLDH);
+    g.fillStyle = shade(GOLD, .7); g.fillRect(5, 17.5, 14, 3);
+    inkPath(g, gg => gg.rect(5, 17.5, 14, 3), 1, INK);
+  },
   temple(g) { // resurrection shrine: pediment on pillars
     poly(g, [[3, 9], [12, 3], [21, 9]], shade(GOLD, .62)); inkPoly(g, [[3, 9], [12, 3], [21, 9]], 1.4);
     g.fillStyle = shade(BONE, .92); for (const x of [5, 11, 16]) g.fillRect(x, 9, 3, 10);

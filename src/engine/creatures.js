@@ -510,8 +510,44 @@ function hCleric(g){
   ell(g,62,60,2.4,2,"#e2b088");
   return "Cleric";
 }
+function hRogue(g){
+  const leather="#6e4a32", leatherD=shade(leather,.6), hood="#2c322a";
+  ground(g,15);
+  // legs (lean)
+  limb(g,[[44,64],[42,75],[45,84]],3.8,leatherD); limb(g,[[53,64],[55,75],[52,84]],3.8,leatherD);
+  // torso
+  ell(g,48,57,8.5,11,leather);
+  hatch(g,gg=>gg.ellipse(48,57,8.5,11,0,0,7),48,60,46,70);
+  inkPath(g,gg=>gg.ellipse(48,57,8.5,11,0,0,7),1.5);
+  // belt + diagonal baldric strap
+  g.fillStyle="#3a2a1c"; g.fillRect(40,60,16,3); inkPath(g,gg=>gg.rect(40,60,16,3),1);
+  inkPath(g,gg=>{ gg.moveTo(41,49); gg.lineTo(54,66); },1.3,"#3a2a1c");
+  ell(g,47,58,1.6,1.6,"#c9a04a"); // buckle
+  // arms
+  limb(g,[[41,52],[35,58],[33,63]],2.8,leatherD);
+  limb(g,[[55,52],[61,57],[63,62]],2.8,leatherD);
+  // twin daggers (crossed, held low)
+  limb(g,[[33,63],[29,51]],1.6,"#c8ccd6",.8); g.fillStyle="#3a2a1c"; g.fillRect(30,61,4,3);
+  inkPath(g,gg=>{ gg.moveTo(33,63); gg.lineTo(29,51); },1,"rgba(10,8,14,.6)");
+  limb(g,[[63,62],[67,50]],1.6,"#c8ccd6",.8); g.fillStyle="#3a2a1c"; g.fillRect(62,60,4,3);
+  inkPath(g,gg=>{ gg.moveTo(63,62); gg.lineTo(67,50); },1,"rgba(10,8,14,.6)");
+  // face
+  ell(g,48,40,7.5,7,"#c9915f");
+  // hood over the head, shadowed brow
+  g.fillStyle=hood; g.beginPath();
+  g.moveTo(38,45); g.quadraticCurveTo(35,26,48,23); g.quadraticCurveTo(61,26,58,45);
+  g.quadraticCurveTo(54,33,48,31.5); g.quadraticCurveTo(42,33,38,45); g.closePath(); g.fill();
+  hatch(g,gg=>{ gg.moveTo(38,45); gg.quadraticCurveTo(35,26,48,23); gg.quadraticCurveTo(61,26,58,45); gg.lineTo(48,40); gg.closePath(); },48,60,23,45);
+  inkPath(g,gg=>{ gg.moveTo(38,45); gg.quadraticCurveTo(35,26,48,23); gg.quadraticCurveTo(61,26,58,45); },1.6);
+  inkPath(g,gg=>{ gg.moveTo(41,33); gg.quadraticCurveTo(48,28,55,33); },1.2);
+  // keen eyes glinting in the hood-shadow
+  g.fillStyle="rgba(10,8,14,.5)"; g.fillRect(42,37,12,4);
+  glowDot(g,45,39.5,1.2,"#dce4ea"); glowDot(g,51,39.5,1.2,"#dce4ea");
+  inkPath(g,gg=>{ gg.moveTo(42,43); gg.quadraticCurveTo(48,45,54,43); },1); // set mouth
+  return "Rogue";
+}
 const FIGURES={rat:cRat,goblin:cGoblin,kobold:cKobold,skeleton:cSkeleton,wight:cWight,dragon:cDragon,
-  spider:cSpider,lich:cLich,wyvern:cWyvern,golem:cGolem,knight:hKnight,mage:hMage,cleric:hCleric};
+  spider:cSpider,lich:cLich,wyvern:cWyvern,golem:cGolem,knight:hKnight,mage:hMage,cleric:hCleric,rogue:hRogue};
 function buildFigure(kind,seed){
   seedRng(seed); setParts(null); setBlinks(null);
   const c=document.createElement("canvas"); c.width=c.height=384;
@@ -523,5 +559,5 @@ function buildFigure(kind,seed){
 }
 
 export {
-  cSpider, cKobold, cGoblin, cSkeleton, cRat, cLich, cWight, cWyvern, cDragon, cGolem, hKnight, hMage, hCleric, FIGURES, buildFigure
+  cSpider, cKobold, cGoblin, cSkeleton, cRat, cLich, cWight, cWyvern, cDragon, cGolem, hKnight, hMage, hCleric, hRogue, FIGURES, buildFigure
 };

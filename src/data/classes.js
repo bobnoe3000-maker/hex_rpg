@@ -19,4 +19,9 @@ export const HERO_BASES = {
     hp: 46, atk: 9, def: 16, dodge: 8, crit: 8, aspd: 1.05,
     growth: { hp: 11, atk: 2, def: 3, dodge: 1, crit: 1 },
   },
+  rogue: {
+    name: "Sable", cls: "rogue", rng: 1,
+    hp: 40, atk: 12, def: 12, dodge: 16, crit: 15, aspd: 1.20,
+    growth: { hp: 9, atk: 3, def: 2, dodge: 2, crit: 2 },
+  },
 };

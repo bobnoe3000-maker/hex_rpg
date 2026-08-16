@@ -389,7 +389,7 @@ function buildPortrait(seed, archIdx){
 
 
 /* engine entry: portrait canvas for a hero class */
-const PORTRAIT_ARCH={knight:0,mage:1,cleric:2};
+const PORTRAIT_ARCH={knight:0,mage:1,cleric:2,rogue:3};
 function makeHeroPortrait(cls,seed){
   return buildPortrait(seed, PORTRAIT_ARCH[cls]!==undefined?PORTRAIT_ARCH[cls]:0);
 }

@@ -69,7 +69,7 @@ const liveUnits=()=>{ const a=[]; for(const h of party) if(h.alive) a.push(h);
 let uiFrozen=false;
 const panelShown=()=>overlay.classList.contains("show");
 let party=[];               // filled by onboarding: [main, ...hired companions] (max 4)
-const partyClasses=()=>party.length?[...new Set(party.map(h=>h.cls))]:["knight","mage","cleric"];
+const partyClasses=()=>party.length?[...new Set(party.map(h=>h.cls))]:["knight","mage","cleric","rogue"];
 let combatRng=Math.random;  // reseeded deterministically when a fight starts / area changes
 /* tiny currency readout in the log header */
 const hudEl=document.createElement("span");
@@ -146,7 +146,7 @@ function tileOf(u){
     g.strokeStyle=pal.o; g.lineWidth=1; g.strokeRect(-s,-s,s*2,s*2); g.restore(); };
   gem(S/2,bw/2+1); gem(S/2,S-bw/2-1); gem(bw/2+1,S/2); gem(S-bw/2-1,S/2);
   // role icon medallion (top-right) — procedural sprite, not emoji
-  const medal={knight:"sword",mage:"spark",cleric:"cross",rat:"fang",goblin:"fang",
+  const medal={knight:"sword",mage:"spark",cleric:"cross",rogue:"dagger",rat:"fang",goblin:"fang",
     kobold:"fang",skeleton:"skull",wight:"skull",dragon:"star"};
   const mname=medal[u.cls||u.fig]||"sword", ir=S*0.15;
   g.fillStyle=pal.o; g.beginPath(); g.arc(S-ir*0.9,ir*0.9,ir,0,7); g.fill();
@@ -173,7 +173,7 @@ function renderParty(){
     if(!h.alive){ const sk=document.createElement("div"); sk.className="skull"; sk.innerHTML=iconImg("skull",22); picWrap.appendChild(sk); }
     const bag=Object.values(h.gear).filter(Boolean).length;
     const info=document.createElement("div");
-    info.innerHTML=`<b>${h.name}</b> <span class="lvl">Lv${h.level}</span> <span class="cls">${h.cls}</span><br>
+    info.innerHTML=`${h===party[0]?iconImg("crown",12)+" ":""}<b>${h.name}</b> <span class="lvl">Lv${h.level}</span> <span class="cls">${h.cls}</span><br>
       ${h.alive ? `<span style="opacity:.7">ATK ${D.atk} · DEF ${D.def}</span>
       <div class="bar"><i style="width:${clamp(h.hp/D.maxhp*100,0,100)}%"></i></div>
       ${h.hp}/${D.maxhp}<div class="gear">${bag} equipped · tap for gear ›</div>`
@@ -194,10 +194,12 @@ function uyS(u){ const k=(u.moveT===undefined)?1:ease(u.moveT);
    (unique start columns, nudged only off walls/foes), so hires and resurrections just work — a
    living party member is a combatant by definition; there's no roster/battlefield list to sync. */
 function placeHeroes(){
-  const pcols=[2,5,3,6], prow=GROWS-2; // spread up to 4 heroes; GROWS-2 is the floor row
-  const alive=liveHeroes();
-  alive.forEach((h,i)=>{ h.r=prow; h.c=pcols[i%4]; });   // assign first so nudges see real positions
-  alive.forEach((h,i)=>{
+  // Formation centered on the MAIN hero (party[0], front-center) with companions flanking.
+  // Placed by party index so the main keeps the center slot even if a companion has fallen.
+  const prow=GROWS-2, ctr=4;
+  const slots=[[prow,ctr],[prow,ctr-2],[prow,ctr+2],[prow-1,ctr]];
+  party.forEach((h,i)=>{ if(!h.alive) return; const s=slots[i%4]; h.r=s[0]; h.c=s[1]; }); // assign first
+  party.forEach((h,i)=>{ if(!h.alive) return;
     let guard=0; while((isBlocked(state.room,h.r,h.c)||occupied(h.r,h.c,h))&&guard++<12){
       h.r--; if(h.r<GROWS-3)h.r=GROWS-2, h.c=1+((h.c)%(GCOLS-2)); }
     h.rr=h.r; h.cc=h.c; h.moveT=1; h.next=state.t+0.5+0.2*i; figOf(h);
@@ -366,6 +368,7 @@ function openHero(h){
   openCharacter(h, {
     inventory: state.inventory,
     portrait: heroPortrait(h),
+    isMain: h===party[0],
     refresh: renderParty,
     gems: ()=>state.gems,
     silver: ()=>state.silver,
@@ -519,6 +522,9 @@ function drawUnit(u){
   G.drawImage(tile.canvas,px-S/2,py-S/2,S,S); G.restore();
   if(u.flash>0){ G.save(); G.globalAlpha=Math.min(1,u.flash*4)*.7; G.globalCompositeOperation="lighter";
     G.drawImage(tile.canvas,px-S/2,py-S/2,S,S); G.restore(); if(!uiFrozen) u.flash-=0.016*state.speed; }
+  // crown above the main hero so the leader reads at a glance
+  if(u.team===0 && u===party[0]){ const cw=Math.max(13,Math.round(S*0.42));
+    G.drawImage(iconCanvas("crown",cw*2), px-cw/2, py-S/2-cw*0.7, cw, cw); }
   // HP capsule under the tile (same schema for heroes and enemies now)
   const mh=derive(u).maxhp, hw=S*0.7, hh=Math.max(3.5,S*0.085);
   const hx=px-hw/2, hy=py+S*0.5+2;
@@ -624,12 +630,14 @@ function buildDiagnostics(){
     ``, `== combat log (recent) ==`, logLines||"(empty)",
   ].join("\n");
 }
-/* boot: splash → login → create the main character, then open the Keep */
-startOnboarding(hero=>{
-  party=[hero];
-  state.silver=BAL.STARTING_SILVER;   // enough to hire two companions at the Tavern
+/* boot: splash → login → create the main hero + pick companions, then open the Keep */
+startOnboarding((hero,companions=[])=>{
+  party=[hero, ...companions].slice(0,4);   // main + up to 3 (a 4th is hireable at the Tavern)
+  state.silver=BAL.STARTING_SILVER;
+  const names=party.slice(1).map(h=>`<b>${h.name}</b>`).join(" &amp; ");
   log(`Welcome to <span class="sys">The Emberdeep</span>, <b>${hero.name}</b> the ${hero.cls}.`,"sys");
-  log(`Hire two pals at the Tavern, gear up, then <b>Descend</b>. Fallen pals can be restored at the Temple.`,"sys");
+  log(companions.length?`${names} join your party. Gear up, then <b>Descend</b>. Fallen pals can be restored at the Temple.`
+    :`Hire pals at the Tavern, gear up, then <b>Descend</b>. Fallen pals can be restored at the Temple.`,"sys");
   loadRoom(); renderParty(); syncButtons(); updateHud();
   enterTown();          // open the hub, not straight into a fight
   requestAnimationFrame(loop);

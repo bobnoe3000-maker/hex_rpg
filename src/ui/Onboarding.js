@@ -7,14 +7,17 @@ import { makeHeroPortrait } from "../engine/portraits.js";
 import { rollStats, makeHero } from "../models/units.js";
 import { HERO_BASES } from "../data/classes.js";
 import { COMPANION_NAMES } from "../data/names.js";
+import { derive } from "../systems/StatEngine.js";
 import { iconImg } from "../engine/icons.js";
 
 const randomName = () => COMPANION_NAMES[(Math.random() * COMPANION_NAMES.length) | 0];
+const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
 
 const CLASS_INFO = {
-  knight: { name: "Knight", icon: "sword", blurb: "Frontline bruiser — high HP &amp; armor. Soaks hits and holds the line." },
-  mage:   { name: "Mage",   icon: "spark", blurb: "Glass cannon — high attack &amp; crit, ranged, but fragile." },
-  cleric: { name: "Cleric", icon: "cross", blurb: "Sturdy support — balanced, durable, the party's backbone." },
+  knight: { name: "Knight", icon: "sword",  blurb: "Frontline bruiser — high HP &amp; armor. Soaks hits and holds the line." },
+  mage:   { name: "Mage",   icon: "spark",  blurb: "Glass cannon — high attack &amp; crit, ranged, but fragile." },
+  cleric: { name: "Cleric", icon: "cross",  blurb: "Sturdy support — balanced, durable, the party's backbone." },
+  rogue:  { name: "Rogue",  icon: "dagger", blurb: "Nimble skirmisher — high dodge &amp; crit with twin daggers, fast strikes." },
 };
 const STAT_ROWS = [["HP", "hp"], ["ATK", "atk"], ["DEF", "def"], ["Dodge", "dodge"], ["Crit", "crit"], ["Speed", "aspd"]];
 const seed = () => (Math.random() * 1e9) >>> 0;
@@ -63,11 +66,26 @@ function ensureCss() {
   .cr-stats{width:100%;max-width:300px;display:grid;grid-template-columns:1fr 1fr;gap:5px 16px;font-size:13px;
     padding:11px 14px;background:#120d1c;border:1px solid var(--line);border-radius:10px}
   .cr-stats .k{color:#9a8fb8}.cr-stats .v{float:right;color:var(--parchment);font-variant-numeric:tabular-nums}
+  /* companion picker */
+  .cmp-list{display:flex;flex-direction:column;gap:10px;width:100%}
+  .cmp-card{display:flex;align-items:center;gap:11px;text-align:left;padding:10px 12px;border-radius:11px;
+    background:linear-gradient(#241b38,#1a1328);border:1px solid var(--line)}
+  .cmp-card canvas{width:60px;height:60px;border-radius:9px;border:1px solid #6e5a2a;flex:0 0 auto;background:#120d1c}
+  .cmp-mid{flex:1;min-width:0}
+  .cmp-mid b{font-size:14px;color:var(--gold)} .cmp-mid .cls{color:#9a8fb8;font-style:italic;font-size:12px;margin-left:4px}
+  .cmp-mid small{display:block;color:#8fd39a;font-size:10.5px;font-style:italic;margin:3px 0 5px}
+  .cmp-classes{display:flex;gap:5px}
+  .cmp-cls{background:#120d1c;border:1px solid var(--line);border-radius:7px;padding:4px 7px;cursor:pointer;line-height:0}
+  .cmp-cls.sel{border-color:var(--gold);background:#241a12}
+  .cmp-cls:active{transform:translateY(1px)}
+  .cmp-roll{flex:0 0 auto;background:linear-gradient(#2c2342,#1c1630);border:0;border-radius:9px;padding:10px;cursor:pointer;
+    box-shadow:0 3px 0 #100b1c;line-height:0}
+  .cmp-roll:active{transform:translateY(2px);box-shadow:0 1px 0 #100b1c}
   `;
   document.head.appendChild(s);
 }
 
-/* onComplete: (hero) => void */
+/* onComplete: (hero, companions) => void */
 export function startOnboarding(onComplete) {
   ensureCss();
   const el = document.getElementById("flow");
@@ -80,6 +98,8 @@ export function startOnboarding(onComplete) {
     cv.getContext("2d").clearRect(0, 0, cv.width, cv.height);
     cv.getContext("2d").drawImage(p.canvas, 0, 0, cv.width, cv.height);
   }
+  /* a level-1 companion of a chosen class (rolled name/stats/portrait) */
+  const genCompanion = (cls, name) => makeHero(cls, { name: name || randomName(), statSeed: seed(), portraitSeed: seed() });
 
   function render() {
     if (S.step === "splash") {
@@ -125,18 +145,54 @@ export function startOnboarding(onComplete) {
           <input class="fl-in" id="fl-hero" placeholder="Name your hero" maxlength="16" value="${S.name}" autocomplete="off" style="flex:1">
           <button class="fl-btn ghost" data-roll="name" title="Suggest a name">${iconImg("dice",15)}</button>
         </div>
-        <button class="fl-btn" data-finish>${iconImg("sword",16)} Begin the Descent</button>
+        <button class="fl-btn" data-go="companions">${iconImg("tankard",16)} Next: choose companions</button>
       </div>`;
       drawPortrait();
+    } else if (S.step === "companions") {
+      if (!S.companions) { const ks = Object.keys(CLASS_INFO);
+        S.companions = [genCompanion(ks[1]), genCompanion(ks[3])]; }   // default mage + rogue
+      el.innerHTML = `<div class="fl-wrap">
+        <span class="fl-back" data-go="create">‹ hero</span>
+        <h2 class="fl-h">Choose Two Companions</h2>
+        <p class="fl-p">Pick a class for each pal to round out your party — tap ${iconImg("dice",13)} for a new face. You can hire a fourth (and replace the fallen) at the Tavern.</p>
+        <div class="cmp-list">${S.companions.map((c, idx) => {
+          const D = derive(c);
+          return `<div class="cmp-card">
+            <canvas width="72" height="72" data-cport="${idx}"></canvas>
+            <div class="cmp-mid"><b>${c.name}</b><span class="cls">${cap(c.cls)}</span>
+              <small>HP ${D.maxhp} · ATK ${D.atk} · DEF ${D.def} · Dodge ${D.dodge} · Crit ${D.crit}</small>
+              <div class="cmp-classes">${Object.keys(CLASS_INFO).map(k =>
+                `<button class="cmp-cls ${c.cls === k ? "sel" : ""}" data-setcls="${idx}:${k}" title="${CLASS_INFO[k].name}">${iconImg(CLASS_INFO[k].icon,15)}</button>`).join("")}</div>
+            </div>
+            <button class="cmp-roll" data-reroll="${idx}" title="New face">${iconImg("dice",16)}</button>
+          </div>`;
+        }).join("")}</div>
+        <button class="fl-btn" data-finish>${iconImg("sword",16)} Begin the Descent</button>
+      </div>`;
+      S.companions.forEach((c, idx) => {
+        const cv = el.querySelector(`[data-cport="${idx}"]`);
+        if (cv) cv.getContext("2d").drawImage(makeHeroPortrait(c.cls, c.portraitSeed).canvas, 0, 0, cv.width, cv.height);
+      });
     }
 
     // wiring
     el.querySelectorAll("[data-go]").forEach(b => b.onclick = () => {
       const to = b.getAttribute("data-go");
       if (S.step === "login") { const n = el.querySelector("#fl-name"); if (n) S.name = n.value.trim(); }
+      if (S.step === "create") { const n = el.querySelector("#fl-hero"); if (n) S.name = n.value.trim() || S.name; }
       S.step = to; render();
     });
     el.querySelectorAll("[data-cls]").forEach(c => c.onclick = () => { S.cls = c.getAttribute("data-cls"); render(); });
+    el.querySelectorAll("[data-setcls]").forEach(b => b.onclick = () => {
+      const [idx, k] = b.getAttribute("data-setcls").split(":");
+      S.companions[+idx] = genCompanion(k, S.companions[+idx].name);   // same pal, new class
+      render();
+    });
+    el.querySelectorAll("[data-reroll]").forEach(b => b.onclick = () => {
+      const idx = +b.getAttribute("data-reroll");
+      S.companions[idx] = genCompanion(S.companions[idx].cls);         // new face, same class
+      render();
+    });
     el.querySelectorAll("[data-roll]").forEach(b => b.onclick = () => {
       const nm = el.querySelector("#fl-hero"); if (nm) S.name = nm.value;
       const kind = b.getAttribute("data-roll");
@@ -146,10 +202,10 @@ export function startOnboarding(onComplete) {
     });
     const fin = el.querySelector("[data-finish]");
     if (fin) fin.onclick = () => {
-      const nm = el.querySelector("#fl-hero"); const name = (nm && nm.value.trim()) || HERO_BASES[S.cls].name;
+      const name = (S.name && S.name.trim()) || HERO_BASES[S.cls].name;
       const hero = makeHero(S.cls, { name, statSeed: S.statSeed, portraitSeed: S.portSeed });
       el.classList.remove("show"); el.innerHTML = "";
-      onComplete(hero);
+      onComplete(hero, S.companions || []);
     };
   }
 

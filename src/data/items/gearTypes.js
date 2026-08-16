@@ -9,15 +9,18 @@ export const GEAR_TYPES = [
   // --- weapons (class-specific) ---
   { id: "sword",      name: "Sword",      slot: "weapon",  use: "knight", stat: "atk",   val: 3,  w: 6, mat: "weapon" },
   { id: "greatsword", name: "Greatsword", slot: "weapon",  use: "knight", stat: "atk",   val: 5,  w: 3, mat: "weapon" },
-  { id: "dagger",     name: "Dagger",     slot: "weapon",  use: "knight", stat: "crit",  val: 5,  w: 4, mat: "weapon" },
   { id: "wand",       name: "Wand",       slot: "weapon",  use: "mage",   stat: "atk",   val: 3,  w: 6, mat: "weapon" },
   { id: "staff",      name: "Staff",      slot: "weapon",  use: "mage",   stat: "atk",   val: 5,  w: 3, mat: "weapon" },
   { id: "mace",       name: "Mace",       slot: "weapon",  use: "cleric", stat: "atk",   val: 3,  w: 6, mat: "weapon" },
   { id: "scepter",    name: "Scepter",    slot: "weapon",  use: "cleric", stat: "hp",    val: 8,  w: 4, mat: "weapon" },
+  { id: "dagger",     name: "Dagger",     slot: "weapon",  use: "rogue",  stat: "crit",  val: 5,  w: 6, mat: "weapon" },
+  { id: "kris",       name: "Kris",       slot: "weapon",  use: "rogue",  stat: "atk",   val: 4,  w: 4, mat: "weapon" },
+  { id: "shortbow",   name: "Shortbow",   slot: "weapon",  use: "rogue",  stat: "dodge", val: 5,  w: 3, mat: "weapon" },
   // --- offhand ---
   { id: "shield",     name: "Shield",     slot: "offhand", use: "knight", stat: "def",   val: 7,  w: 4, mat: "weapon" },
   { id: "orb",        name: "Orb",        slot: "offhand", use: "mage",   stat: "crit",  val: 5,  w: 4, mat: "wear" },
   { id: "tome",       name: "Tome",       slot: "offhand", use: "cleric", stat: "hp",    val: 8,  w: 4, mat: "wear" },
+  { id: "cloak",      name: "Cloak",      slot: "offhand", use: "rogue",  stat: "dodge", val: 5,  w: 4, mat: "wear" },
   { id: "buckler",    name: "Buckler",    slot: "offhand", use: "any",    stat: "dodge", val: 4,  w: 5, mat: "weapon" },
   // --- helm ---
   { id: "helm",       name: "Helm",       slot: "helm",    use: "any",    stat: "def",   val: 4,  w: 6, mat: "wear" },

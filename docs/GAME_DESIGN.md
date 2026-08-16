@@ -74,7 +74,7 @@ All randomness flows through a **seeded RNG** (mulberry32, already in the protot
 
 ## 3. Classes ✅ (fighter / mage / rogue / cleric)
 
-Four base classes. Each defines: base stats, per-level growth, allowed gear types, a native **skill pool**, and (future) a **skill tree** for specialization (§4.1).
+Four base classes. Each defines: base stats, per-level growth, allowed gear types, a native **skill pool**, and (future) a **skill tree** for specialization (§4.1). **All four are implemented** (the "fighter" ships as **Knight** in code/UI): Knight, Mage, Cleric, and **Rogue** (nimble skirmisher — high dodge/crit, twin daggers, starts in a Leather Vest; native gear: dagger, kris, shortbow, cloak). Rogue-restricted loot rolls through the same `LootGenerator` class filter as the others.
 
 | Class | Fantasy | Stat lean | Role |
 |---|---|---|---|
@@ -165,7 +165,7 @@ There are **no labeled rarity tiers** (no common/rare/epic/legendary). Loot is a
 
 ## 7. Party & Companions ✅ (main + up to 3)
 
-- **Party = 4 slots:** the player's **main hero** + up to **3 hired companions**. (Feature 2.)
+- **Party = 4 slots:** the player's **main hero** + up to **3 companions**. (Feature 2.) At character creation the player **picks two starting companions** (choose each pal's class, reroll the face) in the onboarding flow; a **fourth** is hireable at the Tavern. The **main hero is marked with a crown** (battlefield tile, party HUD, Keep roster, character panel) and takes the **front-center** slot in the combat formation so the leader always reads at a glance.
 - **Companions** are **randomly generated** (class, name, rolled stats, rolled portrait, starter gear) — **implemented** via the **Tavern** service (`ui/TavernScreen.js`, `models/makeCompanion`): hire for silver, refresh the recruits, party caps at 4 (main + 3). The player **starts with silver to hire two** (`BAL.STARTING_SILVER`). Recruits **scale to the main hero's level**, and the **hire fee scales with recruit level** (`HIRE_BASE + level*HIRE_PER_LEVEL`), so higher-level pals cost more as you grow.
 - Companions **earn XP and loot**, are **equippable**, and the player chooses **which of their skills to upgrade**. (Feature 2.)
 - Heroes are **not permanently deleted**, but death carries a real penalty (§7.1). A **roster cap** limits benched companions (expandable — monetization hook).

@@ -82,7 +82,7 @@ export function openTown(ctx) {
       : `<span class="fallen">${iconImg("skull",10)} fallen</span>`;
     return `<div class="tw-card ${h.alive ? "" : "dead"}" data-hero="${i}">
       <div class="tw-portwrap"><canvas width="96" height="96"></canvas>${skull}</div>
-      <b>${h.name}</b><span class="cls">${h.cls}</span><span class="lv">Lv ${h.level}</span>
+      <b>${i === 0 ? iconImg("crown", 11) + " " : ""}${h.name}</b><span class="cls">${h.cls}</span><span class="lv">Lv ${h.level}</span>
       ${foot}</div>`;
   };
   el.innerHTML = `<div class="tw-wrap">

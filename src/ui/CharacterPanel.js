@@ -98,7 +98,7 @@ export function openCharacter(hero, ctx) {
     overlay.innerHTML = `<div class="cpanel">
       <div class="cp-head">
         <canvas width="96" height="96"></canvas>
-        <div class="nm"><b>${hero.name}</b> <span class="lvl">Lv ${hero.level}</span><br><span class="cls">${cap(hero.cls)}</span></div>
+        <div class="nm"><b>${ctx.isMain ? iconImg("crown", 12) + " " : ""}${hero.name}</b> <span class="lvl">Lv ${hero.level}</span><br><span class="cls">${cap(hero.cls)}${ctx.isMain ? " · Main" : ""}</span></div>
         <span class="cur">${iconImg("coin", 13)} ${silver}<br>${iconImg("gem", 13)} ${gems}</span>
         <span class="cp-x" data-close="1">✕</span>
       </div>

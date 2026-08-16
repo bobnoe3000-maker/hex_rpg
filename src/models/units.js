@@ -10,7 +10,7 @@ import { SLOTS } from "../data/items/gearTypes.js";
 import { starterGear } from "../data/items/starter.js";
 import { COMPANION_NAMES } from "../data/names.js";
 
-const CLASSES = ["knight", "mage", "cleric"];
+const CLASSES = ["knight", "mage", "cleric", "rogue"];
 
 /* Roll a hero's six stats from a class base with per-stat variance (seeded → re-rollable). */
 export function rollStats(cls, seed) {

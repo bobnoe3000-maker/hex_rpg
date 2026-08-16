@@ -49,8 +49,8 @@ const SHAPES = {
 };
 const SHAPE_FOR = {
   wand: "rod", staff: "rod", scepter: "rod",
-  sword: "blade", greatsword: "blade", dagger: "blade", mace: "blade",
-  shield: "shield", buckler: "shield", orb: "orb", tome: "chest",
+  sword: "blade", greatsword: "blade", dagger: "blade", kris: "blade", mace: "blade", shortbow: "rod",
+  shield: "shield", buckler: "shield", orb: "orb", tome: "chest", cloak: "chest",
   helm: "helm", hood: "helm", circlet: "helm",
   plate: "chest", robe: "chest", vestments: "chest", mail: "chest", leathers: "chest",
   gauntlets: "glove", gloves: "glove", grips: "glove",
