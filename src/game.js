@@ -329,11 +329,18 @@ function hurt(u,dmg,src){
   }
   if(u.team===0) renderParty();
 }
+const HERO_MAX_LEVEL=3;   // heroes cap here for now (skill trees extend this later)
+/* xp progress toward the next level, for the character panel */
+function xpProgress(h){
+  if(h.level>=HERO_MAX_LEVEL) return {max:true};
+  const prev=XP_NEXT[h.level-1]||0, next=XP_NEXT[h.level];
+  return {max:false, cur:Math.max(0,(h.xp||0)-prev), need:next-prev, nextLevel:h.level+1};
+}
 function awardXP(xp){
   const share=Math.ceil(xp/Math.max(1,party.filter(p=>p.alive).length));
   for(const h of party){ if(!h.alive)continue;
     h.xp+=share;
-    while(h.level<3&&h.xp>=XP_NEXT[h.level]){
+    while(h.level<HERO_MAX_LEVEL&&h.xp>=XP_NEXT[h.level]){
       h.level++; const gr=HERO_BASES[h.cls].growth;
       h.atk+=gr.atk; h.def+=gr.def; h.dodge+=gr.dodge; h.crit+=gr.crit; h.maxhp+=gr.hp;
       h.hp=derive(h).maxhp;
@@ -406,6 +413,7 @@ function openHero(h){
     inventory: state.inventory,
     portrait: heroPortrait(h),
     isMain: h===party[0],
+    xp: xpProgress,
     refresh: renderParty,
     gems: ()=>state.gems,
     silver: ()=>state.silver,

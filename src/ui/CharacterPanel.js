@@ -29,6 +29,11 @@ function injectCss() {
   .cp-x:active{transform:translateY(1px)}
   .cp-msg{font-size:11.5px;margin:2px 2px 8px;padding:5px 8px;border-radius:6px;background:#120d1c;border:1px solid var(--line)}
   .cp-msg.good{color:#7ee787}.cp-msg.bad{color:#ff6b6b}.cp-msg.meh{color:#9a8fb8}
+  .cp-xp{margin:0 2px 9px;font-size:10.5px;color:#9a8fb8}
+  .cp-xp-l{display:block;margin-bottom:3px}.cp-xp-l b{color:#e8dcc4;font-variant-numeric:tabular-nums}
+  .cp-xp-max{color:#d8a24a;font-style:italic}
+  .cp-xp-bar{height:5px;background:#241a2e;border-radius:3px;overflow:hidden;border:1px solid var(--line)}
+  .cp-xp-bar i{display:block;height:100%;background:linear-gradient(#c9a0ff,#7a4ad1);transition:width .25s}
   .cp-stats{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;font-size:12px;margin-bottom:10px;
     padding:8px 10px;background:#120d1c;border:1px solid var(--line);border-radius:8px}
   .cp-stats .k{color:#9a8fb8}.cp-stats .v{float:right;color:var(--parchment);font-variant-numeric:tabular-nums}
@@ -72,6 +77,14 @@ export function openCharacter(hero, ctx) {
     if (filterSlot) usable = usable.filter(it => it.slot === filterSlot);
 
     const statCell = (k, key) => `<div><span class="k">${k}</span><span class="v">${D[key]}</span></div>`;
+    const xpBar = () => {
+      const x = ctx.xp ? ctx.xp(hero) : null;
+      if (!x) return "";
+      if (x.max) return `<div class="cp-xp"><span class="cp-xp-l">Experience <span class="cp-xp-max">· Max level</span></span></div>`;
+      const w = Math.max(0, Math.min(100, x.cur / x.need * 100));
+      return `<div class="cp-xp"><span class="cp-xp-l">XP <b>${x.cur} / ${x.need}</b> · ${x.need - x.cur} to Lv ${x.nextLevel}</span>
+        <div class="cp-xp-bar"><i style="width:${w}%"></i></div></div>`;
+    };
     const slotRow = key => {
       const it = hero.gear[key];
       return `<div class="cp-slot ${filterSlot === key ? "sel" : ""}" data-filter="${key}"><span class="sl">${cap(key)}</span>` +
@@ -92,6 +105,7 @@ export function openCharacter(hero, ctx) {
         <span class="cur">${iconImg("coin", 13)} ${silver}<br>${iconImg("gem", 13)} ${gems}</span>
         <span class="cp-x" data-close="1">✕</span>
       </div>
+      ${xpBar()}
       ${msg ? `<div class="cp-msg ${msg[0]}">${msg[1]}</div>` : ""}
       <div class="cp-stats">
         <div class="hp"><span class="k">HP</span><span class="v">${hero.hp} / ${D.maxhp}</span></div>
