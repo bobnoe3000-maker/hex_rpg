@@ -57,3 +57,40 @@ export function isUpgrade(hero, item) {
   if (!canEquip(hero, item)) return false;
   return itemScore(item) > itemScore(hero.gear[item.slot]);
 }
+
+/* Compare a bag `item` against what the hero has equipped in its slot (and any slot the swap would
+   free — a 2H weapon frees the offhand; an offhand frees a 2H weapon). Returns a structured verdict
+   the character panel renders: overall up/side/down/new, per-stat from→to→diff, and keyword changes
+   (procs, ranged, two-handed). Pure & DOM-free. */
+const CMP_STATS = ["atk", "def", "hp", "dodge", "crit", "aspd"];
+const round1 = v => Math.round(v * 10) / 10;
+export function compareToEquipped(hero, item) {
+  const removed = [];
+  const cur = hero.gear[item.slot];
+  if (cur) removed.push(cur);
+  if (item.slot === "weapon" && item.twoH && hero.gear.offhand) removed.push(hero.gear.offhand);
+  if (item.slot === "offhand" && hero.gear.weapon && hero.gear.weapon.twoH) removed.push(hero.gear.weapon);
+
+  const sumStat = s => removed.reduce((n, it) => n + (it[s] || 0), 0);
+  const stats = CMP_STATS.map(s => {
+    const from = round1(sumStat(s)), to = round1(item[s] || 0);
+    return { stat: s, from, to, diff: round1(to - from) };
+  }).filter(x => x.from || x.to);   // present in either the item or what it replaces
+
+  const keywords = [];
+  const remProcs = new Set(removed.map(it => it.proc && it.proc.kind).filter(Boolean));
+  if (item.proc && !remProcs.has(item.proc.kind)) keywords.push({ label: item.proc.kind, sign: 1 });
+  for (const k of remProcs) if (!(item.proc && item.proc.kind === k)) keywords.push({ label: k, sign: -1 });
+  const itRanged = (item.rng || 1) > 1, remRanged = removed.some(it => (it.rng || 1) > 1);
+  if (itRanged && !remRanged) keywords.push({ label: "Ranged", sign: 1 });
+  if (!itRanged && remRanged) keywords.push({ label: "Ranged", sign: -1 });
+  if (item.twoH && !(cur && cur.twoH)) keywords.push({ label: "Two-handed", sign: 0 });
+
+  const scoreFrom = removed.reduce((n, it) => n + itemScore(it), 0), scoreTo = itemScore(item);
+  let verdict;
+  if (!removed.length) verdict = "new";
+  else { const band = Math.max(2, 0.05 * Math.max(scoreFrom, scoreTo)), d = scoreTo - scoreFrom;
+    verdict = d > band ? "up" : d < -band ? "down" : "side"; }
+
+  return { verdict, stats, keywords, scoreFrom: round1(scoreFrom), scoreTo: round1(scoreTo) };
+}

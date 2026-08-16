@@ -3,7 +3,7 @@
 import { makeHero, makeEnemy, makeCompanion, rollStats, growTo } from "../src/models/units.js";
 import { derive, dodgeChance, critChance, mitigate } from "../src/systems/StatEngine.js";
 import { resolveAttack } from "../src/systems/CombatSim.js";
-import { canEquip, equip, unequip, isUpgrade, itemScore } from "../src/systems/Equipment.js";
+import { canEquip, equip, unequip, isUpgrade, itemScore, compareToEquipped } from "../src/systems/Equipment.js";
 import { generate, describeItem } from "../src/systems/LootGenerator.js";
 import { upgrade, canUpgrade, primaryStat, forgeCost, forgePreview } from "../src/systems/ForgeSystem.js";
 import { priceOf, sellPriceOf } from "../src/systems/Economy.js";
@@ -390,6 +390,33 @@ ok("different seed diverges", seq(123) !== seq(777));
   ok("higher tier rolls stronger stats (same seed)", sum(t10) > sum(t1) * 3);
   ok("epic floor forces at least a rare-or-better grade", (()=>{ for(let i=0;i<20;i++){ const it=generate(mb(i), {power:10, floor:"epic"}); if(it.grade!=="epic") return false; } return true; })());
   ok("no floor / power keeps legacy behaviour", generate(mb(1)).grade !== undefined);
+}
+
+// ---- gear comparison (bag item vs equipped) ----
+{
+  const hero = makeHero("fighter", 5);
+  const equipped = { n:"Steel Sword", slot:"weapon", use:"any", atk:24, crit:4, grade:"fine" };
+  hero.gear.weapon = equipped;
+  const better = { n:"Warblade", slot:"weapon", use:"any", atk:33, crit:8, grade:"epic", proc:{kind:"lifesteal",val:0.06} };
+  const worse  = { n:"Iron Sword", slot:"weapon", use:"any", atk:18, grade:"plain" };
+  const cB = compareToEquipped(hero, better), cW = compareToEquipped(hero, worse);
+  ok("clear upgrade reads as up", cB.verdict === "up");
+  ok("clear downgrade reads as down", cW.verdict === "down");
+  ok("upgrade deltas are correct (+9 ATK, +4 Crit)", (()=>{
+    const a = cB.stats.find(s=>s.stat==="atk"), c = cB.stats.find(s=>s.stat==="crit");
+    return a.diff === 9 && c.diff === 4; })());
+  ok("downgrade shows negative ATK delta", cW.stats.find(s=>s.stat==="atk").diff === -6);
+  ok("gained proc surfaces as a keyword", cB.keywords.some(k=>k.label==="lifesteal" && k.sign>0));
+  // empty slot → New, everything is a gain
+  hero.gear.amulet = null;
+  const amu = { n:"Jade Amulet", slot:"amulet", use:"any", hp:40, dodge:3, grade:"fine" };
+  const cN = compareToEquipped(hero, amu);
+  ok("empty slot reads as new", cN.verdict === "new" && cN.stats.find(s=>s.stat==="hp").diff === 40);
+  // two-handed weapon is weighed against weapon + offhand together
+  hero.gear.offhand = { n:"Buckler", slot:"offhand", use:"any", def:10, grade:"fine" };
+  const twoH = { n:"Greatsword", slot:"weapon", use:"any", atk:40, twoH:true, grade:"rare" };
+  const cT = compareToEquipped(hero, twoH);
+  ok("2H swap accounts for the freed offhand's DEF", cT.stats.find(s=>s.stat==="def").diff === -10);
 }
 
 console.log(fails ? `\n${fails} FAILED` : "\nall passed");

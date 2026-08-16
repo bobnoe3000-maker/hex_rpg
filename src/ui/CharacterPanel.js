@@ -4,7 +4,7 @@
 "use strict";
 
 import { derive } from "../systems/StatEngine.js";
-import { canEquip, equip, unequip, isUpgrade } from "../systems/Equipment.js";
+import { canEquip, equip, unequip, compareToEquipped } from "../systems/Equipment.js";
 import { STAT_STEP, ASSIGNABLE } from "../systems/Leveling.js";
 import { heroKit } from "../systems/Skills.js";
 import { SLOTS } from "../data/items/gearTypes.js";
@@ -15,6 +15,12 @@ import { gearIconImg } from "../engine/gearIcon.js";
 const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
 const STAT_ROWS = [["ATK", "atk"], ["DEF", "def"], ["Dodge", "dodge"], ["Crit", "crit"]];
 const ATTR_LABEL = { hp: "HP", atk: "ATK", def: "DEF", dodge: "Dodge", crit: "Crit" };
+/* gear-comparison formatting */
+const CMP_LABEL = { atk: "ATK", def: "DEF", hp: "HP", dodge: "Dodge", crit: "Crit", aspd: "Speed" };
+const VD_TEXT = { up: "▲ Upgrade", side: "⇄ Sidegrade", down: "▼ Downgrade", new: "✦ New" };
+const cmpEps = s => s === "aspd" ? 0.005 : 0.05;
+const cmpNum = (s, v) => s === "aspd" ? (Math.round(v * 100) / 100).toFixed(2) : String(Math.round(v * 10) / 10);
+const cmpDelta = (s, v) => (v > 0 ? "+" : "−") + cmpNum(s, Math.abs(v));   // signed, uses a real minus glyph
 const fmtStep = (k, n) => k === "aspd" ? n.toFixed(2) : n;   // (aspd isn't assignable, kept for safety)
 
 function injectCss() {
@@ -59,16 +65,38 @@ function injectCss() {
     display:flex;justify-content:space-between;align-items:baseline}
   .cp-sec .hint{color:#6f6486;letter-spacing:.5px;text-transform:none;font-size:10px}
   .cp-clear{color:#9ad1ff;cursor:pointer;text-transform:none;letter-spacing:.5px}
-  .cp-slot,.cp-item{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:7px;
-    background:#1c1630;border:1px solid var(--line);margin-bottom:5px;font-size:12px}
-  .cp-slot{cursor:pointer}
+  .cp-slot{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:7px;
+    background:#1c1630;border:1px solid var(--line);margin-bottom:5px;font-size:12px;cursor:pointer}
+  .cp-item{background:#1c1630;border:1px solid var(--line);border-radius:8px;margin-bottom:6px;font-size:12px;overflow:hidden}
+  .cp-irow{display:flex;align-items:center;gap:6px;padding:6px 8px}
+  .cp-vd{font-family:ui-monospace,monospace;font-size:8px;font-weight:bold;letter-spacing:.05em;text-transform:uppercase;
+    padding:3px 6px;border-radius:5px;white-space:nowrap;flex:0 0 auto}
+  .cp-vd.up{color:#08260f;background:#7ee787}.cp-vd.side{color:#241606;background:#e0b063}
+  .cp-vd.down{color:#2a0808;background:#ff6b6b}.cp-vd.new{color:#06121a;background:#9ad1ff}
+  .cp-cmpline{display:flex;flex-wrap:wrap;gap:5px;align-items:center;padding:0 8px 7px 40px}
+  .cp-dl{font-family:ui-monospace,monospace;font-size:8.5px;letter-spacing:.05em;text-transform:uppercase;color:#6f6486;margin-right:1px}
+  .cp-chip{font-family:ui-monospace,monospace;font-size:10px;font-weight:bold;padding:1.5px 6px;border-radius:999px;font-variant-numeric:tabular-nums}
+  .cp-chip.p{color:#7ee787;background:rgba(126,231,135,.12);border:1px solid rgba(126,231,135,.4)}
+  .cp-chip.n{color:#ff6b6b;background:rgba(255,107,107,.12);border:1px solid rgba(255,107,107,.4)}
+  .cp-chip.kw{color:#9ad1ff;background:rgba(154,209,255,.12);border:1px solid rgba(154,209,255,.4)}
+  .cp-chip.kwn{color:#ff6b6b;background:rgba(255,107,107,.12);border:1px solid rgba(255,107,107,.4)}
+  .cp-chip.kw0{color:#9a8fb8;background:#00000030;border:1px solid var(--line2)}
+  .cp-cmpx{cursor:pointer;color:#6f6486;font-size:10px;font-family:ui-monospace,monospace;margin-left:auto}
+  .cp-cmpx:active{color:#9ad1ff}
+  .cp-cmpgrid{display:grid;grid-template-columns:1fr auto auto auto;gap:3px 10px;padding:8px 9px 9px 40px;
+    border-top:1px dashed var(--line2);background:#160f24;font-size:11.5px;align-items:center}
+  .cp-cmpgrid .h{font-family:ui-monospace,monospace;font-size:8px;letter-spacing:.05em;text-transform:uppercase;color:#6f6486;padding-bottom:1px}
+  .cp-cmpgrid .k{color:#9a8fb8}
+  .cp-cmpgrid .a{text-align:right;color:#6f6486;font-variant-numeric:tabular-nums}
+  .cp-cmpgrid .b{text-align:right;color:var(--parchment);font-variant-numeric:tabular-nums;font-weight:bold}
+  .cp-cmpgrid .d{text-align:right;font-variant-numeric:tabular-nums;font-weight:bold}
+  .cp-cmpgrid .d.p{color:#7ee787}.cp-cmpgrid .d.n{color:#ff6b6b}.cp-cmpgrid .d.z{color:#6f6486}
   .cp-slot.sel{border-color:var(--gold);background:#241a12}
   .cp-slot .sl{color:#9a8fb8;width:58px;flex:0 0 auto;font-size:10px;text-transform:uppercase;letter-spacing:1px}
   .cp-slot.sel .sl{color:var(--gold)}
   .cp-slot .it,.cp-item .it{flex:1;line-height:1.3;min-width:0}
   .cp-slot .it small,.cp-item .it small{color:#8fd39a;font-style:italic}
   .cp-empty{opacity:.5;font-style:italic}
-  .cp-up{color:#7ee787;font-weight:bold;margin-right:3px}
   .cp-btn{font-family:inherit;font-weight:bold;font-size:11px;border:0;border-radius:6px;padding:6px 9px;
     cursor:pointer;background:linear-gradient(#e0b063,#a8722a);color:#241606;box-shadow:0 2px 0 #6e4a14;flex:0 0 auto}
   .cp-btn.off{background:linear-gradient(#2c2342,#1c1630);color:var(--parchment);box-shadow:0 2px 0 #100b1c}
@@ -151,6 +179,7 @@ export function openCharacter(hero, ctx) {
   injectCss();
   const overlay = document.getElementById("overlay");
   let filterSlot = null; // when set, the bag lists only items for that slot
+  const expandedCmp = new WeakSet(); // bag items whose side-by-side compare is open
   let tab = "stats";     // main-hero panel tab: "stats" | "skills" | "equip"
   let skillBranch = "off"; // Skills tab sub-tab: "off" | "def"
   let keepScroll = true;   // preserve scroll across re-render (false = jump to top, for main-tab switches)
@@ -187,9 +216,30 @@ export function openCharacter(hero, ctx) {
           : `<span class="it cp-empty">— empty —</span>`) +
         `</div>`;
     };
-    const itemRow = (it, i) =>
-      `<div class="cp-item">${gearIconImg(it, 26)}<span class="it">${isUpgrade(hero, it) ? `<span class="cp-up" title="Upgrade for an empty/weaker slot">${iconImg("chevron", 11)}</span>` : ""}${itemName(it)}<br><small>${it.d}</small></span>` +
-      `<button class="cp-btn" data-eq="${i}">Equip</button></div>`;
+    // A bag item shows how it compares to what's equipped in its slot: a verdict pill, always-on
+    // stat-delta chips, and a tap-to-open side-by-side (Equipped → This → Δ).
+    const itemRow = (it, i) => {
+      const c = compareToEquipped(hero, it);
+      const isNew = c.verdict === "new", isOpen = expandedCmp.has(it);
+      const changed = c.stats.filter(x => Math.abs(x.diff) >= cmpEps(x.stat));
+      const statChips = changed.map(x =>
+        `<span class="cp-chip ${x.diff > 0 ? "p" : "n"}">${cmpDelta(x.stat, x.diff)} ${CMP_LABEL[x.stat]}</span>`).join("");
+      const kwChips = c.keywords.map(k =>
+        `<span class="cp-chip ${k.sign > 0 ? "kw" : k.sign < 0 ? "kwn" : "kw0"}">${k.sign > 0 ? "+ " : k.sign < 0 ? "− " : ""}${cap(k.label)}</span>`).join("");
+      const grid = isOpen ? `<div class="cp-cmpgrid">
+          <span class="h">Stat</span><span class="h" style="text-align:right">Equipped</span><span class="h" style="text-align:right">This</span><span class="h" style="text-align:right">Δ</span>
+          ${c.stats.map(x => { const z = Math.abs(x.diff) < cmpEps(x.stat);
+            return `<span class="k">${CMP_LABEL[x.stat]}</span><span class="a">${x.from ? cmpNum(x.stat, x.from) : "—"}</span><span class="b">${x.to ? cmpNum(x.stat, x.to) : "—"}</span><span class="d ${z ? "z" : x.diff > 0 ? "p" : "n"}">${z ? "—" : cmpDelta(x.stat, x.diff)}</span>`; }).join("")}
+          ${c.keywords.map(k => `<span class="k">${cap(k.label)}</span><span class="a">${k.sign < 0 ? "✓" : "—"}</span><span class="b">${k.sign >= 0 ? "✓" : "—"}</span><span class="d ${k.sign > 0 ? "p" : k.sign < 0 ? "n" : "z"}">${k.sign > 0 ? "new" : k.sign < 0 ? "lost" : "—"}</span>`).join("")}
+        </div>` : "";
+      return `<div class="cp-item ${isOpen ? "open" : ""}">
+        <div class="cp-irow">${gearIconImg(it, 26)}<span class="it">${itemName(it)}<br><small>${it.d}</small></span>
+          <span class="cp-vd ${c.verdict}">${VD_TEXT[c.verdict]}</span></div>
+        <div class="cp-cmpline"><span class="cp-dl">${isNew ? "empty slot" : "vs equipped"}</span>${statChips}${kwChips}
+          ${isNew ? "" : `<span class="cp-cmpx" data-cmp="${i}">${isOpen ? "hide ▲" : "compare ▾"}</span>`}
+          <button class="cp-btn" data-eq="${i}" style="${isNew ? "margin-left:auto" : "margin-left:6px"}">Equip</button></div>
+        ${grid}</div>`;
+    };
 
     // Attribute point-buy — main hero only (ctx.points supplied). Draft with +/−, then Confirm.
     const attrSection = () => {
@@ -365,6 +415,10 @@ export function openCharacter(hero, ctx) {
     overlay.querySelectorAll("[data-eq]").forEach(b => b.onclick = e => {
       e.stopPropagation(); const it = ctx.inventory[+b.getAttribute("data-eq")];
       if (it) { equip(hero, it, ctx.inventory); ctx.refresh(); render(); }
+    });
+    overlay.querySelectorAll("[data-cmp]").forEach(b => b.onclick = () => {
+      const it = ctx.inventory[+b.getAttribute("data-cmp")];
+      if (it) { expandedCmp.has(it) ? expandedCmp.delete(it) : expandedCmp.add(it); render(); }
     });
     // attribute point-buy: draft with +/−, Reset discards, Confirm commits via ctx.assign
     overlay.querySelectorAll("[data-inc]").forEach(b => b.onclick = () => {
