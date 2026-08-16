@@ -302,6 +302,10 @@ function hasBuff(u,k){ return u.buffs && u.buffs.some(b=>b.k===k); }
 function addBuff(u,b){ (u.buffs||(u.buffs=[])).push(b); }
 function resetCombat(u){ u.buffs=[]; u.cd={}; u.mLast=0; }
 function adjFoes(u){ return livingFoes(u.team).filter(f=>distU(f,u)<=1); }
+function foesInRange(u,rad){ return livingFoes(u.team).filter(f=>distU(f,u)<=rad); }
+function lowestHurtAlly(u,thr){ let best=null,bf=2;
+  for(const h of party){ if(!h.alive)continue; const f=h.hp/Math.max(1,derive(h).maxhp); if(f<bf){bf=f;best=h;} }
+  return (best && bf<(thr==null?0.999:thr))?best:null; }
 function guardianNear(u){ for(const h of party){ if(h===u||!h.alive)continue;
   if(guardianFrac(h)>0 && distU(h,u)<=1) return h; } return null; }
 function applyBleed(target,src,bl){
@@ -381,6 +385,28 @@ function castActive(u,s,tg){
       addBuff(u,{k:"immune",until:state.t+dur}); addBuff(u,{k:"taunt",until:state.t+dur});
       const heal=Math.round(derive(u).maxhp*a.heal[r-1]); u.hp=Math.min(derive(u).maxhp,u.hp+heal);
       fxText(uxS(u),uyS(u)-30,"+"+heal,"#7ee787"); break; }
+    // ---- generic archetypes shared by Mage / Cleric / Rogue ----
+    case "bolt":{ say(s.name.split(" ")[0].toUpperCase(),"#b48bff"); hit(tg,atk*a.dmg[r-1]);
+      if(tg.alive){
+        if(a.burn&&a.burn[r-1]>0) applyBleed(tg,u,{pct:a.burn[r-1],dur:3,stacks:1});
+        if(a.mark&&a.mark[r-1]>0) addBuff(tg,{k:"mark",mult:true,stat:"def",v:-a.mark[r-1],until:state.t+(a.dur||5)});
+        if(a.slow&&a.slow[r-1]>0) addBuff(tg,{k:"slow",mult:true,stat:"aspd",v:-a.slow[r-1],until:state.t+3});
+        if(a.stun&&a.stun[r-1]>0){ addBuff(tg,{k:"stun",until:state.t+a.stun[r-1]}); fxText(uxS(tg),uyS(tg)-30,"stun","#9ad1ff"); }
+      } break; }
+    case "nova":{ say(s.name.split(" ")[0].toUpperCase(),"#b48bff"); fxRing(uxS(u),uyS(u)+6,"#b48bff");
+      foesInRange(u,a.radius||2).forEach(f=>{ hit(f,atk*a.dmg[r-1]);
+        if(a.slow&&a.slow[r-1]>0) addBuff(f,{k:"slow",mult:true,stat:"aspd",v:-a.slow[r-1],until:state.t+3});
+        if(a.stun&&a.stun[r-1]>0) addBuff(f,{k:"stun",until:state.t+a.stun[r-1]}); }); break; }
+    case "heal":{ say("HEAL","#7ee787"); const imm=Array.isArray(a.immune)?a.immune[r-1]:0;
+      const targets=a.party?party.filter(h=>h.alive):[lowestHurtAlly(u)].filter(Boolean);
+      targets.forEach(t=>{ const mh=derive(t).maxhp, amt=Math.round(mh*a.pct[r-1]); t.hp=Math.min(mh,t.hp+amt);
+        fxText(uxS(t),uyS(t)-30,"+"+amt,"#7ee787"); if(imm) addBuff(t,{k:"immune",until:state.t+imm}); }); break; }
+    case "buff":{ say(s.name.toUpperCase().slice(0,10),"#9ad1ff"); const dur=Array.isArray(a.dur)?a.dur[r-1]:(a.dur||6);
+      const targets=a.party?party.filter(h=>h.alive):[u];
+      targets.forEach(t=>{
+        if(a.stat) addBuff(t,{k:"sbuff",mult:!a.flat,flat:!!a.flat,stat:a.stat,v:a.v[r-1],until:state.t+dur});
+        if(a.shield){ const sh=Math.round(derive(u).maxhp*a.shield[r-1]); addBuff(t,{k:"shield",v:sh,until:state.t+12}); fxText(uxS(t),uyS(t)-30,"shield","#9ad1ff"); } });
+      break; }
   }
   if(u.team===0) renderParty();
 }
@@ -392,10 +418,12 @@ function tryCast(u,tg){
   for(const s of acts){
     if(state.t < (u.cd[s.id]||0)) continue;
     const k=s.a.kind, fits =
-      k==="rally"   ? true :
+      (k==="rally"||k==="buff") ? true :                          // buffs/shields fire on cooldown
+      k==="heal"    ? !!lowestHurtAlly(u,0.72) :                   // heal only when a pal is hurt
       k==="unbreak" ? (u.hp/derive(u).maxhp<0.55 || adjFoes(u).length>=2) :
+      k==="nova"    ? foesInRange(u,s.a.radius||2).length>=1 :     // AoE wants foes in the blast
       (k==="guard"||k==="taunt") ? d<=2 :
-      d<=Math.max(1,R);                       // melee strikes need a foe in reach
+      d<=Math.max(1,R);                       // bolt + melee strikes need a foe in reach
     if(!fits) continue;
     u.cd[s.id]=state.t+s.a.cd[s.rank-1];
     castActive(u,s,tg);

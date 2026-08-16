@@ -100,9 +100,9 @@ Four base classes. Each defines: base stats, per-level growth, allowed gear type
 - **Upgrades:** skills level up (stronger effect / lower cooldown / added rider) via **skill points** (from leveling) and/or materials. Diminishing per level. (Features 1 & 2.)
 - No mana/energy — the knobs are **cooldown, condition, and order**. This is the heart of the theorycraft.
 
-### 4.1 Skill Trees & Specialization ✅ (Phase 1: Fighter shipped)
+### 4.1 Skill Trees & Specialization ✅ (all four classes shipped)
 
-Each class owns a **skill tree**: a branching set of skills and passives the main hero unlocks with skill points as they level. Trees let two heroes of the same class play completely differently — the core of long-term theorycraft. **Implemented** for the **Fighter** (`data/skills.js`, `systems/Skills.js`, Skills tab in the character panel); Mage/Cleric/Rogue reuse the same framework next.
+Each class owns a **skill tree**: a branching set of skills and passives the main hero unlocks with skill points as they level. Trees let two heroes of the same class play completely differently — the core of long-term theorycraft. **All four classes implemented** (`data/skills.js`, `systems/Skills.js`, Skills tab in the character panel): **Fighter** (Onslaught / Bulwark), **Mage** (Evocation / Warding), **Cleric** (Judgment / Sanctuary), **Rogue** (Assassination / Shadow). Actives run through a small set of shared archetypes — single-target nuke, AoE nova, heal (self/party), and self/party buffs & shields — plus control riders (slow, stun, armor-shred, burn) layered on top.
 
 - **Two branches per class**, one **offensive** and one **defensive**, of **13 skills each** (5 tiers: 3·3·3·3 + a capstone). 4 classes → 104 skills.
 - **Active or passive.** Passives fold into `StatEngine.derive` (flat + missing-HP multipliers) and per-hit `combatMods` (Executioner, Crushing Blows, Bulwark, Bloodthirst). Actives are cast by the battle AI on cooldown when their trigger fits (`Skills.activeSkills` + the game's `tryCast`) — Cleave, Sunder, Whirlwind, Rampage, Guard, Taunt, Shield Bash, Rallying Cry, and the capstones, all driven through a unified **timed-buff system** (shields, stuns, DEF shred, party auras, immunity, bleeds).

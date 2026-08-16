@@ -310,5 +310,25 @@ ok("different seed diverges", seq(123) !== seq(777));
   ok("passive-only heroes have no actives", activeSkills(makeHero("fighter",{})).length === 0);
 }
 
+// All four classes have a complete, well-formed tree
+{
+  for (const cls of ["fighter","mage","cleric","rogue"]) {
+    const all = allSkills(cls);
+    ok(cls+" tree is 13 off + 13 def", all.filter(s=>s.br==="off").length===13 && all.filter(s=>s.br==="def").length===13);
+    const tiers = all.filter(s=>s.br==="off").map(s=>s.tier).sort((a,b)=>a-b).join("");
+    ok(cls+" offensive tiers are 3·3·3·3·1", tiers === "1112223334445");
+    ok(cls+" every skill has 5 rank texts", all.every(s=>s.text.length===5));
+    ok(cls+" every skill is active or passive with an fx", all.every(s=>(s.type==="active"||s.type==="passive") && s.fx));
+  }
+  // a mage's passives fold into derive; its actives surface for casting
+  const mage = makeHero("mage", 1); mage.skills = { kindling:5, firebolt:3 };
+  ok("Mage Kindling +15 ATK via derive", derive(mage).atk === derive(makeHero("mage",1)).atk + 15);
+  ok("Mage Firebolt is a castable active", activeSkills(mage).some(a=>a.id==="firebolt"));
+  // a cleric heal is an active; Grace is a flat-HP passive
+  const cleric = makeHero("cleric", 1); cleric.skills = { grace:5, heal:1 };
+  ok("Cleric Grace +75 HP", derive(cleric).maxhp === derive(makeHero("cleric",1)).maxhp + 75);
+  ok("Cleric Heal is a castable active", activeSkills(cleric).some(a=>a.id==="heal"));
+}
+
 console.log(fails ? `\n${fails} FAILED` : "\nall passed");
 process.exit(fails ? 1 : 0);
