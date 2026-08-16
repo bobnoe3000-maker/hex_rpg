@@ -112,7 +112,11 @@ export function openCompanionRoll(hero, ctx) {
     </div>`;
     overlay.querySelector(".clv-top canvas").getContext("2d").drawImage(ctx.portrait, 0, 0, 96, 96);
     overlay.querySelector("[data-close]").onclick = () => finish();
-    idle(); controls();
+    idle();
+    // A roll drawn earlier (then closed without confirming) shows settled — no free re-draw. Otherwise
+    // start idle with just the Roll button: the player initiates every draw, the first included.
+    const existing = ctx.getRoll && ctx.getRoll();
+    if (existing) showSettled(existing); else { phase = "ready"; controls(); }
   };
 
   const stripOf = k => overlay.querySelector(`[data-reel="${k}"] .clv-strip`);
@@ -132,6 +136,29 @@ export function openCompanionRoll(hero, ctx) {
   }
 
   function buildStrip(strip, item, endIdx) { let h = ""; for (let k = 0; k <= endIdx + 1; k++) h += item(k); strip.innerHTML = h; }
+
+  // draw the current level's free roll on the player's click, then spin to reveal it
+  function doRoll() { if (ctx.firstRoll) ctx.firstRoll(); spin(); }
+
+  // place a persisted roll in its final position without animating (reopen case)
+  function showSettled(roll) {
+    const kit = ctx.kit();
+    ASSIGNABLE.forEach(k => {
+      const v = roll.stats[k] || 0, st = stripOf(k);
+      st.innerHTML = cellHtml(v); st.style.transform = "translateY(0)";
+      effOf(k).textContent = v > 0 ? `+${v * STAT_STEP[k]} ${STAT_LABEL[k]}` : "—";
+      boxOf(k).className = "clv-reel locked" + (v === 0 ? " zero" : "");
+    });
+    const s = roll.skillId ? kit.find(x => x.id === roll.skillId) : null;
+    sstrip().innerHTML = scellHtml(s); sstrip().style.transform = "translateY(0)";
+    if (s) {
+      const before = s.rank, after = Math.min(5, before + 1), cell = sstrip().firstElementChild;
+      if (cell) cell.insertAdjacentHTML("beforeend", `<span class="clv-pips">${[0,1,2,3,4].map(n => `<i class="${n < before ? "f" : n === before ? "n" : ""}"></i>`).join("")}</span>`);
+      supEl().innerHTML = `${"★".repeat(before)}<span style="color:#3a3450">${"★".repeat(5 - before)}</span> → <b>${after}★</b>`;
+    } else supEl().textContent = "maxed";
+    skillBox().className = "clv-skill locked";
+    phase = "rolled"; hintRoll(roll); controls();
+  }
 
   function spin() {
     const roll = ctx.getRoll(); if (!roll) return;
@@ -194,7 +221,7 @@ export function openCompanionRoll(hero, ctx) {
     const c = ctrlEl();
     if (phase === "ready") {
       c.innerHTML = `<button class="clv-roll" data-roll>Roll for Lv ${ctx.levelFor()}</button>`;
-      c.querySelector("[data-roll]").onclick = spin;
+      c.querySelector("[data-roll]").onclick = doRoll;
     } else if (phase === "spinning") {
       c.innerHTML = `<button class="clv-reroll" disabled>Spinning…</button><button class="clv-confirm" disabled>Confirm</button>`;
     } else if (phase === "rolled") {

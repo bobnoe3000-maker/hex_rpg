@@ -31,6 +31,12 @@ function injectCss() {
   .cp-tab:active{transform:translateY(1px)}
   .cp-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#e0b063;
     box-shadow:0 0 5px #e0b063;margin-left:5px;vertical-align:middle}
+  .cp-dot.roll{background:#8fd39a;box-shadow:0 0 5px #8fd39a}
+  .cp-rollcta{width:100%;font-family:inherit;font-weight:bold;font-size:13px;border:0;border-radius:9px;padding:12px;
+    cursor:pointer;margin-bottom:10px;color:#04140f;background:linear-gradient(#8fd39a,#3a8a5a);
+    box-shadow:0 3px 0 #1c4a30;display:flex;align-items:center;justify-content:center;gap:8px;letter-spacing:.3px}
+  .cp-rollcta:active{transform:translateY(2px);box-shadow:0 1px 0 #1c4a30}
+  .cp-rollcta small{font-weight:normal;opacity:.8}
   .cp-head{display:flex;align-items:center;gap:9px;margin-bottom:8px}
   .cp-head canvas{width:50px;height:50px;border-radius:8px;border:1px solid #6e5a2a;flex:0 0 auto}
   .cp-head .nm{flex:1;min-width:0}.cp-head b{font-size:15px;color:var(--gold)} .cp-head .lvl{color:#9ad1ff;font-size:12px}
@@ -317,10 +323,14 @@ export function openCharacter(hero, ctx) {
          </div>${paneFor(tab)}`;
     } else {
       const ct = tab === "equip" ? "equip" : "stats";   // companion tabs are stats-&-skills | equipment
+      const pend = ctx.pendRolls ? ctx.pendRolls() : 0;  // queued level-up rolls
+      const rollDot = pend > 0 ? `<span class="cp-dot roll"></span>` : "";
+      const rollCta = pend > 0
+        ? `<button class="cp-rollcta" data-openroll>${iconImg("spark", 14)} Level-Up Roll ${pend > 1 ? `<small>· ${pend} pending</small>` : ""} — Roll!</button>` : "";
       body = `<div class="cp-tabs">
-           <button class="cp-tab ${ct === "stats" ? "sel" : ""}" data-tab="stats">Stats &amp; Skills</button>
+           <button class="cp-tab ${ct === "stats" ? "sel" : ""}" data-tab="stats">Stats &amp; Skills${rollDot}</button>
            <button class="cp-tab ${ct === "equip" ? "sel" : ""}" data-tab="equip">Equipment</button>
-         </div>${ct === "equip" ? equipBlock : statsBlock + kitSection()}`;
+         </div>${ct === "equip" ? equipBlock : rollCta + statsBlock + kitSection()}`;
     }
 
     // keep the scroll position across a re-render (learning a rank shouldn't jump back to the top);
@@ -342,6 +352,7 @@ export function openCharacter(hero, ctx) {
     const panel = overlay.querySelector(".cpanel"); if (panel) panel.scrollTop = prevScroll;
     overlay.querySelector(".cp-head canvas").getContext("2d").drawImage(ctx.portrait, 0, 0, 96, 96);
     overlay.querySelector("[data-close]").onclick = () => { overlay.classList.remove("show"); ctx.close(); };
+    const orb = overlay.querySelector("[data-openroll]"); if (orb && ctx.openRoll) orb.onclick = () => ctx.openRoll();
     overlay.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => { tab = b.getAttribute("data-tab"); keepScroll = false; render(); });
     const clr = overlay.querySelector("[data-clear]"); if (clr) clr.onclick = () => { filterSlot = null; render(); };
     overlay.querySelectorAll("[data-filter]").forEach(row => row.onclick = () => {

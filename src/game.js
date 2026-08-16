@@ -569,10 +569,9 @@ function companionRollData(h){
   const skillId=pool.length ? pool[(Math.random()*pool.length)|0].id : null;
   return { stats, skillId };
 }
-/* make sure a hero with pending levels has a current (uncommitted) roll to show/reroll */
-function ensureRoll(h){ if(!h.pendRoll && (h.pendRolls||0)>0) h.pendRoll=companionRollData(h); return h.pendRoll; }
 /* apply the current roll: fold points into pts (derive handles the rest), bump the skill, grant new
-   HP, decrement the queue and pre-roll the next level. Returns pending rolls remaining. */
+   HP, and decrement the queue. The NEXT level is NOT pre-rolled — the player initiates every roll.
+   Returns pending rolls remaining. */
 function applyCompanionRoll(h){
   const roll=h.pendRoll; if(!roll) return h.pendRolls||0;
   const before=derive(h).maxhp;
@@ -584,23 +583,25 @@ function applyCompanionRoll(h){
   if(after>before) h.hp=Math.min(after, h.hp+(after-before));
   h.pendRolls=Math.max(0,(h.pendRolls||0)-1);
   h.pendRoll=null; h.rerollN=0;
-  if(h.pendRolls>0) h.pendRoll=companionRollData(h);   // queue up the next level's fresh roll
-  renderParty(); updateHud(); saveGame();
+  refreshParty(); updateHud(); saveGame();   // update HUD + the Keep/Tavern tiles (and their roll-dots)
   return h.pendRolls;
 }
 function openCompanionRollScreen(h){
-  ensureRoll(h);
   openCompanionRoll(h, {
     portrait: heroPortrait(h),
     kit: ()=>heroKit(h),
     silver: ()=>state.silver,
-    getRoll: ()=>h.pendRoll,
+    getRoll: ()=>h.pendRoll,        // null until the player clicks Roll (drawn on their click)
     levelFor: ()=> h.level - (h.pendRolls||0) + 1,
+    // the free first draw for the current level, generated ON the click (persists so closing and
+    // reopening shows the same roll — no free reroll by re-entering)
+    firstRoll: ()=>{ if(!h.pendRoll){ h.pendRoll=companionRollData(h); saveGame(); } return h.pendRoll; },
     rerollCost: ()=>companionRerollCost(h.rerollN||0),
     reroll: ()=>{ const cost=companionRerollCost(h.rerollN||0); if(state.silver<cost) return false;
       state.silver-=cost; h.rerollN=(h.rerollN||0)+1; h.pendRoll=companionRollData(h); updateHud(); saveGame(); return true; },
     confirm: ()=>applyCompanionRoll(h),
-    close: ()=>refreshParty(),
+    // return to the companion's screen (which shows the next Roll CTA if more levels wait, else the stats)
+    close: ()=>openHero(h),
   });
 }
 /* Commit a pending point allocation for the main hero. `deltas` maps stat→signed count (add/remove).
@@ -734,16 +735,18 @@ function tryForge(item){
   return res;
 }
 function openHero(h){
-  // A companion with pending level-ups opens the slot-machine roll instead of the stat panel.
-  if(h!==party[0] && (h.pendRolls||0)>0){ openCompanionRollScreen(h); return; }
   // Opening the panel shows the overlay, which the loop reads to freeze the dungeon entirely
   // (combat, movement, FX) without touching the manual Fight/Pause state — so closing the panel
-  // resumes exactly where the fight left off. No separate flag to leak.
+  // resumes exactly where the fight left off. No separate flag to leak. A companion with pending
+  // level-ups sees a "Roll" call-to-action inside their screen (the player initiates every roll).
+  const isCompanion = h!==party[0];
   openCharacter(h, {
     inventory: state.inventory,
     portrait: heroPortrait(h),
     isMain: h===party[0],
     xp: xpProgress,
+    pendRolls: isCompanion ? ()=>h.pendRolls||0 : null,     // companion level-up rolls waiting
+    openRoll: isCompanion ? ()=>openCompanionRollScreen(h) : null,
     points: h===party[0] ? ()=>unspentPoints(h) : null,   // only the main hero allocates points
     assign: h===party[0] ? d=>assignPoints(h, d) : null,
     skills: h===party[0] && CLASS_SKILLS[h.cls] ? {
