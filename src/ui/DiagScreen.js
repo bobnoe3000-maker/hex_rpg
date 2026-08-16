@@ -5,6 +5,19 @@
 
 import { ensureTownCss } from "./TownScreen.js";
 import { iconImg } from "../engine/icons.js";
+import { APP_BUILD } from "../engine/diag.js";
+
+/* Blow away any persisted/cached data and force a fresh reload. This is a zero-build ESM site, so
+   a stale browser cache (or an open tab running old code) is the usual reason a shipped change
+   doesn't show up — this clears storage/caches/service-workers and reloads with a cache-buster. */
+async function hardReset() {
+  try { localStorage.clear(); } catch {}
+  try { sessionStorage.clear(); } catch {}
+  try { if (window.caches) { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } } catch {}
+  try { if (navigator.serviceWorker) { const rs = await navigator.serviceWorker.getRegistrations(); await Promise.all(rs.map(r => r.unregister())); } } catch {}
+  const base = location.href.split("?")[0].split("#")[0];
+  location.replace(base + "?fresh=" + Date.now());   // fresh document URL → re-fetch, revalidating modules
+}
 
 let cssDone = false;
 function ensureDiagCss() {
@@ -16,6 +29,8 @@ function ensureDiagCss() {
     border-radius:9px;padding:9px 10px;white-space:pre;overflow:auto;-webkit-user-select:text;user-select:text}
   .diag-note{font-size:11px;color:#9a8fb8;font-style:italic;line-height:1.5}
   .diag-ok{color:#7ee787}
+  .diag-build{font-size:10.5px;color:#7d7196;font-family:ui-monospace,Menlo,Consolas,monospace;text-align:center;margin:-2px 0 2px}
+  .tw-btn.reset{background:linear-gradient(#3a2033,#241626);color:#e8cfe0;box-shadow:0 3px 0 #140b18}
   `;
   document.head.appendChild(s);
 }
@@ -32,15 +47,19 @@ export function openDiag(ctx) {
       <span class="tw-cur"><span id="diag-status" class="diag-note">${text.split("\n").length} lines</span></span>
     </div>
     <div class="tw-head"><h1>Diagnostics</h1></div>
+    <div class="diag-build">build ${APP_BUILD}</div>
     <p class="diag-note">If something breaks or freezes, tap <b>Copy</b> and paste the log to report it —
       it captures recent errors, game state, and the combat log.</p>
     <textarea class="diag-ta" readonly>${text.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</textarea>
     <button class="tw-btn primary" data-copy>${iconImg("check", 15)} Copy diagnostics</button>
+    <button class="tw-btn reset" data-reset style="justify-content:center">${iconImg("refresh", 15)} Clear cache &amp; reload</button>
+    <p class="diag-note" style="text-align:center">Not seeing a recent change? This wipes cached code &amp; data and reloads fresh.</p>
     <button class="tw-btn" data-back style="justify-content:center">Back to the Keep</button>
   </div>`;
 
   const status = el.querySelector("#diag-status");
   const ta = el.querySelector(".diag-ta");
+  el.querySelector("[data-reset]").onclick = () => { status.innerHTML = `<span class="diag-ok">Clearing…</span>`; hardReset(); };
   el.querySelectorAll("[data-back]").forEach(b => b.onclick = () => ctx.back());
   el.querySelector("[data-copy]").onclick = async () => {
     let ok = false;

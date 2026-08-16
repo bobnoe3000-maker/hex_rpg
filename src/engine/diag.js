@@ -4,6 +4,10 @@
    see what went wrong on a phone (no dev console), e.g. a recovered render/loop exception. */
 "use strict";
 
+/* Bump on each meaningful deploy so a stale browser cache is visible at a glance
+   (shown on the Diagnostics screen + in the export). */
+export const APP_BUILD = "2026-08-16 · party-cap-3 + tavern-replace";
+
 const BUF = [];
 const MAX = 400;
 

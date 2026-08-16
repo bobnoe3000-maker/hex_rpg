@@ -20,7 +20,7 @@ import { openTemple } from './ui/TempleScreen.js';
 import { openDiag } from './ui/DiagScreen.js';
 import { startOnboarding } from './ui/Onboarding.js';
 import { makeCompanion } from './models/units.js';
-import { installDiag, diag, diagText } from './engine/diag.js';
+import { installDiag, diag, diagText, APP_BUILD } from './engine/diag.js';
 installDiag(); // start capturing console errors / uncaught exceptions immediately
 /* Surface caught glitches instead of failing silently: a throttled toast points the player at the
    Diagnostics export so any future issue is reportable rather than invisible. */
@@ -649,6 +649,7 @@ function buildDiagnostics(){
   const logLines=[...logEl.children].slice(-40).map(d=>d.textContent).join("\n");
   return [
     `Dungeon Pals — The Emberdeep · diagnostics`,
+    `build: ${APP_BUILD}`,
     `time: ${new Date().toISOString()}`,
     ``, `== state ==`, JSON.stringify(snap,null,2),
     ``, `== event / error log ==`, diagText()||"(none)",
