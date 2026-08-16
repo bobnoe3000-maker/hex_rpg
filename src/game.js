@@ -317,6 +317,7 @@ function hurt(u,dmg,src){
         state.inventory.push(drop);
         log(`${iconImg("chest",14)} <b>${u.name}</b> drops <span class="sys">${drop.n}</span> <span style="opacity:.6">→ bag (${state.inventory.length})</span>`);
         fxText(uxS(u),uyS(u)-30,"+"+drop.n.split(" ").pop(),"#ffd166");
+        saveGame();          // persist fresh loot so a drop survives a reload mid-run
       }
       if(combatRng()<(u.boss?BAL.GEM_CHANCE_BOSS:BAL.GEM_CHANCE)){ state.gems++;
         log(`${iconImg("gem",14)} <b>${u.name}</b> drops a <span class="sys">Runic Gem</span> <span style="opacity:.6">(${state.gems})</span>`,"sys");
@@ -338,16 +339,18 @@ function xpProgress(h){
 }
 function awardXP(xp){
   const share=Math.ceil(xp/Math.max(1,party.filter(p=>p.alive).length));
+  let leveled=false;
   for(const h of party){ if(!h.alive)continue;
     h.xp+=share;
     while(h.level<HERO_MAX_LEVEL&&h.xp>=XP_NEXT[h.level]){
-      h.level++; const gr=HERO_BASES[h.cls].growth;
+      h.level++; leveled=true; const gr=HERO_BASES[h.cls].growth;
       h.atk+=gr.atk; h.def+=gr.def; h.dodge+=gr.dodge; h.crit+=gr.crit; h.maxhp+=gr.hp;
       h.hp=derive(h).maxhp;
       log(`${iconImg("spark",14)} <b>${h.name}</b> reaches <span class="sys">level ${h.level}</span>! (+${gr.hp} HP, +${gr.atk} ATK)`,"heal");
       fxRing(uxS(h),uyS(h)+6,"#7ee787"); fxText(uxS(h),uyS(h)-44,"LEVEL UP!","#7ee787",true);
     } }
   renderParty();
+  if(leveled) saveGame();   // persist a level-up so hard-won progress survives a reload mid-run
 }
 function act(u){
   if(!u.alive)return;
