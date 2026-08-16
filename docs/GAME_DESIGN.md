@@ -141,8 +141,9 @@ Every item is composed of **Prefix + Material + Gear Type + Upgrade Level**, and
 ### 6.1 The three component tables (each grants exactly one stat) ✅ (implemented)
 > Live in `data/items/{prefixes,materials,gearTypes}.js`; `systems/LootGenerator.js` composes them into drops. Names read `[Prefix] [Material] [Type]` (e.g. *Sturdy Meteoric Wand*), class-restricted, colour-graded by the rarest component. The `lifesteal` proc is wired; `+N` upgrade levels and more procs are still ahead.
 
-- **Gear Type** — defines the **slot**, the **class** it serves, and one stat bonus.
-  - *Weapon types:* sword, dagger, mace (fighter); wand, staff, orb (mage); bow, blades (rogue)… 🔶 extend.
+- **Gear Type** — defines the **slot**, the **class** it serves, one stat bonus, and (weapons) a **range**.
+  - *Weapon types:* sword, greatsword (knight, melee); wand, staff (mage, **ranged**); mace, scepter (cleric, melee); dagger, kris (rogue, melee), shortbow (rogue, **ranged**).
+  - **Range is weapon-driven** (`StatEngine.derive`): equip a **ranged** weapon and the hero attacks/animates at range (projectile FX); a **melee** weapon (or an unarmed hero) fights up close. Unarmed heroes fall back to their class's innate range, so a fresh mage still casts at range. A rogue is melee with daggers but turns **ranged the moment they equip a shortbow**.
   - *Wearable types:* helm, chest, gloves, boots, cloak, ring, amulet, shield.
 - **Material** — defines **base stats**; carries one stat bonus and may carry a **drawback**.
   - *Weapon materials:* iron, steel, meteoric, emberglass… (e.g. *meteoric*: +ATK, −ASPD). **Better materials have a lower drop rate.**

@@ -45,6 +45,7 @@ export function generate(rng, opts = {}) {
 
   const name = [prefix.name, material.name, type.name].filter(Boolean).join(" ");
   const descParts = STAT_ORDER.filter(s => stats[s] !== undefined).map(s => fmtVal(s, stats[s]));
+  if (type.rng > 1) descParts.push("Ranged");
   if (prefix.proc) descParts.push(cap(prefix.proc.kind));
 
   // cosmetic grade from the rarest component (colour only — not a mechanical tier)
@@ -57,6 +58,7 @@ export function generate(rng, opts = {}) {
     d: descParts.join(", "),
     parts: { prefix: prefix.id, material: material.id, type: type.id },
   };
+  if (type.rng) item.rng = type.rng;   // weapons carry their range (drives melee vs ranged combat)
   for (const s in stats) item[s] = stats[s];
   return item;
 }

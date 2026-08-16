@@ -26,7 +26,9 @@ export function derive(u) {
     dodge: Math.max(0,   u.dodge + gearSum(u, "dodge")),
     crit:  Math.max(0,   u.crit  + gearSum(u, "crit")),
     aspd:  Math.max(0.1, u.aspd  + gearSum(u, "aspd")),
-    rng:   u.rng   || 1,
+    // range comes from the equipped weapon (ranged weapon → ranged); unarmed falls back to the
+    // unit's innate range (mages still cast at range; enemies use their base rng).
+    rng:   (u.gear && u.gear.weapon && u.gear.weapon.rng) || u.rng || 1,
     level: u.level || 1,
   };
 }

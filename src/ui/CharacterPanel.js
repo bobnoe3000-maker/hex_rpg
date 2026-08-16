@@ -107,6 +107,7 @@ export function openCharacter(hero, ctx) {
         <div class="hp"><span class="k">HP</span><span class="v">${hero.hp} / ${D.maxhp}</span></div>
         ${STAT_ROWS.map(([k, key]) => statCell(k, key)).join("")}
         <div><span class="k">Speed</span><span class="v">${D.aspd.toFixed(2)}</span></div>
+        <div><span class="k">Range</span><span class="v">${D.rng > 1 ? "Ranged" : "Melee"}</span></div>
       </div>
       <div class="cp-sec"><span>Equipped</span><span class="hint">tap a slot to filter the bag</span></div>
       ${SLOTS.map(slotRow).join("")}

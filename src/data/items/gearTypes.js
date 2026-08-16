@@ -7,15 +7,17 @@
 
 export const GEAR_TYPES = [
   // --- weapons (class-specific) ---
-  { id: "sword",      name: "Sword",      slot: "weapon",  use: "knight", stat: "atk",   val: 3,  w: 6, mat: "weapon" },
-  { id: "greatsword", name: "Greatsword", slot: "weapon",  use: "knight", stat: "atk",   val: 5,  w: 3, mat: "weapon" },
-  { id: "wand",       name: "Wand",       slot: "weapon",  use: "mage",   stat: "atk",   val: 3,  w: 6, mat: "weapon" },
-  { id: "staff",      name: "Staff",      slot: "weapon",  use: "mage",   stat: "atk",   val: 5,  w: 3, mat: "weapon" },
-  { id: "mace",       name: "Mace",       slot: "weapon",  use: "cleric", stat: "atk",   val: 3,  w: 6, mat: "weapon" },
-  { id: "scepter",    name: "Scepter",    slot: "weapon",  use: "cleric", stat: "hp",    val: 8,  w: 4, mat: "weapon" },
-  { id: "dagger",     name: "Dagger",     slot: "weapon",  use: "rogue",  stat: "crit",  val: 5,  w: 6, mat: "weapon" },
-  { id: "kris",       name: "Kris",       slot: "weapon",  use: "rogue",  stat: "atk",   val: 4,  w: 4, mat: "weapon" },
-  { id: "shortbow",   name: "Shortbow",   slot: "weapon",  use: "rogue",  stat: "dodge", val: 5,  w: 3, mat: "weapon" },
+  // weapons carry `rng`: >1 = ranged, 1 = melee. A hero's effective range comes from the
+  // equipped weapon (StatEngine.derive), falling back to the class's innate range when unarmed.
+  { id: "sword",      name: "Sword",      slot: "weapon",  use: "knight", stat: "atk",   val: 3,  w: 6, mat: "weapon", rng: 1 },
+  { id: "greatsword", name: "Greatsword", slot: "weapon",  use: "knight", stat: "atk",   val: 5,  w: 3, mat: "weapon", rng: 1 },
+  { id: "wand",       name: "Wand",       slot: "weapon",  use: "mage",   stat: "atk",   val: 3,  w: 6, mat: "weapon", rng: 4 },
+  { id: "staff",      name: "Staff",      slot: "weapon",  use: "mage",   stat: "atk",   val: 5,  w: 3, mat: "weapon", rng: 5 },
+  { id: "mace",       name: "Mace",       slot: "weapon",  use: "cleric", stat: "atk",   val: 3,  w: 6, mat: "weapon", rng: 1 },
+  { id: "scepter",    name: "Scepter",    slot: "weapon",  use: "cleric", stat: "hp",    val: 8,  w: 4, mat: "weapon", rng: 1 },
+  { id: "dagger",     name: "Dagger",     slot: "weapon",  use: "rogue",  stat: "crit",  val: 5,  w: 6, mat: "weapon", rng: 1 },
+  { id: "kris",       name: "Kris",       slot: "weapon",  use: "rogue",  stat: "atk",   val: 4,  w: 4, mat: "weapon", rng: 1 },
+  { id: "shortbow",   name: "Shortbow",   slot: "weapon",  use: "rogue",  stat: "dodge", val: 5,  w: 3, mat: "weapon", rng: 4 },
   // --- offhand ---
   { id: "shield",     name: "Shield",     slot: "offhand", use: "knight", stat: "def",   val: 7,  w: 4, mat: "weapon" },
   { id: "orb",        name: "Orb",        slot: "offhand", use: "mage",   stat: "crit",  val: 5,  w: 4, mat: "wear" },

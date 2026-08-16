@@ -269,7 +269,7 @@ function attack(att,def){
       fxText(uxS(att),uyS(att)-30,"+"+res.heal,"#7ee787"); if(att.team===0) renderParty(); }
   };
   if(derive(att).rng>1){
-    const col=att.cls==="mage"?"#b48bff":(att.fig==="kobold"?"#c8ccd6":"#7ee787");
+    const col=att.cls==="mage"?"#b48bff":att.cls==="rogue"?"#d8c088":(att.fig==="kobold"?"#c8ccd6":"#7ee787");
     fxBolt(uxS(att),uyS(att)-18,uxS(def),uyS(def)-14,col,deliver);
   } else { fxSlash(uxS(def),uyS(def)-14,res.crit); deliver(); }
 }
