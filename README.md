@@ -22,6 +22,8 @@ automatically (`core` has no dependencies, everything imports from it).
 - `src/ui/ShopScreen.js`        — buy / sell gear, reroll stock, trade silver for gems
 - `src/ui/TavernScreen.js`      — hire randomly-generated companions (party of 4); recruits scale to your level, fee scales with recruit level
 - `src/ui/TempleScreen.js`      — resurrect fallen companions for a level-scaled fee (main hero revives free at the Keep)
+- `src/ui/DiagScreen.js`        — Keep's diagnostics/log export (state + captured errors + combat log, copy to clipboard)
+- `src/engine/diag.js`          — diagnostics ring buffer (captures console errors, uncaught exceptions, tagged events)
 - `src/ui/itemView.js`          — shared item-name / grade rendering
 - `src/data/items/`          — `prefixes.js`, `materials.js`, `gearTypes.js` (drop-weighted component tables)
 - `src/ui/CharacterPanel.js`  — tap-a-hero modal: stats + gear slots + bag (equip/unequip)

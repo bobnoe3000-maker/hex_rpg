@@ -17,8 +17,11 @@ import { openTown } from './ui/TownScreen.js';
 import { openShop } from './ui/ShopScreen.js';
 import { openTavern } from './ui/TavernScreen.js';
 import { openTemple } from './ui/TempleScreen.js';
+import { openDiag } from './ui/DiagScreen.js';
 import { startOnboarding } from './ui/Onboarding.js';
 import { makeCompanion } from './models/units.js';
+import { installDiag, diag, diagText } from './engine/diag.js';
+installDiag(); // start capturing console errors / uncaught exceptions immediately
 /* ============ DP ENGINE :: game.js — endless auto-battle loop ============ */
 "use strict";
 const cvG=document.getElementById("cv"), G=cvG.getContext("2d");
@@ -355,17 +358,21 @@ function enterTown(fromWipe=false){
   if(fromWipe){ state.phase="idle"; loadRoom(); }
   renderParty();
   openTownScreen();
+  diag("scene", `keep${fromWipe?" · wipe":""} · party ${party.filter(h=>h.alive).length}/${party.length}`);
 }
 function enterDungeon(){
   state.scene="dungeon"; townEl.classList.remove("show");
   if(state.phase==="idle") seedBattle();
   placeParty();               // pull in any pals hired or resurrected since the last delve
   state.phase="fight"; syncButtons();
+  diag("scene", `descend · room ${state.roomIdx} · party ${party.filter(h=>h.alive).length}`);
 }
 function openTownScreen(){
   openTown({ silver:()=>state.silver, gems:()=>state.gems, party, portrait:h=>heroPortrait(h),
-    openHero, openShop:openShopScreen, openTavern:openTavernScreen, openTemple:openTempleScreen, enterDungeon });
+    openHero, openShop:openShopScreen, openTavern:openTavernScreen, openTemple:openTempleScreen,
+    openDiag:openDiagScreen, enterDungeon });
 }
+function openDiagScreen(){ openDiag({ text:buildDiagnostics, back:openTownScreen }); }
 /* ---------- tavern: hire companions (scale to the main hero's level) ---------- */
 const mainLevel=()=>party[0]?party[0].level:1;
 const hireCostFor=h=>BAL.TAVERN.HIRE_BASE + h.level*BAL.TAVERN.HIRE_PER_LEVEL;
@@ -562,8 +569,31 @@ function loop(now){
         u.moveT=Math.min(1,u.moveT+dt*6.5); }
     }
     render(frozen?0:dt);
-  }catch(err){ if(!loop._warned){ loop._warned=true; console.error("DP loop frame error (recovered):",err); } }
+  }catch(err){
+    // Recovered per-frame error: log the first few (with a state snapshot) to the diagnostics
+    // buffer so it can be exported from the Keep, but never spam or break the frame chain.
+    loop._errs=(loop._errs||0)+1;
+    if(loop._errs<=3){ console.error("DP loop frame error (recovered):",err);
+      diag("state", JSON.stringify({scene:state.scene,phase:state.phase,frozen:uiFrozen,
+        units:state.units.length,roomIdx:state.roomIdx,rally:state.rally,t:+state.t.toFixed(1)})); }
+  }
   requestAnimationFrame(loop);
+}
+/* assemble a copy-pasteable diagnostics export: live state + captured errors + combat log */
+function buildDiagnostics(){
+  const snap={ scene:state.scene, phase:state.phase, panelShown:panelShown(), frozen:uiFrozen,
+    speed:state.speed, roomIdx:state.roomIdx, rally:state.rally, silver:state.silver, gems:state.gems,
+    units:state.units.length, inventory:state.inventory.length, recruits:state.recruits.length,
+    respawnAt:state.respawnAt, wipeAt:state.wipeAt, loopErrs:loop._errs||0,
+    party:party.map(h=>({name:h.name,cls:h.cls,lv:h.level,hp:h.hp,alive:h.alive})) };
+  const logLines=[...logEl.children].slice(-40).map(d=>d.textContent).join("\n");
+  return [
+    `Dungeon Pals — The Emberdeep · diagnostics`,
+    `time: ${new Date().toISOString()}`,
+    ``, `== state ==`, JSON.stringify(snap,null,2),
+    ``, `== event / error log ==`, diagText()||"(none)",
+    ``, `== combat log (recent) ==`, logLines||"(empty)",
+  ].join("\n");
 }
 /* boot: splash → login → create the main character, then open the Keep */
 startOnboarding(hero=>{

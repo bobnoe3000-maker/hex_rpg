@@ -48,6 +48,9 @@ export function ensureTownCss() {
   .tw-btn.primary{background:linear-gradient(#e0b063,#a8722a);color:#241606;box-shadow:0 3px 0 #6e4a14;justify-content:center;text-align:center}
   .tw-btn:active{transform:translateY(2px)}
   .tw-btn[disabled]{opacity:.45;pointer-events:none}
+  .tw-foot{text-align:center;margin-top:4px}
+  .tw-foot span{font-size:11px;color:#6f6486;cursor:pointer;letter-spacing:.3px}
+  .tw-foot span:active{color:#9ad1ff}
   /* shop (shares the #town surface) */
   .shop-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px}
   .shop-back{cursor:pointer;color:#9ad1ff;font-size:13px}
@@ -98,6 +101,7 @@ export function openTown(ctx) {
     <div class="tw-sec">Party — tap to manage gear</div>
     <div class="tw-party">${ctx.party.map(card).join("")}</div>
     <button class="tw-btn primary" data-enter>${iconImg("sword",16)} Descend into the Emberdeep</button>
+    <div class="tw-foot"><span data-diag>Diagnostics &amp; log export ›</span></div>
   </div>`;
 
   ctx.party.forEach((h, i) => {
@@ -109,4 +113,5 @@ export function openTown(ctx) {
   el.querySelector("[data-temple]").onclick = () => ctx.openTemple();
   el.querySelector("[data-shop]").onclick = () => ctx.openShop();
   el.querySelector("[data-enter]").onclick = () => ctx.enterDungeon();
+  const dg = el.querySelector("[data-diag]"); if (dg && ctx.openDiag) dg.onclick = () => ctx.openDiag();
 }
