@@ -35,7 +35,7 @@ automatically (`core` has no dependencies, everything imports from it).
 - `src/engine/creatures.js` — full-body procedural figures (NPCs + heroes); `buildFigure(kind, seed)`
 - `src/engine/tiles.js`     — floor/feature painters + extruded 2.5D walls & doorways
 - `src/engine/fx.js`        — combat effects (slash / bolt / dissolve / ring / text …)
-- `src/engine/dungeon.js`   — `buildGameRoom(seed, spec)` → `{base, parts, blocked, door}`; room graph via `ROOMS_SPEC`
+- `src/engine/dungeon.js`   — `buildGameRoom(seed, spec)` → open-floor island over the void (5 shapes), guaranteed-connected walkable set, portal exits → `{base, parts, blocked, exits, entry, floorCells}`; up to 7 rooms via `ROOMS_SPEC`
 - `src/engine/combat.js`    — content layer: item pool, loot rolls, XP curve, room specs
 
 ## Tests

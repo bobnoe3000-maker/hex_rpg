@@ -240,6 +240,79 @@ function pDoor(g,x,y,tone,type,label){
   doorLabel(g,x,y,label,y<OY+T); // above for the north wall, below for the south
 }
 
+/* ================= new decorative tiles (walkable — never block a cell) ================= */
+function pEmber(g,x,y,tone){ pFloor(g,x,y,tone);
+  for(let j=0;j<2;j++){ let px=x+rf(8,34),py=y+rf(6,16);
+    g.strokeStyle="rgba(224,115,58,.75)"; g.lineWidth=2; g.lineCap="round"; g.beginPath();
+    g.moveTo(px,py); for(let i=0;i<3;i++){ px+=rf(-8,8); py+=rf(4,10); g.lineTo(px,py); } g.stroke(); }
+  const fx=x+T/2, fy=y+T/2;
+  part(0,0,{kind:"pulse",base:.4,amp:.35,speed:rf(2,4),phase:rf(0,6)},pg=>{
+    const rg=pg.createRadialGradient(fx,fy,2,fx,fy,20);
+    rg.addColorStop(0,"rgba(255,150,80,.32)"); rg.addColorStop(1,"rgba(255,150,80,0)");
+    pg.fillStyle=rg; pg.fillRect(x-6,y-6,T+12,T+12); });
+}
+function pRune(g,x,y,tone){ pFloor(g,x,y,tone);
+  const cx=x+T/2, cy=y+T/2;
+  g.strokeStyle="rgba(121,199,230,.7)"; g.lineWidth=1.6;
+  g.beginPath(); g.arc(cx,cy,T*.22,0,7); g.stroke();
+  g.beginPath(); g.moveTo(cx,cy-T*.22); g.lineTo(cx+T*.18,cy+T*.13); g.lineTo(cx-T*.18,cy+T*.13); g.closePath(); g.stroke();
+  part(0,0,{kind:"pulse",base:.4,amp:.35,speed:rf(1.5,3),phase:rf(0,6)},pg=>{
+    const rg=pg.createRadialGradient(cx,cy,2,cx,cy,17);
+    rg.addColorStop(0,"rgba(121,199,230,.3)"); rg.addColorStop(1,"rgba(121,199,230,0)");
+    pg.fillStyle=rg; pg.fillRect(x-4,y-4,T+8,T+8); });
+}
+function pBones(g,x,y,tone){ pFloor(g,x,y,tone);
+  g.lineCap="round";
+  for(let i=0;i<3;i++){ const bx=x+rf(9,35),by=y+rf(9,35),a=rf(0,6.28),l=T*.15;
+    g.strokeStyle="rgba(203,184,154,.8)"; g.lineWidth=2.2;
+    g.beginPath(); g.moveTo(bx-Math.cos(a)*l,by-Math.sin(a)*l); g.lineTo(bx+Math.cos(a)*l,by+Math.sin(a)*l); g.stroke();
+    ell(g,bx-Math.cos(a)*l,by-Math.sin(a)*l,1.5,1.5,"#cbb89a");
+    ell(g,bx+Math.cos(a)*l,by+Math.sin(a)*l,1.5,1.5,"#cbb89a"); }
+}
+function pRubble(g,x,y,tone){ pFloor(g,x,y,tone);
+  for(let i=0;i<6;i++){ const rx=x+rf(6,38),ry=y+rf(6,38);
+    ell(g,rx,ry,rf(2,3.4),rf(1.6,2.6),i%2?tone[0]:tone[2],rf(-.4,.4));
+    inkPath(g,gg=>gg.ellipse(rx,ry,rf(2,3.4),rf(1.6,2.6),0,0,7),.7,"rgba(10,8,14,.4)"); }
+}
+function pMushroom(g,x,y,tone){ pFloor(g,x,y,tone);
+  for(let i=0;i<3;i++){ const bx=x+rf(9,35),by=y+rf(16,36);
+    g.strokeStyle="rgba(220,210,225,.7)"; g.lineWidth=1.8;
+    g.beginPath(); g.moveTo(bx,by); g.lineTo(bx,by-T*.13); g.stroke();
+    g.fillStyle=["#b48bff","#7ae0ff","#e08a5a"][i%3];
+    g.beginPath(); g.ellipse(bx,by-T*.13,T*.09,T*.055,0,Math.PI,0); g.fill(); }
+}
+function pAsh(g,x,y,tone){ pFloor(g,x,y,tone); g.globalAlpha=.5;
+  for(let i=0;i<24;i++){ g.fillStyle=chance(.5)?"#3a3640":"#4a4650"; g.fillRect(x+rf(2,T-3),y+rf(2,T-3),1.4,1.4); }
+  g.globalAlpha=1;
+}
+
+/* ================= portal (replaces the north door — glows where floor meets the void) ============ */
+const PKIND={ onward:{c:"#e8c06a",g:"255,209,102"}, shrine:{c:"#a6e0f5",g:"121,199,230"},
+  vault:{c:"#e8c06a",g:"216,162,74"}, boss:{c:"#ff9a5c",g:"224,115,58"}, stair:{c:"#8fe6a0",g:"126,231,135"} };
+function pPortal(g,x,y,dir,kind,label){
+  const K=PKIND[kind]||PKIND.onward;
+  let ox=x+T/2, oy=y+T/2;
+  if(dir==="N")oy=y-1; else if(dir==="S")oy=y+T+1; else if(dir==="W")ox=x-1; else if(dir==="E")ox=x+T+1;
+  // pulsing glow in the void beyond the edge (animated part layer)
+  part(0,0,{kind:"pulse",base:.42,amp:.28,speed:rf(1.2,2.2),phase:rf(0,6)},pg=>{
+    const rg=pg.createRadialGradient(ox,oy,2,ox,oy,T*0.95);
+    rg.addColorStop(0,"rgba("+K.g+",.5)"); rg.addColorStop(1,"rgba("+K.g+",0)");
+    pg.fillStyle=rg; pg.fillRect(ox-T,oy-T,T*2,T*2); });
+  // the arch itself, baked into the base
+  g.save(); g.translate(ox,oy); if(dir==="W"||dir==="E") g.rotate(Math.PI/2);
+  const w=T*.32, h=T*.42;
+  const arc=gg=>{ gg.beginPath(); gg.moveTo(-w,h*.5); gg.lineTo(-w,-h*.1); gg.arc(0,-h*.1,w,Math.PI,0,false); gg.lineTo(w,h*.5); };
+  const ig=g.createLinearGradient(0,-h,0,h*.5); ig.addColorStop(0,"rgba("+K.g+",.5)"); ig.addColorStop(1,"rgba("+K.g+",0)");
+  g.fillStyle=ig; arc(g); g.closePath(); g.fill();
+  g.strokeStyle=K.c; g.lineWidth=2.4; g.lineCap="round"; arc(g); g.stroke();
+  g.restore();
+  if(label){ g.font="italic 9px Georgia"; g.textAlign="center";
+    const ly = dir==="N"? oy-6 : dir==="S"? oy+11 : oy-T*.5;
+    g.fillStyle="rgba(6,4,10,.85)"; g.fillText(label,ox+1,ly+1);
+    g.fillStyle=K.c; g.fillText(label,ox,ly); }
+}
+
 export {
-  STONE, crackLine, pFloor, pCracked, pMoss, pGrate, pPuddle, pPit, pFirePit, pColumn, pWallCap, pWallFace, pWall, doorLabel, pDoor
+  STONE, crackLine, pFloor, pCracked, pMoss, pGrate, pPuddle, pPit, pFirePit, pColumn, pWallCap, pWallFace, pWall, doorLabel, pDoor,
+  pEmber, pRune, pBones, pRubble, pMushroom, pAsh, pPortal
 };

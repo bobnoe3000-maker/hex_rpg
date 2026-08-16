@@ -216,30 +216,39 @@ function uyS(u){ const k=(u.moveT===undefined)?1:ease(u.moveT);
    (unique start columns, nudged only off walls/foes), so hires and resurrections just work — a
    living party member is a combatant by definition; there's no roster/battlefield list to sync. */
 function placeHeroes(){
-  // Formation centered on the MAIN hero (party[0], front-center) with companions flanking.
-  // Placed by party index so the main keeps the center slot even if a companion has fallen.
-  const prow=GROWS-2, ctr=4;
-  const slots=[[prow,ctr],[prow,ctr-2],[prow,ctr+2]];   // main center-front, two flanks
-  party.forEach((h,i)=>{ if(!h.alive) return; const s=slots[i%slots.length]; h.r=s[0]; h.c=s[1]; }); // assign first
+  // Heroes form up on the room's entry platform (bottom-centre island of floor). The MAIN hero
+  // takes the centre slot; companions flank. Any collision/blocked cell is nudged to a free floor
+  // cell, so hires and resurrections just work — a living party member is a combatant by definition.
+  const entry=(state.room&&state.room.entry&&state.room.entry.length)?state.room.entry:[[GROWS-2,4]];
+  const mid=entry[Math.floor(entry.length/2)];
+  const slots=[mid, entry[0], entry[entry.length-1], entry[1]||entry[0], entry[entry.length-2]||entry[0]];
+  party.forEach((h,i)=>{ if(!h.alive) return; const s=slots[Math.min(i,slots.length-1)]; h.r=s[0]; h.c=s[1]; });
+  const cells=(state.room&&state.room.floorCells)||[];
   party.forEach((h,i)=>{ if(!h.alive) return;
-    let guard=0; while((isBlocked(state.room,h.r,h.c)||occupied(h.r,h.c,h))&&guard++<12){
-      h.r--; if(h.r<GROWS-3)h.r=GROWS-2, h.c=1+((h.c)%(GCOLS-2)); }
+    let guard=0;
+    while((isBlocked(state.room,h.r,h.c)||occupied(h.r,h.c,h))&&guard++<cells.length+2){
+      const f=cells[(guard*7+i*13)%(cells.length||1)]; if(f){ h.r=f[0]; h.c=f[1]; } else break;
+    }
     h.rr=h.r; h.cc=h.c; h.moveT=1; h.next=state.t+0.5+0.2*i; figOf(h);
   });
 }
-/* a random open (non-blocked, unoccupied) cell within a row band */
-function randCell(minR,maxR){
-  let r,c,guard=0;
-  do{ r=minR+Math.floor(combatRng()*(maxR-minR+1)); c=1+Math.floor(combatRng()*(GCOLS-2)); }
-  while((isBlocked(state.room,r,c)||occupied(r,c))&&guard++<40);
+/* a random reachable floor cell (not blocked, not occupied). `pred(r,c)` optionally filters. */
+function randFloor(pred){
+  const cells=((state.room&&state.room.floorCells)||[])
+    .filter(([r,c])=> !isBlocked(state.room,r,c) && !occupied(r,c) && (!pred||pred(r,c)));
+  if(!cells.length) return null;
+  const [r,c]=cells[Math.floor(combatRng()*cells.length)];
   return {r,c};
 }
 function spawnWave(){
   const spec=ROOMS_SPEC[state.roomIdx];
-  // NPCs appear at random spots across the upper room (kept off the hero line at the bottom)
+  // NPCs appear on random reachable floor cells, kept off the hero line at the bottom when possible.
+  // Enemy level scales with how deep you are, so the badge on each tile means something.
   spec.spawn().forEach((f,i)=>{
-    const cell=randCell(1,GROWS-4);
+    const cell=randFloor((r,c)=>r<=GROWS-4) || randFloor();
+    if(!cell) return;
     f.r=cell.r; f.c=cell.c; f.rr=f.r; f.cc=f.c; f.moveT=1; f.next=state.t+0.7+0.2*i;
+    f.level=state.roomIdx+1+(f.boss?1:0);
     state.foes.push(f); figOf(f); });
 }
 function loadRoom(){
@@ -601,7 +610,7 @@ cvG.addEventListener("click", e=>{
   const rect=cvG.getBoundingClientRect();
   const px=(e.clientX-rect.left)/rect.width*CW, py=(e.clientY-rect.top)/rect.height*CH;
   const c=Math.floor((px-cx0g(0))/T), r=Math.floor((py-cy0g(0))/T);
-  if(r<1||r>GROWS-2||c<1||c>GCOLS-2||isBlocked(state.room,r,c)) return;
+  if(r<0||c<0||r>=GROWS||c>=GCOLS||isBlocked(state.room,r,c)) return;  // any reachable floor cell
   state.rally={r,c};
 });
 
@@ -629,6 +638,12 @@ function drawUnit(u){
   // crown above the main hero so the leader reads at a glance
   if(u.team===0 && u===party[0]){ const cw=Math.max(13,Math.round(S*0.42));
     G.drawImage(iconCanvas("crown",cw*2), px-cw/2, py-S/2-cw*0.7, cw, cw); }
+  // enemy level badge at the tile's bottom-right corner
+  if(u.team===1 && u.level){ const bs=Math.max(12,Math.round(S*0.32)), bx=px+S*0.4, by=py+S*0.38;
+    G.fillStyle="#2a0d0d"; rrp(G,bx-bs/2,by-bs/2,bs,bs,bs*0.32); G.fill();
+    G.strokeStyle="#ff9a5c"; G.lineWidth=1.3; rrp(G,bx-bs/2,by-bs/2,bs,bs,bs*0.32); G.stroke();
+    G.fillStyle="#ffd8c0"; G.font="bold "+Math.round(bs*0.62)+"px monospace"; G.textAlign="center"; G.textBaseline="middle";
+    G.fillText(u.level,bx,by+0.5); G.textBaseline="alphabetic"; }
   // HP capsule under the tile (same schema for heroes and enemies now)
   const mh=derive(u).maxhp, hw=S*0.7, hh=Math.max(3.5,S*0.085);
   const hx=px-hw/2, hy=py+S*0.5+2;
@@ -661,6 +676,28 @@ function drawFlag(cx,cy){
   G.strokeStyle="#6e4a14"; G.lineWidth=1; G.stroke();               // pennant
   G.restore();
 }
+/* Rune Compass — a corner dial of the descent: current room glows, cleared rooms fill, the boss
+   room carries a ring. Overlays the top-right void margin so it never covers the fight. */
+function drawCompass(){
+  if(!state.room) return;
+  const n=ROOMS_SPEC.length, cur=state.roomIdx;
+  const pw=Math.min(CW-16, 52+(n-1)*20), ph=40, x=CW-pw-8, y=8;
+  G.fillStyle="rgba(12,9,22,.82)"; rrp(G,x,y,pw,ph,9); G.fill();
+  G.strokeStyle="rgba(216,162,74,.45)"; G.lineWidth=1.2; rrp(G,x,y,pw,ph,9); G.stroke();
+  G.fillStyle="#d8a24a"; G.font="bold 8px monospace"; G.textAlign="left"; G.textBaseline="alphabetic";
+  G.fillText("ROOM "+(cur+1)+" / "+n, x+9, y+13);
+  const nx0=x+13, span=(pw-26), ny=y+27, X=i=> nx0+span*(n>1?i/(n-1):0);
+  for(let i=0;i<n-1;i++){ G.strokeStyle= i<cur?"rgba(216,162,74,.6)":"rgba(120,110,150,.3)"; G.lineWidth=2;
+    G.beginPath(); G.moveTo(X(i),ny); G.lineTo(X(i+1),ny); G.stroke(); }
+  for(let i=0;i<n;i++){ const nx=X(i), isCur=i===cur, past=i<cur, boss=i===n-1;
+    if(isCur){ const pl=1+.25*Math.sin(state.t*3); const rg=G.createRadialGradient(nx,ny,0,nx,ny,8*pl);
+      rg.addColorStop(0,"rgba(216,162,74,.6)"); rg.addColorStop(1,"rgba(216,162,74,0)"); G.fillStyle=rg;
+      G.beginPath(); G.arc(nx,ny,8*pl,0,7); G.fill(); }
+    G.fillStyle= isCur?"#f0d48a": past?"#d8a24a": boss?"#7a3f2c":"#2f2740";
+    G.beginPath(); G.arc(nx,ny, boss?4.2:isCur?4:3,0,7); G.fill();
+    if(boss){ G.strokeStyle=isCur?"#ff9a5c":"#8a4a34"; G.lineWidth=1.2; G.beginPath(); G.arc(nx,ny,6,0,7); G.stroke(); } }
+  G.textBaseline="alphabetic";
+}
 function render(dt){
   G.setTransform(2,0,0,2,0,0);
   G.drawImage(state.room.base,0,0,CW,CH);
@@ -670,6 +707,7 @@ function render(dt){
   const sorted=[...party,...state.foes].sort((a,b)=>a.r-b.r||a.c-b.c);
   for(const u of sorted) drawUnit(u);
   fxUpdateDraw(G,dt);
+  drawCompass();
   if(state.phase==="idle"){
     G.fillStyle="#e8dcc4"; G.font="bold 13px monospace"; G.textAlign="center";
     G.fillText("Press Fight! to begin",CW/2,CH-8);

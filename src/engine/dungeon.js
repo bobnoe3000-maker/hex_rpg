@@ -1,67 +1,176 @@
-import { mulberry32, R, ri, pick, maskToSnap, applyMask, T, WH, OX, OY, CW, CH, PARTS, newLayer, gradeLayer, seedRng, setParts, setGeom } from './core.js';
-import { STONE, pFloor, pCracked, pMoss, pGrate, pPuddle, pPit, pFirePit, pColumn, pWall, pDoor } from './tiles.js';
-/* ============ DP ENGINE :: dungeon.js — room generation + graph ============ */
+import { mulberry32, R, ri, rf, pick, chance, maskToSnap, applyMask, T, WH, OX, OY, CW, CH, PARTS, newLayer, gradeLayer, seedRng, setParts, setGeom } from './core.js';
+import { STONE, pFloor, pCracked, pMoss, pGrate, pPuddle, pPit, pFirePit, pColumn,
+         pEmber, pRune, pBones, pRubble, pMushroom, pAsh, pPortal } from './tiles.js';
+/* ============ DP ENGINE :: dungeon.js — open-floor rooms (no walls; islands over the void) ============ */
+/* A room is now an irregular island of stone floating in the void. Its shape comes from one of five
+   generators; the walkable area is guaranteed fully connected (no unreachable tiles); exits are
+   glowing portals where the floor meets the dark. Blocking features (pit/column/firepit) are only
+   ever placed where they can't strand a tile. */
 "use strict";
+
 const GCOLS=8, GROWS=11;
 function setRoomGeom(){ const T=44, WH=24, OX=12, OY=WH+30, CW=GCOLS*T+OX*2, CH=GROWS*T+OY+26; setGeom(T,WH,OX,OY,CW,CH); }
-function buildGameRoom(seed,spec){
+const cx0g=c=>OX+c*T, cy0g=r=>OY+r*T;
+
+/* ---- floor-shape generators: is (r,c) part of the island? rnd(r,c)→[0,1) is stable per cell ---- */
+const SHAPES = {
+  full: (r,c,rnd,g) => { const edge = r===0||c===0||r===g.rows-1||c===g.cols-1;
+    return edge ? rnd(r,c) > .38 : rnd(r,c) > .05; },
+  ring: (r,c,rnd,g) => { const ring = Math.min(r, g.rows-1-r, c, g.cols-1-c);
+    if(ring>=2) return true;                              // solid core
+    return Math.sin(r*1.3)*Math.cos(c*1.5) + rnd(r,c)*.8 > .35; },   // crumbling outer ring
+  causeway: (r,c,rnd,g) => { const cx=(g.cols-1)/2;
+    const top = r<=3 && Math.abs(c-cx)<=2.4;
+    const bot = r>=g.rows-4 && Math.abs(c-cx)<=2.4;
+    const bridge = Math.abs(c-cx)<=1 && r>2 && r<g.rows-3;   // two platforms joined over the dark
+    return top||bot||bridge; },
+  cavern: (r,c,rnd,g) => { const cx=(g.cols-1)/2, cy=(g.rows-1)/2, rx=g.cols*.5, ry=g.rows*.5;
+    const wob = .18*Math.sin(c*1.1+g.phase) + .15*Math.cos(r*.7-g.phase) + .1*Math.sin((r+c)*.6);
+    return ((c-cx)/rx)**2 + ((r-cy)/ry)**2 < .8 + wob; },
+  cross: (r,c,rnd,g) => { const cx=(g.cols-1)/2, cy=(g.rows-1)/2;
+    return Math.abs(c-cx)<=1.5 || Math.abs(r-cy)<=2; },
+};
+
+const NEI = [[1,0],[-1,0],[0,1],[0,-1]];
+/* reachable floor cells from `start`, walking 4-neighbours, skipping any cell in `block` */
+function reachFrom(floor, start, block){
+  const seen=new Set([start]), q=[start];
+  while(q.length){ const [r,c]=q.pop().split(",").map(Number);
+    for(const [dr,dc] of NEI){ const k=(r+dr)+","+(c+dc);
+      if(floor.has(k) && !seen.has(k) && !(block&&block.has(k))){ seen.add(k); q.push(k); } } }
+  return seen;
+}
+
+const EXIT_LABEL = { onward:"Onward", shrine:"Shrine", vault:"Vault", boss:"Descent", stair:"Daylight" };
+
+/* map a decorative tile name → its painter (walkable tiles only) */
+const DECO = { crack:pCracked, moss:pMoss, grate:pGrate, puddle:pPuddle,
+  ember:pEmber, rune:pRune, bones:pBones, rubble:pRubble, mushroom:pMushroom, ash:pAsh };
+const BLOCKER = { pit:pPit, column:pColumn, fire:pFirePit };
+
+function buildGameRoom(seed, spec){
   setRoomGeom();
   seedRng(seed); setParts([]);
   const layer=newLayer(); const g=layer.getContext("2d");
   g.fillStyle="#0a0812"; g.fillRect(0,0,CW,CH);
-  const tone=pick(STONE), wallTone=pick(STONE);
-  const blocked={}, B=(r,c,v)=>blocked[r+","+c]=v;
-  for(let r=0;r<GROWS;r++) for(let c=0;c<GCOLS;c++)
-    if(r===0||r===GROWS-1||c===0||c===GCOLS-1) B(r,c,"wall");
-  // north door + decos
-  const doorC=ri(2,5);
-  const decos={}; const rem=[1,2,3,4,5,6].filter(c=>c!==doorC).sort(()=>R()-.5);
-  decos[rem[0]]="torch"; decos[rem[1]]="chains"; decos[rem[2]]="torch"; decos[rem[3]]="crack";
-  const decosS={}; const remS=[1,2,3,4,5,6].sort(()=>R()-.5);
-  decosS[remS[0]]="torch"; decosS[remS[1]]="crack";
-  // interior features (kept off spawn rows 1-2 top / 5-6 bottom edges lightly)
-  const open=[]; for(let r=2;r<GROWS-2;r++) for(let c=1;c<GCOLS-1;c++) open.push([r,c]);
-  open.sort(()=>R()-.5);
-  const feats=(spec.features||["column","pit","firepit","puddle","crack","moss","grate"]);
-  const featMap={};
-  feats.forEach((f,i)=>{ if(open[i]) featMap[open[i][0]+","+open[i][1]]=f; });
-  // floors
-  for(let r=1;r<GROWS-1;r++) for(let c=1;c<GCOLS-1;c++){
-    const f=featMap[r+","+c], x=cx0g(c), y=cy0g(r);
-    if(f==="crack") pCracked(g,x,y,tone);
-    else if(f==="moss") pMoss(g,x,y,tone);
-    else if(f==="grate") pGrate(g,x,y,tone);
-    else if(f==="puddle") pPuddle(g,x,y,tone);
-    else if(f==="pit"){ pPit(g,x,y,tone); B(r,c,"pit"); }
-    else pFloor(g,x,y,tone);
+  const tone=pick(STONE);
+  const rng=mulberry32((seed*2654435761)>>>0);                       // sequence rng for placement
+  const rnd=(r,c)=>{ let h=(((r+3)*73856093)^((c+7)*19349663)^(seed|0))>>>0;   // stable per-cell noise
+    h=Math.imul(h^h>>>13,0x5bd1e995); return ((h^h>>>15)>>>0)/4294967296; };
+  const geo={cols:GCOLS, rows:GROWS, phase:seed%10};
+
+  // 1) island from the shape generator
+  const floor=new Set();
+  const shape=SHAPES[spec.shape]||SHAPES.full;
+  for(let r=0;r<GROWS;r++) for(let c=0;c<GCOLS;c++) if(shape(r,c,rnd,geo)) floor.add(r+","+c);
+
+  // 2) forced entry platform (bottom-centre) + a top landing so every run reads as a climb
+  const ctr=Math.floor(GCOLS/2), entry=[];
+  for(let r=GROWS-2;r<=GROWS-1;r++) for(let c=ctr-1;c<=ctr+1;c++)
+    if(c>=0&&c<GCOLS){ floor.add(r+","+c); entry.push([r,c]); }
+  for(let c=ctr-1;c<=ctr+1;c++) if(c>=0&&c<GCOLS) floor.add("0,"+c);
+
+  // 3) connectivity: guarantee the top landing joins the entry (carve a central spine only if needed),
+  //    then discard every cell the party can't actually reach — no orphan tiles, ever.
+  const start=(GROWS-1)+","+ctr;
+  if(!reachFrom(floor,start).has("0,"+ctr)) for(let r=0;r<GROWS;r++) floor.add(r+","+ctr);
+  const reach=reachFrom(floor,start);
+  for(const k of [...floor]) if(!reach.has(k)) floor.delete(k);
+
+  // 4) blocking features — placed only where they keep the whole walkable island connected
+  const isEntry=(r,c)=> r>=GROWS-3;
+  const interior=[...floor].filter(k=>{ const [r,c]=k.split(",").map(Number);
+    return r>0 && !isEntry(r,c) && NEI.every(([dr,dc])=>floor.has((r+dr)+","+(c+dc))); });
+  for(let i=interior.length-1;i>0;i--){ const j=(rng()*(i+1))|0; [interior[i],interior[j]]=[interior[j],interior[i]]; }
+  const blockers=new Map();                       // cellKey → blocker kind
+  const kinds=spec.blockerKinds||["column","pit"];
+  const maxB=spec.blockers==null?2:spec.blockers;
+  for(const k of interior){
+    if(blockers.size>=maxB) break;
+    const test=new Set([...blockers.keys(), k]);
+    if(reachFrom(floor,start,test).size === floor.size-test.size)   // still reaches every open tile
+      blockers.set(k, kinds[(rng()*kinds.length)|0]);
   }
-  // rows top→bottom: walls + tall features
-  for(let r=0;r<GROWS;r++) for(let c=0;c<GCOLS;c++){
-    const x=cx0g(c), y=cy0g(r), f=featMap[r+","+c];
-    if(blocked[r+","+c]==="wall"){
-      if(r===0&&c===doorC) pDoor(g,x,y,wallTone,spec.doorType||"arch",spec.doorLabel||"→ ???");
-      else if(r===0) pWall(g,x,y,wallTone,decos[c]);
-      else if(r===GROWS-1) pWall(g,x,y,wallTone,decosS[c]);
-      else pWall(g,x,y,wallTone,null);
-    }
-    else if(f==="firepit"){ pFirePit(g,x,y,tone); B(r,c,"fire"); }
-    else if(f==="column"){ pColumn(g,x,y,tone); B(r,c,"column"); }
+
+  // 5) decorative (walkable) tiles on the remaining open floor
+  const decoPool=spec.tiles&&spec.tiles.length?spec.tiles:["crack","moss","rubble"];
+  const deco=new Map();
+  for(const k of [...floor]){ const [r,c]=k.split(",").map(Number);
+    if(blockers.has(k)||isEntry(r,c)||k==="0,"+ctr) continue;
+    if(rng()<.26) deco.set(k, decoPool[(rng()*decoPool.length)|0]); }
+
+  // 6) exits: walkable edge cells (touching the void), spread out from the entry
+  const walk=[...floor].filter(k=>!blockers.has(k)).map(k=>k.split(",").map(Number));
+  const edges=walk.filter(([r,c])=> NEI.some(([dr,dc])=> !floor.has((r+dr)+","+(c+dc)) ));
+  const exitKinds=spec.exits||["onward"];
+  const exits=[]; let pool=edges.slice();
+  for(let i=0;i<exitKinds.length && pool.length;i++){
+    let best=null,bd=-1;
+    for(const e of pool){ const d = exits.length
+        ? Math.min(...exits.map(x=>(e[0]-x.r)**2+(e[1]-x.c)**2))
+        : (e[0]-(GROWS-1))**2+(e[1]-ctr)**2;
+      if(d>bd){ bd=d; best=e; } }
+    if(!best) break;
+    const [r,c]=best;
+    const hit=[["N",-1,0],["S",1,0],["W",0,-1],["E",0,1]].find(([d,dr,dc])=>!floor.has((r+dr)+","+(c+dc)));
+    exits.push({ r, c, dir:hit[0], kind:exitKinds[i], label:EXIT_LABEL[exitKinds[i]]||"Onward" });
+    pool=pool.filter(e=>e!==best);
   }
-  // room title
+
+  // 7) paint — floors + rims + decorations, then blockers, then portals, then the title
+  for(const k of [...floor]){ const [r,c]=k.split(",").map(Number);
+    if(blockers.has(k)) continue;
+    const x=cx0g(c), y=cy0g(r), d=deco.get(k);
+    (d&&DECO[d]?DECO[d]:pFloor)(g,x,y,tone);
+    paintRim(g,x,y,floor,r,c);
+  }
+  for(const [k,kind] of blockers){ const [r,c]=k.split(",").map(Number);
+    (BLOCKER[kind]||pColumn)(g, cx0g(c), cy0g(r), tone); }
+  for(const e of exits) pPortal(g, cx0g(e.c), cy0g(e.r), e.dir, e.kind, e.label);
+
   g.font="italic 12px Georgia"; g.textAlign="left";
-  g.fillStyle="rgba(6,4,10,.8)"; g.fillText(spec.title+"  ·  #"+(seed%100000),OX+1,15);
-  g.fillStyle="#d8a24a"; g.fillText(spec.title+"  ·  #"+(seed%100000),OX,14);
+  g.fillStyle="rgba(6,4,10,.8)"; g.fillText(spec.title+"  ·  #"+(seed%100000), OX+1, 15);
+  g.fillStyle="#d8a24a"; g.fillText(spec.title+"  ·  #"+(seed%100000), OX, 14);
+
   gradeLayer(layer);
   const parts=PARTS; setParts(null);
   for(const p of parts){ const snap=maskToSnap(p.canvas); gradeLayer(p.canvas); applyMask(p.canvas,snap); }
-  return {base:layer,parts,blocked,door:{r:0,c:doorC},seed};
+
+  // 8) blocked map: void everywhere off the island, plus each blocker cell
+  const blocked={};
+  for(let r=0;r<GROWS;r++) for(let c=0;c<GCOLS;c++){ const k=r+","+c;
+    if(!floor.has(k)) blocked[k]="void"; else if(blockers.has(k)) blocked[k]=blockers.get(k); }
+
+  return { base:layer, parts, blocked, exits, entry,
+           floorCells:[...floor].map(k=>k.split(",").map(Number)), seed };
 }
-const cx0g=c=>OX+c*T, cy0g=r=>OY+r*T;
+
+/* darken the inner edge of any tile facing the void + a faint top lip — reads as a raised floor
+   over the abyss without any wall geometry */
+function paintRim(g,x,y,floor,r,c){
+  const side=(dr,dc,s)=>{ if(floor.has((r+dr)+","+(c+dc))) return;
+    let grd;
+    if(s==="N") grd=g.createLinearGradient(x,y,x,y+T*.5);
+    else if(s==="S") grd=g.createLinearGradient(x,y+T,x,y+T*.5);
+    else if(s==="W") grd=g.createLinearGradient(x,y,x+T*.5,y);
+    else grd=g.createLinearGradient(x+T,y,x+T*.5,y);
+    grd.addColorStop(0,"rgba(4,3,9,.75)"); grd.addColorStop(1,"rgba(4,3,9,0)");
+    g.fillStyle=grd;
+    if(s==="N") g.fillRect(x,y,T,T*.5); else if(s==="S") g.fillRect(x,y+T*.5,T,T*.5);
+    else if(s==="W") g.fillRect(x,y,T*.5,T); else g.fillRect(x+T*.5,y,T*.5,T);
+    g.strokeStyle="rgba(232,220,200,.12)"; g.lineWidth=1.4; g.beginPath();
+    if(s==="N"){ g.moveTo(x,y+1); g.lineTo(x+T,y+1); }
+    else if(s==="S"){ g.moveTo(x,y+T-1); g.lineTo(x+T,y+T-1); }
+    else if(s==="W"){ g.moveTo(x+1,y); g.lineTo(x+1,y+T); }
+    else { g.moveTo(x+T-1,y); g.lineTo(x+T-1,y+T); }
+    g.stroke();
+  };
+  side(-1,0,"N"); side(1,0,"S"); side(0,-1,"W"); side(0,1,"E");
+}
+
 function isBlocked(room,r,c){
   if(r<0||c<0||r>=GROWS||c>=GCOLS) return true;
   return !!room.blocked[r+","+c];
 }
 
-export {
-  GCOLS, GROWS, setRoomGeom, buildGameRoom, cx0g, cy0g, isBlocked
-};
+export { GCOLS, GROWS, setRoomGeom, buildGameRoom, cx0g, cy0g, isBlocked };

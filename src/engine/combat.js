@@ -11,14 +11,30 @@ import { makeEnemy } from '../models/units.js';
 export const xpToReach = lvl => 10 * (lvl * lvl - 1);
 export const xpForNext = lvl => xpToReach(lvl + 1) - xpToReach(lvl);
 
+/* A descent is up to seven rooms. Each names a floor SHAPE (see dungeon.js SHAPES), a pool of
+   walkable decorative TILES, how many BLOCKERS to attempt (pit/column/firepit, always placed so
+   they can't strand a tile), the EXIT kinds to render as portals, and its wave. Spawns no longer
+   carry fixed r/c — the game drops each foe on a random reachable floor cell. */
 export const ROOMS_SPEC = [
-  { title: "The Emberdeep — Rat Warrens", doorType: "arch", doorLabel: "→ Bone Gallery",
-    features: ["puddle", "puddle", "grate", "crack", "moss", "column", "crack"],
-    spawn: () => [makeEnemy("rat", 1, 2), makeEnemy("rat", 1, 5), makeEnemy("rat", 2, 3), makeEnemy("goblin", 1, 4), makeEnemy("goblin", 2, 6)] },
-  { title: "The Emberdeep — Bone Gallery", doorType: "open", doorLabel: "→ Ashwing's Hoard",
-    features: ["column", "column", "pit", "crack", "crack", "moss", "grate"],
-    spawn: () => [makeEnemy("skeleton", 1, 2), makeEnemy("skeleton", 1, 5), makeEnemy("skeleton", 2, 6), makeEnemy("wight", 1, 4)] },
-  { title: "The Emberdeep — Ashwing's Hoard", doorType: "stairsUp", doorLabel: "↑ Daylight",
-    features: ["firepit", "firepit", "column", "crack", "moss", "puddle"],
-    spawn: () => [makeEnemy("dragon", 1, 4), makeEnemy("kobold", 2, 2), makeEnemy("kobold", 2, 6)] },
+  { title: "The Emberdeep — Rat Warren", shape: "full", blockers: 2,
+    tiles: ["crack", "moss", "grate", "puddle", "bones", "rubble"], exits: ["onward"],
+    spawn: () => [makeEnemy("rat"), makeEnemy("rat"), makeEnemy("rat"), makeEnemy("goblin"), makeEnemy("goblin")] },
+  { title: "The Emberdeep — Bone Gallery", shape: "cross", blockers: 3, blockerKinds: ["column", "pit"],
+    tiles: ["bones", "bones", "crack", "rubble", "ash", "grate"], exits: ["onward"],
+    spawn: () => [makeEnemy("skeleton"), makeEnemy("skeleton"), makeEnemy("skeleton"), makeEnemy("goblin")] },
+  { title: "The Emberdeep — Ember Causeway", shape: "causeway", blockers: 1, blockerKinds: ["fire", "column"],
+    tiles: ["ember", "ash", "crack", "rubble"], exits: ["onward"],
+    spawn: () => [makeEnemy("kobold"), makeEnemy("kobold"), makeEnemy("goblin")] },
+  { title: "The Emberdeep — Fungal Hollow", shape: "cavern", blockers: 2, blockerKinds: ["column", "pit"],
+    tiles: ["mushroom", "moss", "rune", "puddle", "crack"], exits: ["shrine", "onward"],
+    spawn: () => [makeEnemy("goblin"), makeEnemy("kobold"), makeEnemy("skeleton")] },
+  { title: "The Emberdeep — Flooded Vault", shape: "ring", blockers: 3, blockerKinds: ["column", "pit"],
+    tiles: ["puddle", "puddle", "rune", "moss", "grate"], exits: ["vault", "onward"],
+    spawn: () => [makeEnemy("skeleton"), makeEnemy("skeleton"), makeEnemy("wight")] },
+  { title: "The Emberdeep — Ashen Approach", shape: "cross", blockers: 3, blockerKinds: ["fire", "column", "pit"],
+    tiles: ["ember", "ash", "bones", "rubble"], exits: ["onward"],
+    spawn: () => [makeEnemy("wight"), makeEnemy("kobold"), makeEnemy("kobold"), makeEnemy("skeleton")] },
+  { title: "The Emberdeep — Ashwing's Hoard", shape: "cavern", blockers: 2, blockerKinds: ["fire", "column"],
+    tiles: ["ember", "ember", "ash", "bones"], exits: ["stair"],
+    spawn: () => [makeEnemy("dragon"), makeEnemy("kobold"), makeEnemy("kobold")] },
 ];
