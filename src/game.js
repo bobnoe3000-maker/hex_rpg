@@ -62,7 +62,8 @@ setLogState("mid");
 /* phase: idle → fight ⇄ paused. inventory holds dropped loot; respawn/revive are timers. */
 const state={ roomIdx:0, scene:"town", phase:"idle", room:null, foes:[], t:0, speed:1,
   inventory:[], gems:0, silver:0, shopStock:[], recruits:[], respawnAt:null, wipeAt:null,
-  dungeonId:"emberdeep", cleared:[], victoryAt:null,   // active dungeon + cleared-boss ids + boss-clear timer
+  dungeonId:"emberdeep", cleared:[],   // active dungeon + set of cleared-boss ids (persisted)
+  bossAt:null, bossInWave:false,       // when the boss may next appear (runtime) + is it on the field now
   rally:null };      // {r,c} flag heroes regroup on when no foe is engaged
 /* the dungeon the party is currently delving (falls back to the Emberdeep) */
 const activeDungeon=()=>dungeonById(state.dungeonId);
@@ -257,11 +258,20 @@ function spawnFromToken(tok,d,idx){
   const lvl=d.baseLevel+idx;                 // rooms ramp from the dungeon's base level down to the boss
   return makeEnemy(tok,{level:lvl, name:(d.roster&&d.roster[tok])||undefined});
 }
+/* Between boss kills the boss room fields a trash wave so it stays farmable (deep-level roster). */
+const BOSS_FARM_COMP=["wight","skeleton","kobold","kobold","goblin"];
 function spawnWave(){
   const d=activeDungeon(), idx=state.roomIdx, L=LAYOUTS[idx];
+  // The boss only joins the wave when its timer is up; otherwise a trash pack keeps the room busy.
+  let comp=L.comp;
+  if(idx===BOSS_ROOM){
+    const ready = state.bossAt===null || state.t>=state.bossAt;
+    comp = ready ? L.comp : BOSS_FARM_COMP;
+    state.bossInWave = ready;
+  } else state.bossInWave=false;
   // NPCs appear on random reachable floor cells, kept off the hero line at the bottom when possible.
   // Enemy level scales with the dungeon's band, so the badge on each tile means something.
-  L.comp.forEach((tok,i)=>{
+  comp.forEach((tok,i)=>{
     const cell=randFloor((r,c)=>r<=GROWS-4) || randFloor();
     if(!cell) return;
     const f=spawnFromToken(tok,d,idx);
@@ -277,7 +287,8 @@ function loadRoom(){
   const spec={ title:roomTitle(d,idx), shape:L.shape, blockers:L.blockers,
     blockerKinds:L.blockerKinds, tiles:L.tiles, exits:L.exits };
   state.room=buildGameRoom((Date.now()+idx*7919)|0,spec);
-  state.foes=[]; fxClear(); state.respawnAt=null; state.wipeAt=null; state.victoryAt=null; state.rally=null;
+  state.foes=[]; fxClear(); state.respawnAt=null; state.wipeAt=null; state.rally=null;
+  state.bossAt=null; state.bossInWave=false;   // boss is available the moment you arrive at its room
   placeHeroes(); spawnWave();
   log(`— <span class="sys">${spec.title.split("— ")[1]}</span> —`);
 }
@@ -602,28 +613,26 @@ function updateWaves(){
       log(`${iconImg("skull",14)} <span class="crit">The party falls…</span> retreating to the Keep.`); }
     return;
   }
-  if(!foesAlive){
-    // The boss room is the finish line: clearing it wins the dungeon (no respawn). Every other room
-    // keeps its endless-wave rhythm so you can farm before pressing onward.
-    if(state.roomIdx===BOSS_ROOM){
-      if(state.victoryAt===null){ state.victoryAt=state.t+BAL.RESPAWN_DELAY;
-        log(`${iconImg("check",14)} <span class="heal">${activeDungeon().boss.name} is slain!</span>`,"heal"); }
-      return;
-    }
-    if(state.respawnAt===null){
-      state.respawnAt=state.t+BAL.RESPAWN_DELAY;
-      for(const h of party) if(h.alive){ const mh=derive(h).maxhp;
-        const heal=Math.round(mh*BAL.WAVE_HEAL_FRAC)+Math.round(mh*waveHealFrac(h));   // + Second Wind
-        h.hp=Math.min(mh,h.hp+heal); }
-      renderParty();
-      log(`${iconImg("check",14)} <span class="sys">Wave cleared.</span> Another approaches…`);
-    }
+  if(!foesAlive && state.respawnAt===null){
+    // Every room (the boss room included) keeps an endless-wave rhythm so you can farm as long as you
+    // like. In the boss room, killing the wave that HELD the boss puts the boss on a respawn timer —
+    // the room then fields trash until the boss recovers, and you never get pulled back to the Keep.
+    const bossKill = state.roomIdx===BOSS_ROOM && state.bossInWave;
+    if(bossKill){ state.bossInWave=false; state.bossAt=state.t+BAL.BOSS_RESPAWN; onBossDown(); }
+    state.respawnAt=state.t+BAL.RESPAWN_DELAY;
+    for(const h of party) if(h.alive){ const mh=derive(h).maxhp;
+      const heal=Math.round(mh*BAL.WAVE_HEAL_FRAC)+Math.round(mh*waveHealFrac(h));   // + Second Wind
+      h.hp=Math.min(mh,h.hp+heal); }
+    renderParty();
+    if(!bossKill) log(`${iconImg("check",14)} <span class="sys">Wave cleared.</span> Another approaches…`);
   }
 }
-/* Boss down → mark the dungeon cleared, unlock the next rung (first clear grants a guaranteed drop),
-   and retire to the Keep in victory. Re-clearing a dungeon just farms it (no double unlock). */
-function winDungeon(){
+/* Boss slain: mark the dungeon cleared and unlock the next rung the FIRST time (with a guaranteed
+   drop); every kill after just farms the boss's normal loot. The party stays in the dungeon — the
+   boss returns on its timer (BAL.BOSS_RESPAWN) with trash to fight in the meantime. */
+function onBossDown(){
   const d=activeDungeon(), first=!state.cleared.includes(d.id);
+  log(`${iconImg("check",14)} <span class="heal">${d.boss.name} is slain!</span>`,"heal");
   if(first){
     state.cleared.push(d.id);
     const floor=["plain","fine","rare","epic"];
@@ -633,11 +642,9 @@ function winDungeon(){
     log(`${iconImg("chest",14)} First clear! <b>${d.name}</b> yields <span class="sys">${reward.n}</span>.`,"heal");
     const nx=nextDungeon(d);
     if(nx) log(`${iconImg("spark",14)} <span class="sys">${nx.name} is now open at the Dungeons board.</span>`,"sys");
-  } else {
-    log(`${iconImg("check",14)} <b>${d.name}</b> cleared again.`,"sys");
   }
-  state.phase="idle"; state.roomIdx=0; loadRoom();   // reset the delve for next time
-  enterTown();
+  log(`${iconImg("skull",14)} <span class="sys">${d.boss.name} will return in ~${Math.round(BAL.BOSS_RESPAWN/60)} min.</span>`,"sys");
+  updateHud(); saveGame();
 }
 /* ---------- controls & menus ---------- */
 function syncButtons(){
@@ -939,6 +946,17 @@ function drawCompass(){
     G.beginPath(); G.arc(nx,ny, boss?4.2:isCur?4:3,0,7); G.fill();
     if(boss){ G.strokeStyle=isCur?"#ff9a5c":"#8a4a34"; G.lineWidth=1.2; G.beginPath(); G.arc(nx,ny,6,0,7); G.stroke(); } }
   G.textBaseline="alphabetic";
+  // In the boss room, surface the boss respawn timer (or a READY flare) just below the compass dial.
+  if(state.roomIdx===BOSS_ROOM){
+    const onCd = state.bossAt!==null && state.t<state.bossAt;
+    const rem = onCd ? Math.max(0,state.bossAt-state.t) : 0;
+    const txt = onCd ? `BOSS ${Math.floor(rem/60)}:${String(Math.floor(rem%60)).padStart(2,"0")}` : "BOSS ✦ READY";
+    const bw=onCd?52:74, bx=x+pw-bw, by=y+ph+3;
+    G.fillStyle="rgba(12,9,22,.82)"; rrp(G,bx,by,bw,15,6); G.fill();
+    G.strokeStyle=onCd?"rgba(216,162,74,.4)":"rgba(255,154,92,.7)"; G.lineWidth=1; rrp(G,bx,by,bw,15,6); G.stroke();
+    G.fillStyle=onCd?"#e0b063":"#ff9a5c"; G.font="bold 8px monospace"; G.textAlign="center"; G.textBaseline="middle";
+    G.fillText(txt, bx+bw/2, by+8); G.textBaseline="alphabetic"; G.textAlign="left";
+  }
 }
 function render(dt){
   G.setTransform(2,0,0,2,0,0);
@@ -980,8 +998,6 @@ function loop(now){
         updateWaves();
         // endless map: respawn a fresh wave on its timer
         if(state.respawnAt!==null && state.t>=state.respawnAt){ state.respawnAt=null; spawnWave(); }
-        // boss slain: end the delve in victory (unlocks the next rung) once the dust settles
-        if(state.victoryAt!==null && state.t>=state.victoryAt){ state.victoryAt=null; winDungeon(); }
         // full wipe: pull back to the Keep (main revives free there; fallen pals need the Temple)
         if(state.wipeAt!==null && state.t>=state.wipeAt){ state.wipeAt=null; enterTown(true); }
         // prune slain FOES only (heroes are never pruned — they live in `party`, dead or alive)

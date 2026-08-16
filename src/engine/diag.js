@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-16 · tiered dungeons · the Dungeons board (10 rungs → Lv 100)";
+export const APP_BUILD = "2026-08-16 · tiered dungeons · farmable boss on a 10-min respawn timer";
 
 const BUF = [];
 const MAX = 400;
