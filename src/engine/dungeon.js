@@ -1,6 +1,6 @@
 import { mulberry32, R, ri, rf, pick, chance, maskToSnap, applyMask, T, WH, OX, OY, CW, CH, PARTS, newLayer, gradeLayer, seedRng, setParts, setGeom } from './core.js';
 import { STONE, pFloor, pCracked, pMoss, pGrate, pPuddle, pPit, pFirePit, pColumn,
-         pEmber, pRune, pBones, pRubble, pMushroom, pAsh, pWallBlock, pExitWall } from './tiles.js';
+         pEmber, pRune, pBones, pRubble, pMushroom, pAsh, pFrost, pCrystal, pWallBlock, pExitWall } from './tiles.js';
 /* ============ DP ENGINE :: dungeon.js — open-floor rooms (no walls; islands over the void) ============ */
 /* A room is now an irregular island of stone floating in the void. Its shape comes from one of five
    generators; the walkable area is guaranteed fully connected (no unreachable tiles); exits are
@@ -45,7 +45,8 @@ const EXIT_LABEL = { onward:"Onward", shrine:"Shrine", vault:"Vault", boss:"Desc
 
 /* map a decorative tile name → its painter (walkable tiles only) */
 const DECO = { crack:pCracked, moss:pMoss, grate:pGrate, puddle:pPuddle,
-  ember:pEmber, rune:pRune, bones:pBones, rubble:pRubble, mushroom:pMushroom, ash:pAsh };
+  ember:pEmber, rune:pRune, bones:pBones, rubble:pRubble, mushroom:pMushroom, ash:pAsh,
+  frost:pFrost, crystal:pCrystal };
 const BLOCKER = { pit:pPit, column:pColumn, fire:pFirePit, wall:pWallBlock };
 
 function buildGameRoom(seed, spec){
@@ -53,7 +54,7 @@ function buildGameRoom(seed, spec){
   seedRng(seed); setParts([]);
   const layer=newLayer(); const g=layer.getContext("2d");
   g.fillStyle="#0a0812"; g.fillRect(0,0,CW,CH);
-  const tone=pick(STONE);
+  const tone=pick(spec.palette&&spec.palette.length?spec.palette:STONE);   // themed floor stone per dungeon
   const rng=mulberry32((seed*2654435761)>>>0);                       // sequence rng for placement
   const rnd=(r,c)=>{ let h=(((r+3)*73856093)^((c+7)*19349663)^(seed|0))>>>0;   // stable per-cell noise
     h=Math.imul(h^h>>>13,0x5bd1e995); return ((h^h>>>15)>>>0)/4294967296; };
@@ -137,7 +138,7 @@ function buildGameRoom(seed, spec){
   }
   for(const [k,kind] of [...blockers].sort((a,b)=>(+a[0].split(",")[0])-(+b[0].split(",")[0]))){   // back→front
     const [r,c]=k.split(",").map(Number); (BLOCKER[kind]||pColumn)(g, cx0g(c), cy0g(r), tone); }
-  for(const e of exits) pExitWall(g, cx0g(e.c), cy0g(e.r), e.dir, e.kind, e.label);
+  for(const e of exits) pExitWall(g, cx0g(e.c), cy0g(e.r), e.dir, e.kind, e.label, tone);
 
   g.font="italic 12px Georgia"; g.textAlign="left";
   g.fillStyle="rgba(6,4,10,.8)"; g.fillText(spec.title+"  ·  #"+(seed%100000), OX+1, 15);

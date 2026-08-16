@@ -13,6 +13,7 @@ import { earnedSkillPoints, unspentSkillPoints, branchInvested, tierUnlocked, co
          skillFlat, skillMult, buffMult, activeSkills, allSkills, rollCompanionSkills, heroKit } from "../src/systems/Skills.js";
 import { scaleEnemy } from "../src/models/units.js";
 import { DUNGEONS, LAYOUTS, ROOM_COUNT, BOSS_ROOM, dungeonById, isUnlocked, nextDungeon, prevDungeon } from "../src/data/dungeons.js";
+import { BAL } from "../src/data/balance.js";
 
 let fails = 0;
 const ok = (name, cond) => { console.log(`${cond ? "PASS" : "FAIL"}  ${name}`); if (!cond) fails++; };
@@ -353,6 +354,12 @@ ok("different seed diverges", seq(123) !== seq(777));
   ok("bands tile 1..100 without gaps", DUNGEONS.every((d,i)=>d.band[0]===i*10+1 && d.band[1]===(i+1)*10));
   ok("top dungeon caps at Lv 100", DUNGEONS[9].band[1] === 100);
   ok("every dungeon has a named boss + 5-figure roster", DUNGEONS.every(d=>d.boss.name && d.boss.fig && Object.keys(d.roster).length===5));
+  ok("every dungeon has a themed palette + tileset", DUNGEONS.every(d=>Array.isArray(d.palette)&&d.palette.length&&Array.isArray(d.tiles)&&d.tiles.length));
+  // bosses spawn from a normalized block, so difficulty is figure-independent (dragon can't break a tier)
+  ok("boss stats are figure-independent (normalized)", (()=>{
+    const a=makeEnemy("dragon",{level:100,stats:BAL.BOSS_BASE,boss:true});
+    const b=makeEnemy("wight",{level:100,stats:BAL.BOSS_BASE,boss:true});
+    return a.maxhp===b.maxhp && a.atk===b.atk && a.def===b.def && a.boss && b.boss; })());
   ok("loot power rises with tier, floors never regress", (()=>{ const ord=["plain","fine","rare","epic"];
     return DUNGEONS.every((d,i)=> d.power===d.tier && (i===0 || ord.indexOf(d.dropFloor)>=ord.indexOf(DUNGEONS[i-1].dropFloor))); })());
   ok("dungeonById falls back to the Emberdeep", dungeonById("nope").id === "emberdeep");

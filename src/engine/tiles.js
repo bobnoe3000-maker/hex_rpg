@@ -285,6 +285,30 @@ function pAsh(g,x,y,tone){ pFloor(g,x,y,tone); g.globalAlpha=.5;
   for(let i=0;i<24;i++){ g.fillStyle=chance(.5)?"#3a3640":"#4a4650"; g.fillRect(x+rf(2,T-3),y+rf(2,T-3),1.4,1.4); }
   g.globalAlpha=1;
 }
+/* frost — an icy sheen with a couple of pale-blue crystal shards (Frostmere / Rimeheart / Skyreach) */
+function pFrost(g,x,y,tone){ pFloor(g,x,y,tone);
+  g.globalAlpha=.20; g.fillStyle="#cfe8ff"; g.fillRect(x+rf(3,10),y+rf(3,10),rf(14,26),rf(9,18)); g.globalAlpha=1;
+  for(let i=0;i<2;i++){ const cx=x+rf(10,34),cy=y+rf(14,34),h=rf(5,9);
+    g.fillStyle="rgba(190,228,255,.85)"; g.beginPath();
+    g.moveTo(cx,cy-h); g.lineTo(cx+3,cy); g.lineTo(cx,cy+2); g.lineTo(cx-3,cy); g.closePath(); g.fill();
+    inkPath(g,gg=>{ gg.moveTo(cx,cy-h); gg.lineTo(cx+3,cy); gg.lineTo(cx,cy+2); gg.lineTo(cx-3,cy); gg.closePath(); },.7,"rgba(70,100,130,.6)"); }
+  part(0,0,{kind:"pulse",base:.3,amp:.2,speed:rf(1,2),phase:rf(0,6)},pg=>{
+    const rg=pg.createRadialGradient(x+T/2,y+T/2,2,x+T/2,y+T/2,16);
+    rg.addColorStop(0,"rgba(200,232,255,.24)"); rg.addColorStop(1,"rgba(200,232,255,0)");
+    pg.fillStyle=rg; pg.fillRect(x-4,y-4,T+8,T+8); });
+}
+/* crystal — glowing violet/cyan gem shards jutting from the floor (Draconis Apex) */
+function pCrystal(g,x,y,tone){ pFloor(g,x,y,tone);
+  const cols=["#b48bff","#7ae0ff","#d69bff"];
+  for(let i=0;i<3;i++){ const cx=x+rf(9,35),cy=y+rf(16,34),h=rf(6,12),w=rf(2.5,4),col=cols[i%3];
+    g.globalAlpha=.85; g.fillStyle=col; g.beginPath();
+    g.moveTo(cx,cy-h); g.lineTo(cx+w,cy-h*0.3); g.lineTo(cx,cy+2); g.lineTo(cx-w,cy-h*0.3); g.closePath(); g.fill(); g.globalAlpha=1;
+    inkPath(g,gg=>{ gg.moveTo(cx,cy-h); gg.lineTo(cx+w,cy-h*0.3); gg.lineTo(cx,cy+2); gg.lineTo(cx-w,cy-h*0.3); gg.closePath(); },.7,"rgba(30,20,50,.7)"); }
+  part(0,0,{kind:"pulse",base:.4,amp:.35,speed:rf(1.5,3),phase:rf(0,6)},pg=>{
+    const rg=pg.createRadialGradient(x+T/2,y+T/2,2,x+T/2,y+T/2,18);
+    rg.addColorStop(0,"rgba(180,139,255,.3)"); rg.addColorStop(1,"rgba(180,139,255,0)");
+    pg.fillStyle=rg; pg.fillRect(x-4,y-4,T+8,T+8); });
+}
 
 /* ================= wall block — old wall art reused as an impassable obstacle ================= */
 /* An extruded stone block sitting on a floor cell. Blocks movement like a column/pit. Variants
@@ -316,8 +340,9 @@ function pWallBlock(g,x,y,tone){
 const XKIND = { onward:"arch", vault:"arch", shrine:"open", stair:"stairsUp", boss:"stairsUp" };
 const XGLOW = { arch:"255,209,102", open:"121,199,230", stairsUp:"126,231,135" };
 const XLABELC = { arch:"#e8c06a", open:"#a6e0f5", stairsUp:"#8fe6a0" };
-function pExitWall(g,x,y,dir,kind,label){
-  const style=XKIND[kind]||"arch", glow=XGLOW[style], lc=XLABELC[style], tone=STONE[0];
+function pExitWall(g,x,y,dir,kind,label,tone){
+  const style=XKIND[kind]||"arch", glow=XGLOW[style], lc=XLABELC[style];
+  tone=tone||STONE[0];
   const cx=x+T/2, cy=y+T/2;
   const rot = dir==="N"?0 : dir==="E"?Math.PI/2 : dir==="S"?Math.PI : -Math.PI/2;   // opening faces the void
   // pulsing glow beyond the opening (animated part layer, rotated to match)
@@ -386,5 +411,5 @@ function pPortal(g,x,y,dir,kind,label){
 
 export {
   STONE, crackLine, pFloor, pCracked, pMoss, pGrate, pPuddle, pPit, pFirePit, pColumn, pWallCap, pWallFace, pWall, doorLabel, pDoor,
-  pEmber, pRune, pBones, pRubble, pMushroom, pAsh, pPortal, pWallBlock, pExitWall
+  pEmber, pRune, pBones, pRubble, pMushroom, pAsh, pFrost, pCrystal, pPortal, pWallBlock, pExitWall
 };

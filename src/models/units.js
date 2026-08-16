@@ -101,16 +101,21 @@ export function scaleEnemy(e, level) {
 }
 
 let _figCounter = 0; // deterministic-ish figure variety without Math.random
-/* makeEnemy(kind, opts) — opts = { r, c, level, name, boss }. Legacy positional makeEnemy(kind,r,c)
-   is still honoured (a numeric/absent second arg is read as r). `level` (>1) scales the archetype
-   baseline; `name`/`boss` override the flavour so one figure serves many themed dungeons. */
+/* makeEnemy(kind, opts) — opts = { r, c, level, name, boss, stats, xp }. Legacy positional
+   makeEnemy(kind,r,c) still works (a numeric/absent second arg is read as r). `level` (>1) scales
+   the baseline; `name`/`boss` override the flavour; `stats` overrides the six-stat block entirely
+   (bosses pass a normalized BOSS_BASE so a boss's power is consistent regardless of which figure
+   represents it — the dragon figure no longer makes a dungeon unwinnable). */
 export function makeEnemy(kind, opts, c) {
   const b = ENEMIES[kind];
   if (typeof opts === "number" || opts == null) opts = { r: opts, c }; // legacy (kind, r, c)
+  const s = opts.stats || b;                                            // stat block (boss override or archetype)
   const e = {
     name: opts.name || b.name, fig: b.fig, team: 1, level: 1,
-    boss: opts.boss != null ? !!opts.boss : !!b.boss, rng: b.rng, xp: b.xp,
-    hp: b.hp, maxhp: b.hp, atk: b.atk, def: b.def, dodge: b.dodge, crit: b.crit, aspd: b.aspd,
+    boss: opts.boss != null ? !!opts.boss : !!b.boss,
+    rng: opts.rng != null ? opts.rng : (s.rng != null ? s.rng : b.rng),
+    xp: opts.xp != null ? opts.xp : (s.xp != null ? s.xp : b.xp),
+    hp: s.hp, maxhp: s.hp, atk: s.atk, def: s.def, dodge: s.dodge, crit: s.crit, aspd: s.aspd,
     r: opts.r, c: opts.c, alive: true, figSeed: ((++_figCounter) * 2654435761) >>> 0 & 0x7fffffff,
   };
   if (opts.level) scaleEnemy(e, opts.level);

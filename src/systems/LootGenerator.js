@@ -10,8 +10,6 @@ import { MATERIALS } from "../data/items/materials.js";
 import { GEAR_TYPES, CLASS_FAMILY } from "../data/items/gearTypes.js";
 import { BAL } from "../data/balance.js";
 
-const POWER_STEP = BAL.LOOT_POWER_STEP;
-
 const STAT_ORDER = ["atk", "def", "hp", "dodge", "crit", "aspd"];
 const GRADES = ["plain", "fine", "rare", "epic"];      // ascending rarity (also the loot grade floor order)
 const STAT_LABEL = { atk: "ATK", def: "DEF", hp: "HP", dodge: "Dodge", crit: "Crit", aspd: "Speed" };
@@ -46,7 +44,7 @@ export function describeItem(item) {
    worst rarity the drop may roll (grade is lifted to it), so deeper dungeons drop richer gear. */
 export function generate(rng, opts = {}) {
   const power = Math.max(1, opts.power || 1);
-  const powMult = 1 + POWER_STEP * (power - 1);
+  const powMult = 1 + BAL.LOOT_POWER_STEP * (power - 1);
   let typePool = GEAR_TYPES;
   if (opts.classes) {
     const wantFam = new Set(opts.classes.map(c => CLASS_FAMILY[c]).filter(Boolean));

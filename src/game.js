@@ -254,7 +254,7 @@ function randFloor(pred){
 }
 /* build one enemy from a composition token for the active dungeon at the given room depth */
 function spawnFromToken(tok,d,idx){
-  if(tok==="BOSS") return makeEnemy(d.boss.fig,{level:d.band[1], name:d.boss.name, boss:true});
+  if(tok==="BOSS") return makeEnemy(d.boss.fig,{level:d.band[1], name:d.boss.name, boss:true, stats:BAL.BOSS_BASE, xp:BAL.BOSS_BASE.xp});
   const lvl=d.baseLevel+idx;                 // rooms ramp from the dungeon's base level down to the boss
   return makeEnemy(tok,{level:lvl, name:(d.roster&&d.roster[tok])||undefined});
 }
@@ -285,7 +285,7 @@ function roomTitle(d,idx){
 function loadRoom(){
   const d=activeDungeon(), idx=state.roomIdx, L=LAYOUTS[idx];
   const spec={ title:roomTitle(d,idx), shape:L.shape, blockers:L.blockers,
-    blockerKinds:L.blockerKinds, tiles:L.tiles, exits:L.exits };
+    blockerKinds:L.blockerKinds, tiles:d.tiles||L.tiles, exits:L.exits, palette:d.palette };
   state.room=buildGameRoom((Date.now()+idx*7919)|0,spec);
   state.foes=[]; fxClear(); state.respawnAt=null; state.wipeAt=null; state.rally=null;
   state.bossAt=null; state.bossInWave=false;   // boss is available the moment you arrive at its room

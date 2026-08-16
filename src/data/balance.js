@@ -32,12 +32,18 @@ export const BAL = {
   // (per-component drop weights live in data/items/*; rarer components fall less often)
 
   // tiered dungeons: enemy stats scale to a room's level as base*(1 + rate*(level-1)). Roughly linear
-  // to track the (roughly-linear) hero growth curve, so a Lv-N pack is a fair fight for a Lv-N party.
-  // First-pass numbers — the balance pass tunes these. (Lv 100 skeleton ≈ hp×55, atk×29, def×22.)
-  ENEMY_SCALE: { hp: 0.55, atk: 0.28, def: 0.22, dodge: 0.05, crit: 0.04, xp: 0.35 },
+  // to track the (roughly-linear) party power curve, so a Lv-N pack is a fair fight for a Lv-N party.
+  // Tuned against tests/balance.sim.mjs so difficulty stays consistent (a gentle ramp) 1→100 while
+  // the party keeps pace via level-up points + tier-scaled loot. (Lv 100 skeleton ≈ hp×48, atk×25.)
+  ENEMY_SCALE: { hp: 0.48, atk: 0.24, def: 0.18, dodge: 0.05, crit: 0.04, xp: 0.35 },
+  // Every dungeon boss spawns from this normalized level-1 block (scaled to the band top by
+  // ENEMY_SCALE), NOT from its figure's archetype — so a boss's difficulty is consistent across
+  // dungeons and the dragon figure can't make a tier unwinnable. Tuned against tests/balance.sim.mjs.
+  BOSS_BASE: { hp: 125, atk: 13, def: 18, dodge: 5, crit: 10, aspd: 0.92, rng: 1, xp: 90 },
   // loot scales with a dungeon's tier (1–10): rolled stat values ×(1 + LOOT_POWER_STEP*(tier-1)),
   // and drop/gem rates rise a little each tier. A dungeon's dropFloor sets the worst rarity it rolls.
-  LOOT_POWER_STEP: 0.55,
+  // The 0.75 step is what keeps party gear pacing enemy scaling through the deep tiers.
+  LOOT_POWER_STEP: 0.75,
   DROP_CHANCE_PER_TIER: 0.02,   // + this to DROP_CHANCE per tier above 1 (capped below)
   DROP_CHANCE_MAX: 0.30,
   FIRST_CLEAR_GRADE_BUMP: 1,    // first boss kill guarantees a drop, floor lifted this many grades
