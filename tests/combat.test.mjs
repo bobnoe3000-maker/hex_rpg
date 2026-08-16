@@ -11,6 +11,8 @@ import { xpToReach, xpForNext } from "../src/engine/combat.js";
 import { earnedPoints, pointsForLevel, unspentPoints, pointBonus, STAT_STEP } from "../src/systems/Leveling.js";
 import { earnedSkillPoints, unspentSkillPoints, branchInvested, tierUnlocked, combatMods,
          skillFlat, skillMult, buffMult, activeSkills, allSkills, rollCompanionSkills, heroKit } from "../src/systems/Skills.js";
+import { scaleEnemy } from "../src/models/units.js";
+import { DUNGEONS, LAYOUTS, ROOM_COUNT, BOSS_ROOM, dungeonById, isUnlocked, nextDungeon, prevDungeon } from "../src/data/dungeons.js";
 
 let fails = 0;
 const ok = (name, cond) => { console.log(`${cond ? "PASS" : "FAIL"}  ${name}`); if (!cond) fails++; };
@@ -342,6 +344,45 @@ ok("different seed diverges", seq(123) !== seq(777));
   const cleric = makeHero("cleric", 1); cleric.skills = { grace:5, heal:1 };
   ok("Cleric Grace +75 HP", derive(cleric).maxhp === derive(makeHero("cleric",1)).maxhp + 75);
   ok("Cleric Heal is a castable active", activeSkills(cleric).some(a=>a.id==="heal"));
+}
+
+// ---- tiered dungeons ----
+{
+  // the ladder is a well-formed 10-rung climb to Lv 100
+  ok("ten dungeons, tiers 1..10 in order", DUNGEONS.length === 10 && DUNGEONS.every((d,i)=>d.tier===i+1));
+  ok("bands tile 1..100 without gaps", DUNGEONS.every((d,i)=>d.band[0]===i*10+1 && d.band[1]===(i+1)*10));
+  ok("top dungeon caps at Lv 100", DUNGEONS[9].band[1] === 100);
+  ok("every dungeon has a named boss + 5-figure roster", DUNGEONS.every(d=>d.boss.name && d.boss.fig && Object.keys(d.roster).length===5));
+  ok("loot power rises with tier, floors never regress", (()=>{ const ord=["plain","fine","rare","epic"];
+    return DUNGEONS.every((d,i)=> d.power===d.tier && (i===0 || ord.indexOf(d.dropFloor)>=ord.indexOf(DUNGEONS[i-1].dropFloor))); })());
+  ok("dungeonById falls back to the Emberdeep", dungeonById("nope").id === "emberdeep");
+
+  // seven shared layouts, boss token only in the final room
+  ok("seven room layouts, boss room is last", LAYOUTS.length===ROOM_COUNT && BOSS_ROOM===ROOM_COUNT-1);
+  ok("only the boss room carries a BOSS token", LAYOUTS.every((L,i)=> L.comp.includes("BOSS") === (i===BOSS_ROOM)));
+
+  // gating: unlock by clearing the previous boss
+  ok("tier 1 is always open", isUnlocked(DUNGEONS[0], []));
+  ok("tier 2 locked until Emberdeep cleared", !isUnlocked(DUNGEONS[1], []) && isUnlocked(DUNGEONS[1], ["emberdeep"]));
+  ok("clearing tier 1 doesn't open tier 3", !isUnlocked(DUNGEONS[2], ["emberdeep"]));
+  ok("nextDungeon/prevDungeon walk the ladder", nextDungeon(DUNGEONS[0]).id==="frostmere" && prevDungeon(DUNGEONS[1]).id==="emberdeep" && nextDungeon(DUNGEONS[9])===null);
+
+  // enemy scaling: a deeper foe is strictly tougher, and level is recorded
+  const lo = makeEnemy("skeleton", { level: 5 }), hi = makeEnemy("skeleton", { level: 95 });
+  ok("makeEnemy records the scaled level", lo.level===5 && hi.level===95);
+  ok("scaled enemy hp/atk/def climb with level", hi.maxhp>lo.maxhp*5 && hi.atk>lo.atk*3 && hi.def>lo.def*2);
+  ok("scaled enemy starts at full hp", hi.hp===hi.maxhp);
+  ok("legacy makeEnemy(kind,r,c) still works at level 1", (()=>{ const e=makeEnemy("rat",2,3); return e.level===1 && e.r===2 && e.c===3; })());
+  ok("scaleEnemy is monotonic in level", (()=>{ let prev=0; for(let L=1;L<=100;L+=9){ const e=makeEnemy("wight",{level:L}); if(e.atk<prev) return false; prev=e.atk; } return true; })());
+  ok("boss token spawns a big named foe", (()=>{ const b=makeEnemy(DUNGEONS[9].boss.fig,{level:100,name:DUNGEONS[9].boss.name,boss:true}); return b.boss && b.name==="Vurmalax, Elder Wyrm" && b.level===100; })());
+
+  // loot power scales stat values and lifts the grade floor
+  const seed = () => mb(999);
+  const t1 = generate(seed(), { power: 1 }), t10 = generate(seed(), { power: 10 });
+  const sum = it => ["atk","def","hp","dodge","crit"].reduce((n,k)=>n+(it[k]||0),0);
+  ok("higher tier rolls stronger stats (same seed)", sum(t10) > sum(t1) * 3);
+  ok("epic floor forces at least a rare-or-better grade", (()=>{ for(let i=0;i<20;i++){ const it=generate(mb(i), {power:10, floor:"epic"}); if(it.grade!=="epic") return false; } return true; })());
+  ok("no floor / power keeps legacy behaviour", generate(mb(1)).grade !== undefined);
 }
 
 console.log(fails ? `\n${fails} FAILED` : "\nall passed");

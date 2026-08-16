@@ -8,8 +8,12 @@
 import { PREFIXES } from "../data/items/prefixes.js";
 import { MATERIALS } from "../data/items/materials.js";
 import { GEAR_TYPES, CLASS_FAMILY } from "../data/items/gearTypes.js";
+import { BAL } from "../data/balance.js";
+
+const POWER_STEP = BAL.LOOT_POWER_STEP;
 
 const STAT_ORDER = ["atk", "def", "hp", "dodge", "crit", "aspd"];
+const GRADES = ["plain", "fine", "rare", "epic"];      // ascending rarity (also the loot grade floor order)
 const STAT_LABEL = { atk: "ATK", def: "DEF", hp: "HP", dodge: "Dodge", crit: "Crit", aspd: "Speed" };
 const cap = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 const round1 = v => Math.round(v * 10) / 10;
@@ -37,8 +41,12 @@ export function describeItem(item) {
 }
 
 /* Generate one item. opts.classes (array) restricts gear types to those the party can use:
-   family armour (fam) only drops in families the party wears; weapons/jewellery gate by `use`. */
+   family armour (fam) only drops in families the party wears; weapons/jewellery gate by `use`.
+   opts.power (dungeon tier, ≥1) scales rolled stat values up; opts.floor ("plain".."epic") is the
+   worst rarity the drop may roll (grade is lifted to it), so deeper dungeons drop richer gear. */
 export function generate(rng, opts = {}) {
+  const power = Math.max(1, opts.power || 1);
+  const powMult = 1 + POWER_STEP * (power - 1);
   let typePool = GEAR_TYPES;
   if (opts.classes) {
     const wantFam = new Set(opts.classes.map(c => CLASS_FAMILY[c]).filter(Boolean));
@@ -51,9 +59,10 @@ export function generate(rng, opts = {}) {
   const material = wpick(rng, MATERIALS.filter(m => m.mat === type.mat));
   const prefix = wpick(rng, PREFIXES);
 
-  // sum stat contributions from the three components (+ any material drawback)
+  // sum stat contributions from the three components (+ any material drawback), scaled by dungeon power.
+  // aspd is a speed multiplier, not a raw pool — it never scales with tier (a +0.1 boot stays +0.1).
   const stats = {};
-  const add = (st, v) => { if (st) stats[st] = round1((stats[st] || 0) + v); };
+  const add = (st, v) => { if (st) stats[st] = round1((stats[st] || 0) + (st === "aspd" ? v : v * powMult)); };
   add(type.stat, type.val);
   add(material.stat, material.val);
   if (material.drawback) add(material.drawback.stat, material.drawback.val);
@@ -61,9 +70,10 @@ export function generate(rng, opts = {}) {
 
   const name = [prefix.name, material.name, type.name].filter(Boolean).join(" ");
 
-  // cosmetic grade from the rarest component (colour only — not a mechanical tier)
+  // cosmetic grade from the rarest component, then lifted to the dungeon's drop floor.
   const minW = Math.min(type.w, material.w, prefix.w);
-  const grade = minW <= 1 ? "epic" : minW <= 2 ? "rare" : minW <= 3 ? "fine" : "plain";
+  let grade = minW <= 1 ? "epic" : minW <= 2 ? "rare" : minW <= 3 ? "fine" : "plain";
+  if (opts.floor && GRADES.indexOf(opts.floor) > GRADES.indexOf(grade)) grade = opts.floor;
 
   const item = {
     n: name, slot: type.slot, use: type.use, primary: type.stat,

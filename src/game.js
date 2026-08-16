@@ -4,7 +4,8 @@ import { buildFigure } from './engine/creatures.js';
 import { iconImg, iconCanvas } from './engine/icons.js';
 import { fxUpdateDraw, fxClear, fxText, fxSlash, fxBolt, fxDissolve, fxRing, fxBlock } from './engine/fx.js';
 import { GCOLS, GROWS, buildGameRoom, cx0g, cy0g, isBlocked } from './engine/dungeon.js';
-import { xpToReach, ROOMS_SPEC } from './engine/combat.js';
+import { xpToReach } from './engine/combat.js';
+import { DUNGEONS, LAYOUTS, ROOM_COUNT, BOSS_ROOM, dungeonById, isUnlocked, nextDungeon } from './data/dungeons.js';
 import { unspentPoints, earnedPoints, pointsForLevel, ASSIGNABLE, emptyPoints } from './systems/Leveling.js';
 import { combatMods, activeSkills, unspentSkillPoints, earnedSkillPoints, spentSkillPoints, branchInvested, tierUnlocked, rankOf, allSkills,
          reflectFrac, guardianFrac, waveHealFrac, lastStand, momentum } from './systems/Skills.js';
@@ -24,7 +25,8 @@ import { openTemple } from './ui/TempleScreen.js';
 import { openForge } from './ui/ForgeScreen.js';
 import { openDiag } from './ui/DiagScreen.js';
 import { startOnboarding } from './ui/Onboarding.js';
-import { makeCompanion } from './models/units.js';
+import { makeCompanion, makeEnemy } from './models/units.js';
+import { openDungeonSelect } from './ui/DungeonSelect.js';
 import { readSlot, writeSlot, SAVE_VERSION } from './state/save.js';
 import { installDiag, diag, diagText, APP_BUILD } from './engine/diag.js';
 installDiag(); // start capturing console errors / uncaught exceptions immediately
@@ -60,7 +62,10 @@ setLogState("mid");
 /* phase: idle → fight ⇄ paused. inventory holds dropped loot; respawn/revive are timers. */
 const state={ roomIdx:0, scene:"town", phase:"idle", room:null, foes:[], t:0, speed:1,
   inventory:[], gems:0, silver:0, shopStock:[], recruits:[], respawnAt:null, wipeAt:null,
+  dungeonId:"emberdeep", cleared:[], victoryAt:null,   // active dungeon + cleared-boss ids + boss-clear timer
   rally:null };      // {r,c} flag heroes regroup on when no foe is engaged
+/* the dungeon the party is currently delving (falls back to the Emberdeep) */
+const activeDungeon=()=>dungeonById(state.dungeonId);
 /* Combatants are DERIVED, never a synced parallel array: the living heroes come straight from
    `party` (the roster's source of truth) and the enemies from `state.foes`. This makes a whole
    bug class impossible — a hired/resurrected pal is a combatant simply by being alive in `party`,
@@ -80,13 +85,16 @@ const PARTY_CAP=3;          // main + 2 companions ("two companions only"); Tave
 let activeSlot=null;        // which save slot this run writes to (set by onboarding)
 function snapshotState(){
   return { v:SAVE_VERSION, party, silver:state.silver, gems:state.gems,
-    inventory:state.inventory, roomIdx:state.roomIdx, savedAt:new Date().toISOString() };
+    inventory:state.inventory, roomIdx:state.roomIdx,
+    dungeonId:state.dungeonId, cleared:state.cleared, savedAt:new Date().toISOString() };
 }
 function saveGame(){ if(activeSlot!==null) writeSlot(activeSlot, snapshotState()); }
 function loadGame(save){
   party=(save.party||[]).map(h=>({alive:true, pts:emptyPoints(), skills:{}, ...h}));   // defaults for older saves
   state.silver=save.silver||0; state.gems=save.gems||0;
   state.inventory=save.inventory||[]; state.roomIdx=save.roomIdx||0;
+  state.dungeonId=dungeonById(save.dungeonId).id;    // older saves default to the Emberdeep
+  state.cleared=Array.isArray(save.cleared)?save.cleared.slice():[];
 }
 const partyClasses=()=>party.length?[...new Set(party.map(h=>h.cls))]:["fighter","mage","cleric","rogue"];
 let combatRng=Math.random;  // reseeded deterministically when a fight starts / area changes
@@ -243,21 +251,33 @@ function randFloor(pred){
   const [r,c]=cells[Math.floor(combatRng()*cells.length)];
   return {r,c};
 }
+/* build one enemy from a composition token for the active dungeon at the given room depth */
+function spawnFromToken(tok,d,idx){
+  if(tok==="BOSS") return makeEnemy(d.boss.fig,{level:d.band[1], name:d.boss.name, boss:true});
+  const lvl=d.baseLevel+idx;                 // rooms ramp from the dungeon's base level down to the boss
+  return makeEnemy(tok,{level:lvl, name:(d.roster&&d.roster[tok])||undefined});
+}
 function spawnWave(){
-  const spec=ROOMS_SPEC[state.roomIdx];
+  const d=activeDungeon(), idx=state.roomIdx, L=LAYOUTS[idx];
   // NPCs appear on random reachable floor cells, kept off the hero line at the bottom when possible.
-  // Enemy level scales with how deep you are, so the badge on each tile means something.
-  spec.spawn().forEach((f,i)=>{
+  // Enemy level scales with the dungeon's band, so the badge on each tile means something.
+  L.comp.forEach((tok,i)=>{
     const cell=randFloor((r,c)=>r<=GROWS-4) || randFloor();
     if(!cell) return;
+    const f=spawnFromToken(tok,d,idx);
     f.r=cell.r; f.c=cell.c; f.rr=f.r; f.cc=f.c; f.moveT=1; f.next=state.t+0.7+0.2*i;
-    f.level=state.roomIdx+1+(f.boss?1:0); resetCombat(f);
+    resetCombat(f);
     state.foes.push(f); figOf(f); });
 }
+function roomTitle(d,idx){
+  return idx===BOSS_ROOM ? `${d.name} — ${d.boss.name}` : `${d.name} — ${LAYOUTS[idx].roomName}`;
+}
 function loadRoom(){
-  const spec=ROOMS_SPEC[state.roomIdx];
-  state.room=buildGameRoom((Date.now()+state.roomIdx*7919)|0,spec);
-  state.foes=[]; fxClear(); state.respawnAt=null; state.wipeAt=null; state.rally=null;
+  const d=activeDungeon(), idx=state.roomIdx, L=LAYOUTS[idx];
+  const spec={ title:roomTitle(d,idx), shape:L.shape, blockers:L.blockers,
+    blockerKinds:L.blockerKinds, tiles:L.tiles, exits:L.exits };
+  state.room=buildGameRoom((Date.now()+idx*7919)|0,spec);
+  state.foes=[]; fxClear(); state.respawnAt=null; state.wipeAt=null; state.victoryAt=null; state.rally=null;
   placeHeroes(); spawnWave();
   log(`— <span class="sys">${spec.title.split("— ")[1]}</span> —`);
 }
@@ -459,8 +479,10 @@ function hurt(u,dmg,src,opt){
     fxDissolve(f,uxS(u),uyS(u)+4,S,S,u.team===0?"#9ad1ff":"#c98a8a");
     if(u.team===1&&src&&src.team===0){
       awardXP(u.xp);
-      if(u.boss||combatRng()<BAL.DROP_CHANCE){
-        const drop=generate(combatRng,{classes:partyClasses()});
+      const d=activeDungeon();
+      const dropChance=Math.min(BAL.DROP_CHANCE_MAX, BAL.DROP_CHANCE + BAL.DROP_CHANCE_PER_TIER*(d.power-1));
+      if(u.boss||combatRng()<dropChance){
+        const drop=generate(combatRng,{classes:partyClasses(), power:d.power, floor:d.dropFloor});
         state.inventory.push(drop);
         log(`${iconImg("chest",14)} <b>${u.name}</b> drops <span class="sys">${drop.n}</span> <span style="opacity:.6">→ bag (${state.inventory.length})</span>`);
         fxText(uxS(u),uyS(u)-30,"+"+drop.n.split(" ").pop(),"#ffd166");
@@ -580,14 +602,42 @@ function updateWaves(){
       log(`${iconImg("skull",14)} <span class="crit">The party falls…</span> retreating to the Keep.`); }
     return;
   }
-  if(!foesAlive && state.respawnAt===null){
-    state.respawnAt=state.t+BAL.RESPAWN_DELAY;
-    for(const h of party) if(h.alive){ const mh=derive(h).maxhp;
-      const heal=Math.round(mh*BAL.WAVE_HEAL_FRAC)+Math.round(mh*waveHealFrac(h));   // + Second Wind
-      h.hp=Math.min(mh,h.hp+heal); }
-    renderParty();
-    log(`${iconImg("check",14)} <span class="sys">Wave cleared.</span> Another approaches…`);
+  if(!foesAlive){
+    // The boss room is the finish line: clearing it wins the dungeon (no respawn). Every other room
+    // keeps its endless-wave rhythm so you can farm before pressing onward.
+    if(state.roomIdx===BOSS_ROOM){
+      if(state.victoryAt===null){ state.victoryAt=state.t+BAL.RESPAWN_DELAY;
+        log(`${iconImg("check",14)} <span class="heal">${activeDungeon().boss.name} is slain!</span>`,"heal"); }
+      return;
+    }
+    if(state.respawnAt===null){
+      state.respawnAt=state.t+BAL.RESPAWN_DELAY;
+      for(const h of party) if(h.alive){ const mh=derive(h).maxhp;
+        const heal=Math.round(mh*BAL.WAVE_HEAL_FRAC)+Math.round(mh*waveHealFrac(h));   // + Second Wind
+        h.hp=Math.min(mh,h.hp+heal); }
+      renderParty();
+      log(`${iconImg("check",14)} <span class="sys">Wave cleared.</span> Another approaches…`);
+    }
   }
+}
+/* Boss down → mark the dungeon cleared, unlock the next rung (first clear grants a guaranteed drop),
+   and retire to the Keep in victory. Re-clearing a dungeon just farms it (no double unlock). */
+function winDungeon(){
+  const d=activeDungeon(), first=!state.cleared.includes(d.id);
+  if(first){
+    state.cleared.push(d.id);
+    const floor=["plain","fine","rare","epic"];
+    const bump=Math.min(floor.length-1, floor.indexOf(d.dropFloor)+BAL.FIRST_CLEAR_GRADE_BUMP);
+    const reward=generate(combatRng,{classes:partyClasses(), power:d.power, floor:floor[bump]});
+    state.inventory.push(reward);
+    log(`${iconImg("chest",14)} First clear! <b>${d.name}</b> yields <span class="sys">${reward.n}</span>.`,"heal");
+    const nx=nextDungeon(d);
+    if(nx) log(`${iconImg("spark",14)} <span class="sys">${nx.name} is now open at the Dungeons board.</span>`,"sys");
+  } else {
+    log(`${iconImg("check",14)} <b>${d.name}</b> cleared again.`,"sys");
+  }
+  state.phase="idle"; state.roomIdx=0; loadRoom();   // reset the delve for next time
+  enterTown();
 }
 /* ---------- controls & menus ---------- */
 function syncButtons(){
@@ -670,7 +720,20 @@ function enterDungeon(){
 function openTownScreen(){
   openTown({ silver:()=>state.silver, gems:()=>state.gems, party, portrait:h=>heroPortrait(h),
     openHero, openShop:openShopScreen, openTavern:openTavernScreen, openTemple:openTempleScreen,
-    openForge:openForgeScreen, openDiag:openDiagScreen, enterDungeon });
+    openForge:openForgeScreen, openDiag:openDiagScreen, openDungeons:openDungeonBoard,
+    activeDungeon:()=>activeDungeon() });
+}
+/* start a fresh delve of a chosen dungeon (resets to its first room) */
+function startDungeon(id){
+  state.dungeonId=dungeonById(id).id; state.roomIdx=0; state.phase="idle";
+  loadRoom(); saveGame(); enterDungeon();
+}
+function openDungeonBoard(){
+  openDungeonSelect({
+    dungeons:DUNGEONS, active:state.dungeonId, cleared:state.cleared, roomIdx:state.roomIdx,
+    resumable:state.roomIdx>0, partyLevel:party[0]?party[0].level:1,
+    silver:state.silver, gems:state.gems,
+    select:id=>startDungeon(id), resume:()=>enterDungeon(), back:openTownScreen });
 }
 function openDiagScreen(){ openDiag({ text:buildDiagnostics, back:openTownScreen }); }
 /* ---------- forge: spend gems to upgrade gear (town service) ---------- */
@@ -764,7 +827,7 @@ function openShopScreen(){
     back:openTownScreen });
 }
 function nextArea(){
-  state.roomIdx=(state.roomIdx+1)%ROOMS_SPEC.length;
+  state.roomIdx=Math.min(BOSS_ROOM, state.roomIdx+1);   // descend toward the boss; the boss room is the finish line
   const wasFighting = state.phase!=="idle";
   loadRoom(); seedBattle();
   state.phase = wasFighting ? "fight" : "idle";
@@ -859,7 +922,7 @@ function drawFlag(cx,cy){
    room carries a ring. Overlays the top-right void margin so it never covers the fight. */
 function drawCompass(){
   if(!state.room) return;
-  const n=ROOMS_SPEC.length, cur=state.roomIdx;
+  const n=ROOM_COUNT, cur=state.roomIdx;
   const pw=Math.min(CW-16, 52+(n-1)*20), ph=40, x=CW-pw-8, y=8;
   G.fillStyle="rgba(12,9,22,.82)"; rrp(G,x,y,pw,ph,9); G.fill();
   G.strokeStyle="rgba(216,162,74,.45)"; G.lineWidth=1.2; rrp(G,x,y,pw,ph,9); G.stroke();
@@ -917,6 +980,8 @@ function loop(now){
         updateWaves();
         // endless map: respawn a fresh wave on its timer
         if(state.respawnAt!==null && state.t>=state.respawnAt){ state.respawnAt=null; spawnWave(); }
+        // boss slain: end the delve in victory (unlocks the next rung) once the dust settles
+        if(state.victoryAt!==null && state.t>=state.victoryAt){ state.victoryAt=null; winDungeon(); }
         // full wipe: pull back to the Keep (main revives free there; fallen pals need the Temple)
         if(state.wipeAt!==null && state.t>=state.wipeAt){ state.wipeAt=null; enterTown(true); }
         // prune slain FOES only (heroes are never pruned — they live in `party`, dead or alive)
@@ -965,6 +1030,7 @@ startOnboarding({
   onNewGame:(hero, slot)=>{
     activeSlot=slot;
     party=[hero]; state.silver=BAL.STARTING_SILVER; state.gems=0; state.inventory=[]; state.roomIdx=0;
+    state.dungeonId="emberdeep"; state.cleared=[];   // fresh ladder
     log(`Welcome to <span class="sys">The Emberdeep</span>, <b>${hero.name}</b> the ${hero.cls}.`,"sys");
     log(`Recruit up to two pals at the Tavern, gear up, then <b>Descend</b>. Fallen pals can be restored at the Temple.`,"sys");
     beginRun();

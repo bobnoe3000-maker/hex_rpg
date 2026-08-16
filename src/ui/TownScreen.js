@@ -101,7 +101,7 @@ export function openTown(ctx) {
     </div>
     <div class="tw-sec">Party — tap to manage gear</div>
     <div class="tw-party">${ctx.party.map(card).join("")}</div>
-    <button class="tw-btn primary" data-enter>${iconImg("sword",16)} Descend into the Emberdeep</button>
+    <button class="tw-btn primary" data-enter>${iconImg("sword",16)} Dungeons${ctx.activeDungeon ? ` — ${ctx.activeDungeon().name}` : ""}</button>
     <div class="tw-foot"><span data-diag>Diagnostics &amp; log export ›</span></div>
   </div>`;
 
@@ -114,6 +114,6 @@ export function openTown(ctx) {
   el.querySelector("[data-temple]").onclick = () => ctx.openTemple();
   el.querySelector("[data-shop]").onclick = () => ctx.openShop();
   const fg = el.querySelector("[data-forge]"); if (fg && ctx.openForge) fg.onclick = () => ctx.openForge();
-  el.querySelector("[data-enter]").onclick = () => ctx.enterDungeon();
+  el.querySelector("[data-enter]").onclick = () => (ctx.openDungeons ? ctx.openDungeons() : ctx.enterDungeon());
   const dg = el.querySelector("[data-diag]"); if (dg && ctx.openDiag) dg.onclick = () => ctx.openDiag();
 }

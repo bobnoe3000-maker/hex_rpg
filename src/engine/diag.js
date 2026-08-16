@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-16 · companion skill loadouts (2 active · 3 passive)";
+export const APP_BUILD = "2026-08-16 · tiered dungeons · the Dungeons board (10 rungs → Lv 100)";
 
 const BUF = [];
 const MAX = 400;

@@ -11,6 +11,9 @@ import { starterGear } from "../data/items/starter.js";
 import { emptyPoints } from "../systems/Leveling.js";
 import { rollCompanionSkills } from "../systems/Skills.js";
 import { COMPANION_NAMES } from "../data/names.js";
+import { BAL } from "../data/balance.js";
+
+const ENEMY_SCALE = BAL.ENEMY_SCALE;
 
 const CLASSES = ["fighter", "mage", "cleric", "rogue"];
 
@@ -80,12 +83,36 @@ export function makeCompanion(seed, level = 1) {
   return h;
 }
 
+/* Scale an archetype's level-1 baseline up to `level`, in place. The rates are a linear fraction of
+   base per level (mirrors the roughly-linear hero growth so a Lv-N pack stays a fair fight for a
+   Lv-N party) and live in BAL.ENEMY_SCALE for the balance pass. HP/ATK/DEF carry the fight; dodge
+   and crit ramp gently (they're rating-vs-level curves already); xp climbs so deeper = richer. */
+export function scaleEnemy(e, level) {
+  const L = Math.max(1, level | 0), s = L - 1, S = ENEMY_SCALE;
+  e.level = L;
+  e.maxhp = Math.max(1, Math.round(e.maxhp * (1 + S.hp * s)));
+  e.hp = e.maxhp;
+  e.atk = Math.max(1, Math.round(e.atk * (1 + S.atk * s)));
+  e.def = Math.round(e.def * (1 + S.def * s));
+  e.dodge = Math.round(e.dodge * (1 + S.dodge * s));
+  e.crit = Math.round(e.crit * (1 + S.crit * s));
+  e.xp = Math.max(1, Math.round(e.xp * (1 + S.xp * s)));
+  return e;
+}
+
 let _figCounter = 0; // deterministic-ish figure variety without Math.random
-export function makeEnemy(kind, r, c) {
+/* makeEnemy(kind, opts) — opts = { r, c, level, name, boss }. Legacy positional makeEnemy(kind,r,c)
+   is still honoured (a numeric/absent second arg is read as r). `level` (>1) scales the archetype
+   baseline; `name`/`boss` override the flavour so one figure serves many themed dungeons. */
+export function makeEnemy(kind, opts, c) {
   const b = ENEMIES[kind];
-  return {
-    name: b.name, fig: b.fig, team: 1, level: 1, boss: !!b.boss, rng: b.rng, xp: b.xp,
+  if (typeof opts === "number" || opts == null) opts = { r: opts, c }; // legacy (kind, r, c)
+  const e = {
+    name: opts.name || b.name, fig: b.fig, team: 1, level: 1,
+    boss: opts.boss != null ? !!opts.boss : !!b.boss, rng: b.rng, xp: b.xp,
     hp: b.hp, maxhp: b.hp, atk: b.atk, def: b.def, dodge: b.dodge, crit: b.crit, aspd: b.aspd,
-    r, c, alive: true, figSeed: ((++_figCounter) * 2654435761) >>> 0 & 0x7fffffff,
+    r: opts.r, c: opts.c, alive: true, figSeed: ((++_figCounter) * 2654435761) >>> 0 & 0x7fffffff,
   };
+  if (opts.level) scaleEnemy(e, opts.level);
+  return e;
 }
