@@ -656,14 +656,12 @@ function buildDiagnostics(){
     ``, `== combat log (recent) ==`, logLines||"(empty)",
   ].join("\n");
 }
-/* boot: splash → login → create the main hero + pick companions, then open the Keep */
-startOnboarding((hero,companions=[])=>{
-  party=[hero, ...companions].slice(0,PARTY_CAP);   // main + two companions
+/* boot: splash → login → create the main hero, then open the Keep (recruit companions at the Tavern) */
+startOnboarding(hero=>{
+  party=[hero];                       // start solo — hire up to two companions at the Tavern
   state.silver=BAL.STARTING_SILVER;
-  const names=party.slice(1).map(h=>`<b>${h.name}</b>`).join(" &amp; ");
   log(`Welcome to <span class="sys">The Emberdeep</span>, <b>${hero.name}</b> the ${hero.cls}.`,"sys");
-  log(companions.length?`${names} join your party. Gear up, then <b>Descend</b>. Fallen pals can be restored at the Temple.`
-    :`Hire pals at the Tavern, gear up, then <b>Descend</b>. Fallen pals can be restored at the Temple.`,"sys");
+  log(`Recruit up to two pals at the Tavern, gear up, then <b>Descend</b>. Fallen pals can be restored at the Temple.`,"sys");
   loadRoom(); renderParty(); syncButtons(); updateHud();
   enterTown();          // open the hub, not straight into a fight
   requestAnimationFrame(loop);
