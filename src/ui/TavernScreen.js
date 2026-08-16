@@ -56,8 +56,7 @@ export function openTavern(ctx) {
     const emptySlots = Array.from({ length: CAP - party.length }, () => `<div class="tv-slot empty">empty</div>`).join("");
 
     el.innerHTML = `<div class="tw-wrap">
-      <div class="shop-top">
-        <span class="shop-back" data-back>‹ The Keep</span>
+      <div class="shop-top" style="justify-content:flex-end">
         <span class="tw-cur"><span>${iconImg("coin",13)} ${silver}</span></span>
       </div>
       <div class="tw-head"><h1>Tavern</h1><p style="font-size:12px;color:#9a8fb8;font-style:italic">

@@ -38,8 +38,12 @@ setLogState("mid");
 /* phase: idle → fight ⇄ paused. inventory holds dropped loot; respawn/revive are timers. */
 const state={ roomIdx:0, scene:"town", phase:"idle", room:null, units:[], t:0, speed:1,
   inventory:[], gems:0, silver:0, shopStock:[], recruits:[], respawnAt:null, wipeAt:null,
-  panelOpen:false,   // a stats/gear panel is open → the whole dungeon freezes (independent of manual pause)
   rally:null };      // {r,c} flag heroes regroup on when no foe is engaged
+/* The dungeon freezes while the character/gear panel is open. We derive that from whether the
+   overlay is actually on-screen (a single source of truth) rather than a separate boolean —
+   so the freeze can never get "stuck" if the overlay is dismissed by any path. */
+let uiFrozen=false;
+const panelShown=()=>overlay.classList.contains("show");
 let party=[];               // filled by onboarding: [main, ...hired companions] (max 4)
 const partyClasses=()=>party.length?[...new Set(party.map(h=>h.cls))]:["knight","mage","cleric"];
 let combatRng=Math.random;  // reseeded deterministically when a fight starts / area changes
@@ -68,12 +72,14 @@ function portOf(u){
   let src;
   if(u.team===0){ src=heroPortrait(u); }
   else{
-    const fig=figOf(u); // 384x384 (96-space @4x); heads sit around y 16..52 in 96-space
+    // Fit the WHOLE standing figure into the tile. Creatures vary far too much for one humanoid
+    // head-crop — rats are low, wide and left-headed (the old crop cut their heads off), while
+    // dragons are tall and winged. The figure is 384×384 (creature drawn in 96-space @4×,
+    // standing on y≈86); source [24,44]→336² captures head-top through ground for every creature.
+    const fig=figOf(u);
     const c=document.createElement("canvas"); c.width=c.height=96;
     const g=c.getContext("2d");
-    // crop the head region and scale it to fill the portrait
-    const sx=u.boss?60:120, sy=u.boss?40:70, sw=384-sx*2, sh=u.boss?260:210;
-    g.drawImage(fig, sx,sy,sw,sh, -6,2, 108,104);
+    g.drawImage(fig, 24,44, 336,336, 4,4, 88,88);
     src=c;
   }
   PORTCACHE[key]=src; return src;
@@ -324,9 +330,9 @@ function tryForge(item){
   return res;
 }
 function openHero(h){
-  // Opening a panel freezes the dungeon entirely (combat, movement, FX) without touching the
-  // manual Fight/Pause state — so closing the panel resumes exactly where the fight left off.
-  state.panelOpen=true;
+  // Opening the panel shows the overlay, which the loop reads to freeze the dungeon entirely
+  // (combat, movement, FX) without touching the manual Fight/Pause state — so closing the panel
+  // resumes exactly where the fight left off. No separate flag to leak.
   openCharacter(h, {
     inventory: state.inventory,
     portrait: heroPortrait(h),
@@ -334,7 +340,7 @@ function openHero(h){
     gems: ()=>state.gems,
     silver: ()=>state.silver,
     forge: tryForge,
-    close: ()=>{ state.panelOpen=false; },
+    close: ()=>{},
   });
 }
 /* ---------- scenes: town hub ⇄ dungeon ---------- */
@@ -450,7 +456,7 @@ btnTown.innerHTML=iconImg("house",18);   // replace the emoji label with a sprit
 btnSpeed.onclick=()=>{ state.speed=state.speed===1?2:1; btnSpeed.textContent=`${state.speed}×`; };
 /* tap the dungeon floor to plant a rally flag; idle pals (no foe engaged) regroup there */
 cvG.addEventListener("click", e=>{
-  if(state.scene!=="dungeon" || state.panelOpen || !state.room) return;
+  if(state.scene!=="dungeon" || panelShown() || !state.room) return;
   const rect=cvG.getBoundingClientRect();
   const px=(e.clientX-rect.left)/rect.width*CW, py=(e.clientY-rect.top)/rect.height*CH;
   const c=Math.floor((px-cx0g(0))/T), r=Math.floor((py-cy0g(0))/T);
@@ -467,7 +473,7 @@ function drawUnit(u){
   const moving=(u.moveT!==undefined&&u.moveT<1);
   const hop=moving ? -Math.sin(u.moveT*Math.PI)*4 : Math.sin(state.t*2.4+u.c*1.7)*1.0;
   let ox=0,oy=0;
-  if(u.lunge){ if(!state.panelOpen) u.lunge.t+=0.016*state.speed;
+  if(u.lunge){ if(!uiFrozen) u.lunge.t+=0.016*state.speed;
     const k=Math.sin(Math.min(1,u.lunge.t/0.22)*Math.PI);
     ox=(u.lunge.tx-gx)*0.20*k; oy=(u.lunge.ty-gy)*0.20*k;
     if(u.lunge.t>0.24)u.lunge=null; }
@@ -477,7 +483,7 @@ function drawUnit(u){
   G.save(); G.shadowColor=pal.glow; G.shadowBlur=u.boss?14:8;
   G.drawImage(tile.canvas,px-S/2,py-S/2,S,S); G.restore();
   if(u.flash>0){ G.save(); G.globalAlpha=Math.min(1,u.flash*4)*.7; G.globalCompositeOperation="lighter";
-    G.drawImage(tile.canvas,px-S/2,py-S/2,S,S); G.restore(); if(!state.panelOpen) u.flash-=0.016*state.speed; }
+    G.drawImage(tile.canvas,px-S/2,py-S/2,S,S); G.restore(); if(!uiFrozen) u.flash-=0.016*state.speed; }
   // HP capsule under the tile (same schema for heroes and enemies now)
   const mh=derive(u).maxhp, hw=S*0.7, hh=Math.max(3.5,S*0.085);
   const hx=px-hw/2, hy=py+S*0.5+2;
@@ -530,28 +536,33 @@ function render(dt){
 let last=performance.now();
 function loop(now){
   let dt=Math.min(0.05,(now-last)/1000); last=now; dt*=state.speed;
-  // A panel open over the dungeon freezes time completely: no combat, no animation, no FX advance.
-  const frozen=state.panelOpen;
-  if(!frozen){
-    state.t+=dt;
-    if(state.scene==="dungeon" && state.phase==="fight"){
-      for(const u of state.units){
-        if(!u.alive)continue;
-        if(state.t>=u.next){ act(u); u.next=state.t+BAL.BASE_INTERVAL/derive(u).aspd+combatRng()*BAL.ASPD_JITTER; }
+  // A per-frame exception must never break the animation-frame chain (that's a hard freeze).
+  // Catch, log once, and keep requesting frames so the game recovers on the next tick.
+  try{
+    // A panel open over the dungeon freezes time completely: no combat, no animation, no FX advance.
+    // Derived from the overlay's real visibility so it can never stick frozen.
+    const frozen=panelShown(); uiFrozen=frozen;
+    if(!frozen){
+      state.t+=dt;
+      if(state.scene==="dungeon" && state.phase==="fight"){
+        for(const u of state.units){
+          if(!u.alive)continue;
+          if(state.t>=u.next){ act(u); u.next=state.t+BAL.BASE_INTERVAL/derive(u).aspd+combatRng()*BAL.ASPD_JITTER; }
+        }
+        updateWaves();
+        // endless map: respawn a fresh wave on its timer
+        if(state.respawnAt!==null && state.t>=state.respawnAt){ state.respawnAt=null; spawnWave(); }
+        // full wipe: pull back to the Keep (main revives free there; fallen pals need the Temple)
+        if(state.wipeAt!==null && state.t>=state.wipeAt){ state.wipeAt=null; enterTown(true); }
+        // prune slain units so the list doesn't grow without bound over endless waves
+        state.units=state.units.filter(u=>u.alive);
       }
-      updateWaves();
-      // endless map: respawn a fresh wave on its timer
-      if(state.respawnAt!==null && state.t>=state.respawnAt){ state.respawnAt=null; spawnWave(); }
-      // full wipe: pull back to the Keep (main revives free there; fallen pals need the Temple)
-      if(state.wipeAt!==null && state.t>=state.wipeAt){ state.wipeAt=null; enterTown(true); }
-      // prune slain units so the list doesn't grow without bound over endless waves
-      state.units=state.units.filter(u=>u.alive);
+      // advance grid-slide interpolation for every unit
+      for(const u of state.units){ if(u.moveT!==undefined&&u.moveT<1)
+        u.moveT=Math.min(1,u.moveT+dt*6.5); }
     }
-    // advance grid-slide interpolation for every unit
-    for(const u of state.units){ if(u.moveT!==undefined&&u.moveT<1)
-      u.moveT=Math.min(1,u.moveT+dt*6.5); }
-  }
-  render(frozen?0:dt);
+    render(frozen?0:dt);
+  }catch(err){ if(!loop._warned){ loop._warned=true; console.error("DP loop frame error (recovered):",err); } }
   requestAnimationFrame(loop);
 }
 /* boot: splash → login → create the main character, then open the Keep */
