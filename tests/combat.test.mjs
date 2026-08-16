@@ -231,13 +231,15 @@ ok("different seed diverges", seq(123) !== seq(777));
   ok("points per level step down at 50 and 100",
      pointsForLevel(1) === 3 && pointsForLevel(50) === 3 && pointsForLevel(51) === 2 &&
      pointsForLevel(100) === 2 && pointsForLevel(101) === 1);
-  ok("earnedPoints is cumulative across the bands",
-     earnedPoints(1) === 3 && earnedPoints(50) === 150 && earnedPoints(100) === 250 && earnedPoints(101) === 251);
+  ok("earnedPoints starts at level 2 and is cumulative across the bands",
+     earnedPoints(1) === 0 && earnedPoints(2) === 3 && earnedPoints(50) === 147 && earnedPoints(100) === 247 && earnedPoints(101) === 248);
 
-  // a fresh hero has level-1 points unspent and none committed
+  // a fresh level-1 hero has NO points yet; they begin at level 2
   const h = makeHero("fighter", 1);
-  ok("new hero starts with its level-1 points unspent", unspentPoints(h) === 3);
+  ok("new level-1 hero has no points yet", unspentPoints(h) === 0);
   ok("no committed points add nothing in derive", pointBonus(h, "atk") === 0);
+  h.level = 2;
+  ok("first level-up grants the level-2 points", unspentPoints(h) === 3);
 
   // committing points raises the derived stat by STEP and reduces the unspent pool
   const atk0 = derive(h).atk;

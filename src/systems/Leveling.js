@@ -16,10 +16,11 @@ export function pointsForLevel(level) {
   return 1;
 }
 
-/* total points a hero has earned by its current level (cumulative, closed to any level) */
+/* total points a hero has earned by its current level (cumulative). Points begin at level 2 — a
+   freshly created level-1 hero has none until its first level-up. */
 export function earnedPoints(level) {
   let total = 0;
-  for (let L = 1; L <= level; L++) total += pointsForLevel(L);
+  for (let L = 2; L <= level; L++) total += pointsForLevel(L);
   return total;
 }
 
