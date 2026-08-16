@@ -189,6 +189,8 @@ Individually downed heroes in a fight the party still **wins** are revived at ru
 ## 8. Meta Structure & Screens
 
 ### 8.1 Keep / Town hub ✅ (Feature 6) — implemented
+**Save slots:** after guest login the player picks one of **three save slots** (`state/save.js`, `ui/Onboarding.js`) — an empty slot starts character creation, a filled slot shows the main hero + party summary and loads directly. A save is a plain-JSON snapshot (party, currencies, bag, room); heroes carry their portrait/figure **seeds**, so all art regenerates on load and nothing non-serializable is stored. The run auto-saves to its slot on returning to the Keep and after every town transaction. Slots can be deleted from the picker.
+
 The game **boots into the Keep**, not a fight. The hub shows the party (tap a hero to manage gear/forge), currency (💰 silver, 💎 gems), and services; **Descend** enters the dungeon and 🏠 returns. The **Shop** is live (buy/sell gear priced by `systems/Economy.js`, reroll stock, trade silver for gems); **Bank** is a stub. The single currency is **silver**. Home screen with services:
 | Service | Function |
 |---|---|

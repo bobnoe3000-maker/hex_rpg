@@ -21,6 +21,7 @@ import { openForge } from './ui/ForgeScreen.js';
 import { openDiag } from './ui/DiagScreen.js';
 import { startOnboarding } from './ui/Onboarding.js';
 import { makeCompanion } from './models/units.js';
+import { readSlot, writeSlot, SAVE_VERSION } from './state/save.js';
 import { installDiag, diag, diagText, APP_BUILD } from './engine/diag.js';
 installDiag(); // start capturing console errors / uncaught exceptions immediately
 /* Surface caught glitches instead of failing silently: a throttled toast points the player at the
@@ -71,6 +72,18 @@ let uiFrozen=false;
 const panelShown=()=>overlay.classList.contains("show");
 let party=[];               // filled by onboarding: [main, ...companions]
 const PARTY_CAP=3;          // main + 2 companions ("two companions only"); Tavern replaces the fallen
+/* ---------- persistence: one of three save slots ---------- */
+let activeSlot=null;        // which save slot this run writes to (set by onboarding)
+function snapshotState(){
+  return { v:SAVE_VERSION, party, silver:state.silver, gems:state.gems,
+    inventory:state.inventory, roomIdx:state.roomIdx, savedAt:new Date().toISOString() };
+}
+function saveGame(){ if(activeSlot!==null) writeSlot(activeSlot, snapshotState()); }
+function loadGame(save){
+  party=(save.party||[]).map(h=>({alive:true, ...h}));   // default alive for older saves
+  state.silver=save.silver||0; state.gems=save.gems||0;
+  state.inventory=save.inventory||[]; state.roomIdx=save.roomIdx||0;
+}
 const partyClasses=()=>party.length?[...new Set(party.map(h=>h.cls))]:["knight","mage","cleric","rogue"];
 let combatRng=Math.random;  // reseeded deterministically when a fight starts / area changes
 /* tiny currency readout in the log header */
@@ -382,7 +395,7 @@ function tryForge(item){
   if(res.outcome==="success") log(`${iconImg("hammer",14)} <span class="heal">+${item.upgradeLevel}!</span> ${item.n} strengthened.`,"heal");
   else if(res.outcome==="destroyed"){ removeItem(item); log(`${iconImg("hammer",14)} <span class="crit">Shattered!</span> ${item.n} was destroyed.`,"crit"); }
   else log(`${iconImg("hammer",14)} <span class="miss">The gem fizzles</span> — ${item.n} is unharmed.`);
-  renderParty(); updateHud();
+  renderParty(); updateHud(); saveGame();
   return res;
 }
 function openHero(h){
@@ -411,6 +424,7 @@ function enterTown(fromWipe=false){
   if(fromWipe){ state.phase="idle"; loadRoom(); }
   renderParty();
   openTownScreen();
+  saveGame();          // persist the run whenever you're back at the Keep (loot, revives, etc.)
   diag("scene", `keep${fromWipe?" · wipe":""} · party ${party.filter(h=>h.alive).length}/${party.length}`);
 }
 function enterDungeon(){
@@ -448,7 +462,7 @@ function refreshRecruits(free){
   if(state.silver<cost) return false;
   state.silver-=cost;
   state.recruits=Array.from({length:BAL.TAVERN.RECRUITS},()=>makeCompanion((Math.random()*1e9)>>>0, mainLevel()));
-  updateHud(); return true;
+  updateHud(); saveGame(); return true;
 }
 function hireCompanion(recruit){
   const cost=hireCostFor(recruit);
@@ -464,7 +478,7 @@ function hireCompanion(recruit){
     state.silver-=cost; state.recruits.splice(i,1); party[dead]=recruit;
     log(`${iconImg("tankard",14)} <b>${recruit.name}</b> the ${recruit.cls} (Lv ${recruit.level}) replaces the fallen <b>${fallen.name}</b>.`,"sys");
   }
-  renderParty(); updateHud();
+  renderParty(); updateHud(); saveGame();
   return true;
 }
 function openTavernScreen(){
@@ -480,7 +494,7 @@ function resurrectHero(h){
   const fee=resurrectFee(h);
   if(h.alive || state.silver<fee) return false;
   state.silver-=fee; h.alive=true; h.hp=derive(h).maxhp;
-  renderParty(); updateHud();
+  renderParty(); updateHud(); saveGame();
   log(`${iconImg("temple",14)} <b>${h.name}</b> is restored to life.`,"sys");
   return true;
 }
@@ -493,20 +507,20 @@ function rerollStock(free){
   if(state.silver<cost) return false;
   state.silver-=cost;
   state.shopStock=Array.from({length:BAL.SHOP.STOCK},()=>generate(Math.random,{classes:partyClasses()}));
-  updateHud(); return true;
+  updateHud(); saveGame(); return true;
 }
 function buyItem(item){
   const p=priceOf(item), i=state.shopStock.indexOf(item);
   if(i<0||state.silver<p) return false;
-  state.silver-=p; state.shopStock.splice(i,1); state.inventory.push(item); updateHud(); return true;
+  state.silver-=p; state.shopStock.splice(i,1); state.inventory.push(item); updateHud(); saveGame(); return true;
 }
 function sellItem(item){
   const i=state.inventory.indexOf(item); if(i<0) return false;
-  state.silver+=sellPriceOf(item); state.inventory.splice(i,1); updateHud(); return true;
+  state.silver+=sellPriceOf(item); state.inventory.splice(i,1); updateHud(); saveGame(); return true;
 }
 function buyGem(){
   if(state.silver<BAL.SHOP.GEM_PRICE) return false;
-  state.silver-=BAL.SHOP.GEM_PRICE; state.gems++; updateHud(); return true;
+  state.silver-=BAL.SHOP.GEM_PRICE; state.gems++; updateHud(); saveGame(); return true;
 }
 function openShopScreen(){
   if(!state.shopStock.length) rerollStock(true); // first visit fills the shelves for free
@@ -676,13 +690,25 @@ function buildDiagnostics(){
     ``, `== combat log (recent) ==`, logLines||"(empty)",
   ].join("\n");
 }
-/* boot: splash → login → create the main hero, then open the Keep (recruit companions at the Tavern) */
-startOnboarding(hero=>{
-  party=[hero];                       // start solo — hire up to two companions at the Tavern
-  state.silver=BAL.STARTING_SILVER;
-  log(`Welcome to <span class="sys">The Emberdeep</span>, <b>${hero.name}</b> the ${hero.cls}.`,"sys");
-  log(`Recruit up to two pals at the Tavern, gear up, then <b>Descend</b>. Fallen pals can be restored at the Temple.`,"sys");
+/* boot: splash → login → pick a save slot → (new) create a hero, or (continue) load the slot */
+function beginRun(){
   loadRoom(); renderParty(); syncButtons(); updateHud();
+  saveGame();           // persist the freshly created/loaded state
   enterTown();          // open the hub, not straight into a fight
   requestAnimationFrame(loop);
+}
+startOnboarding({
+  onNewGame:(hero, slot)=>{
+    activeSlot=slot;
+    party=[hero]; state.silver=BAL.STARTING_SILVER; state.gems=0; state.inventory=[]; state.roomIdx=0;
+    log(`Welcome to <span class="sys">The Emberdeep</span>, <b>${hero.name}</b> the ${hero.cls}.`,"sys");
+    log(`Recruit up to two pals at the Tavern, gear up, then <b>Descend</b>. Fallen pals can be restored at the Temple.`,"sys");
+    beginRun();
+  },
+  onContinue:(slot)=>{
+    activeSlot=slot; loadGame(readSlot(slot)||{});
+    const m=party[0];
+    log(`Welcome back to <span class="sys">The Emberdeep</span>${m?`, <b>${m.name}</b>`:""}.`,"sys");
+    beginRun();
+  },
 });

@@ -66,6 +66,25 @@ function ensureForgeCss() {
   .fg-row{cursor:pointer} .fg-row.seated{border-color:var(--gold);background:#241a12}
   .fg-max{font-size:9px;color:#8f86a8;letter-spacing:1px;border:1px solid var(--line);border-radius:5px;padding:2px 5px;white-space:nowrap}
   .fg-where{color:#8f86a8;font-style:italic}
+  /* fuse animation: charge → strike → success/fail burst */
+  .fg-seat{position:relative;overflow:visible}
+  .fg-seat.charging{animation:fg-charge .48s ease-in forwards}
+  .fg-gembox.charging{animation:fg-gempulse .24s ease-in-out infinite alternate}
+  .fg-seat.strike{animation:fg-shake .4s}
+  @keyframes fg-charge{from{box-shadow:0 0 0 rgba(216,162,74,0)}to{box-shadow:0 0 24px 4px rgba(216,162,74,.85);border-color:var(--gold)}}
+  @keyframes fg-gempulse{to{box-shadow:0 0 26px rgba(121,199,230,.95);transform:scale(1.07)}}
+  @keyframes fg-shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-4px)}40%{transform:translateX(4px)}60%{transform:translateX(-3px)}80%{transform:translateX(3px)}}
+  .fg-burst{position:absolute;inset:-2px;border-radius:12px;pointer-events:none;z-index:2}
+  .fg-burst.good{animation:fg-good .6s ease-out forwards}
+  .fg-burst.bad{animation:fg-bad .55s ease-out forwards}
+  .fg-burst.meh{animation:fg-meh .5s ease-out forwards}
+  @keyframes fg-good{0%{box-shadow:0 0 0 0 rgba(126,231,135,.9),inset 0 0 30px rgba(126,231,135,.7);opacity:1}
+    100%{box-shadow:0 0 44px 22px rgba(126,231,135,0),inset 0 0 0 rgba(126,231,135,0);opacity:0}}
+  @keyframes fg-bad{0%,15%{box-shadow:inset 0 0 34px rgba(255,90,90,.85);opacity:1}100%{box-shadow:inset 0 0 0 rgba(255,90,90,0);opacity:0}}
+  @keyframes fg-meh{0%{box-shadow:inset 0 0 22px rgba(154,143,168,.6);opacity:1}100%{opacity:0}}
+  .fg-spark{position:absolute;left:50%;top:44%;width:5px;height:5px;border-radius:1px;margin:-2.5px;pointer-events:none;z-index:3;
+    animation:fg-fly .58s ease-out forwards}
+  @keyframes fg-fly{0%{transform:translate(0,0) scale(1);opacity:1}100%{transform:translate(var(--dx),var(--dy)) scale(.3);opacity:0}}
   `;
   document.head.appendChild(s);
 }
@@ -79,6 +98,17 @@ export function openForge(ctx) {
   let ownerF = null;   // filter: hero object | "bag" | null (all)
   let slotF = null;    // filter: slot string | null (all)
   let msg = null;
+  let busy = false;    // true while the fuse animation plays (locks interaction)
+
+  function sparks(host, color, n) {
+    for (let i = 0; i < n; i++) {
+      const sp = document.createElement("div"); sp.className = "fg-spark";
+      const a = Math.random() * 6.283, d = 26 + Math.random() * 34;
+      sp.style.setProperty("--dx", Math.cos(a) * d + "px");
+      sp.style.setProperty("--dy", Math.sin(a) * d + "px");
+      sp.style.background = color; host.appendChild(sp);
+    }
+  }
 
   function render() {
     const gems = ctx.gems(), gearAll = ctx.gear(), party = ctx.party();
@@ -141,20 +171,39 @@ export function openForge(ctx) {
     party.forEach((h, i) => { const cv = el.querySelector(`[data-ochip="${i}"]`);
       if (cv) cv.getContext("2d").drawImage(ctx.portrait(h), 0, 0, 72, 72); });
 
-    el.querySelector("[data-back]").onclick = () => ctx.back();
+    el.querySelector("[data-back]").onclick = () => { if (!busy) ctx.back(); };
     el.querySelectorAll("[data-owner]").forEach(b => b.onclick = () => {
-      const v = b.getAttribute("data-owner"); const nv = v === "bag" ? "bag" : party[+v];
+      if (busy) return; const v = b.getAttribute("data-owner"); const nv = v === "bag" ? "bag" : party[+v];
       ownerF = ownerF === nv ? null : nv; render();
     });
     el.querySelectorAll("[data-slot]").forEach(b => b.onclick = () => {
-      const v = b.getAttribute("data-slot") || null; slotF = slotF === v ? null : v; render();
+      if (busy) return; const v = b.getAttribute("data-slot") || null; slotF = slotF === v ? null : v; render();
     });
     el.querySelectorAll("[data-seat]").forEach(r => r.onclick = () => {
-      const x = list[+r.getAttribute("data-seat")]; if (x) { seated = seated === x.item ? null : x.item; msg = null; render(); }
+      if (busy) return; const x = list[+r.getAttribute("data-seat")];
+      if (x) { seated = seated === x.item ? null : x.item; msg = null; render(); }
     });
     const fuse = el.querySelector("[data-fuse]");
-    if (fuse) fuse.onclick = () => { if (!seated) return; const res = ctx.forge(seated); msg = forgeMsg(res);
-      if (res.outcome === "destroyed") seated = null; render(); };
+    if (fuse) fuse.onclick = () => {
+      if (busy || !seated || ctx.gems() <= 0) return;
+      busy = true; fuse.disabled = true;
+      const seatEl = el.querySelector(".fg-seat"), gemEl = el.querySelector(".fg-gembox");
+      seatEl.classList.add("charging"); if (gemEl) gemEl.classList.add("charging");
+      setTimeout(() => {
+        const res = ctx.forge(seated);                 // mutate + spend the gem now
+        seatEl.classList.remove("charging"); if (gemEl) gemEl.classList.remove("charging");
+        const m = forgeMsg(res);
+        seatEl.classList.add("strike");
+        const burst = document.createElement("div"); burst.className = "fg-burst " + m[0]; seatEl.appendChild(burst);
+        if (res.outcome === "success") sparks(seatEl, "#7ee787", 11);
+        else if (res.outcome === "destroyed") sparks(seatEl, "#ff6b6b", 13);
+        setTimeout(() => {
+          busy = false; msg = m;
+          if (res.outcome === "destroyed") seated = null;
+          render();
+        }, 620);
+      }, 470);
+    };
   }
 
   render();
