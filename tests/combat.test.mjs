@@ -10,7 +10,7 @@ import { priceOf, sellPriceOf } from "../src/systems/Economy.js";
 import { xpToReach, xpForNext } from "../src/engine/combat.js";
 import { earnedPoints, pointsForLevel, unspentPoints, pointBonus, STAT_STEP } from "../src/systems/Leveling.js";
 import { earnedSkillPoints, unspentSkillPoints, branchInvested, tierUnlocked, combatMods,
-         skillFlat, skillMult, buffMult, activeSkills, allSkills } from "../src/systems/Skills.js";
+         skillFlat, skillMult, buffMult, activeSkills, allSkills, rollCompanionSkills, heroKit } from "../src/systems/Skills.js";
 
 let fails = 0;
 const ok = (name, cond) => { console.log(`${cond ? "PASS" : "FAIL"}  ${name}`); if (!cond) fails++; };
@@ -225,6 +225,20 @@ ok("different seed diverges", seq(123) !== seq(777));
 {
   const c1 = makeCompanion(2024, 1), c3 = makeCompanion(2024, 3);
   ok("same seed + level is deterministic", JSON.stringify(makeCompanion(2024,3)) === JSON.stringify(c3));
+  // companions auto-roll a 2-active / 3-passive class kit
+  {
+    let bad = 0;
+    for (const seed of [1, 7, 42, 100, 555, 2024, 9999]) for (const lvl of [1, 5, 12]) {
+      const c = makeCompanion(seed, lvl); const kit = heroKit(c);
+      const na = kit.filter(k => k.type === "active").length, np = kit.filter(k => k.type === "passive").length;
+      if (na !== 2 || np !== 3) bad++;
+      if (kit.some(k => allSkills(c.cls).find(s => s.id === k.id).br === undefined)) bad++;   // class-appropriate
+    }
+    ok("every companion kit is 2 active + 3 passive, class-appropriate", bad === 0);
+  }
+  ok("companion kits are deterministic per seed", JSON.stringify(makeCompanion(77, 8).skills) === JSON.stringify(makeCompanion(77, 8).skills));
+  ok("companion skill rank scales with level", Math.max(...Object.values(makeCompanion(3, 1).skills)) === 1 && Math.max(...Object.values(makeCompanion(3, 13).skills)) === 5);
+  ok("rollCompanionSkills is class-appropriate", Object.keys(rollCompanionSkills("mage", 5, 6)).every(id => allSkills("mage").some(s => s.id === id)));
   ok("higher-level companion is the same identity, stronger", c3.cls === c1.cls && c3.name === c1.name && c3.level === 3 && c3.maxhp > c1.maxhp && c3.atk >= c1.atk);
   const h = makeHero("fighter", { statSeed: 1 }); const hp0 = h.maxhp;
   growTo(h, 4);

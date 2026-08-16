@@ -4,6 +4,7 @@
 
 import { ensureTownCss } from "./TownScreen.js";
 import { derive } from "../systems/StatEngine.js";
+import { heroKit } from "../systems/Skills.js";
 import { iconImg } from "../engine/icons.js";
 
 const CAP = 3;   // main + 2 companions
@@ -29,6 +30,7 @@ function ensureTavernCss() {
     background:linear-gradient(#e0b063,#a8722a);color:#241606;box-shadow:0 4px 0 #6e4a14;
     display:flex;align-items:center;justify-content:center;gap:9px}
   .tv-return:active{transform:translateY(2px);box-shadow:0 2px 0 #6e4a14}
+  .tv-kit{color:#9a8fb8;font-style:normal !important;font-size:10.5px;line-height:1.5}
   `;
   document.head.appendChild(s);
 }
@@ -46,11 +48,14 @@ export function openTavern(ctx) {
     const canReplace = party.length >= CAP && hasFallen;   // full, but a fallen pal can be swapped out
     const full = party.length >= CAP && !hasFallen;        // truly full only when every slot is alive
     const row = (h, i) => {
-      const D = derive(h), cost = ctx.hireCost(h);
+      const D = derive(h), cost = ctx.hireCost(h), kit = heroKit(h);
+      const acts = kit.filter(k => k.type === "active").map(k => k.name);
+      const pass = kit.filter(k => k.type === "passive").map(k => k.name);
       return `<div class="shop-row">
         <canvas width="96" height="96" style="width:42px;height:42px;border-radius:8px;border:1px solid #6e5a2a;flex:0 0 auto"></canvas>
         <span class="it"><b style="color:var(--gold)">${h.name}</b> · ${h.cls} · Lv ${h.level}<br>
-          <small>HP ${D.maxhp} · ATK ${D.atk} · DEF ${D.def} · Dodge ${D.dodge} · Crit ${D.crit}</small></span>
+          <small>HP ${D.maxhp} · ATK ${D.atk} · DEF ${D.def} · Dodge ${D.dodge} · Crit ${D.crit}</small>
+          ${kit.length ? `<br><small class="tv-kit"><b style="color:#ff9a5c">${acts.join(", ")}</b>${pass.length ? " · " + pass.join(", ") : ""}</small>` : ""}</span>
         <span class="price">${iconImg("coin",12)} ${cost}</span>
         <button class="shop-btn" data-hire="${i}" ${(silver < cost || full) ? "disabled" : ""}>${canReplace ? "Replace" : "Hire"}</button>
       </div>`;

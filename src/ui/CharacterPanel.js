@@ -6,6 +6,7 @@
 import { derive } from "../systems/StatEngine.js";
 import { canEquip, equip, unequip, isUpgrade } from "../systems/Equipment.js";
 import { STAT_STEP, ASSIGNABLE } from "../systems/Leveling.js";
+import { heroKit } from "../systems/Skills.js";
 import { SLOTS } from "../data/items/gearTypes.js";
 import { itemNameHtml as itemName } from "./itemView.js";
 import { iconImg } from "../engine/icons.js";
@@ -126,6 +127,11 @@ function injectCss() {
   .sbtn:disabled{opacity:.3;cursor:default;color:#6f6486}
   .sbtn:active:not(:disabled){transform:translateY(1px)}
   .slock{font-size:9.5px;color:#8a6a4a;margin-top:5px;font-style:italic}
+  .cp-kit{display:flex;align-items:center;gap:8px;padding:6px 9px;border-radius:8px;background:#1c1630;border:1px solid var(--line);margin-bottom:5px}
+  .cp-kit.off{border-left:2px solid #ff8a5a}.cp-kit.def{border-left:2px solid #79c7e6}
+  .cp-kit .kn{flex:1;font-size:12.5px;font-weight:bold;color:var(--parchment)}
+  .cp-kit .kr{font-size:10px;color:var(--gold);letter-spacing:1px}
+  .cp-kit .kr .ko{color:#3a3450}
   `;
   document.head.appendChild(s);
 }
@@ -279,7 +285,19 @@ export function openCharacter(hero, ctx) {
         ${footer}`;
     };
 
-    // Main hero gets tabs (Stats / Skills / Equipment); companions show one combined view.
+    // Read-only kit for companions (their skills are a fixed, seed-rolled loadout).
+    const kitSection = () => {
+      const kit = heroKit(hero); if (!kit.length) return "";
+      const na = kit.filter(k => k.type === "active").length, np = kit.filter(k => k.type === "passive").length;
+      const row = k => `<div class="cp-kit ${k.br}">
+        <span class="stype ${k.type[0]}">${k.type === "active" ? "Active" : "Passive"}</span>
+        <span class="kn">${k.name}</span>
+        <span class="kr">${"★".repeat(k.rank)}<span class="ko">${"★".repeat(5 - k.rank)}</span></span></div>`;
+      return `<div class="cp-sec"><span>Skills</span><span class="hint">${na} active · ${np} passive · auto-cast in battle</span></div>
+        ${kit.map(row).join("")}`;
+    };
+
+    // Main hero gets tabs (Stats / Skills / Equipment); companions show one combined view + their kit.
     const tabbed = ctx.isMain;
     const hasSkills = !!ctx.skills;
     const paneFor = t => t === "stats" ? statsBlock : t === "skills" ? skillsBlock() : equipBlock;
@@ -289,7 +307,7 @@ export function openCharacter(hero, ctx) {
            ${hasSkills ? `<button class="cp-tab ${tab === "skills" ? "sel" : ""}" data-tab="skills">Skills</button>` : ""}
            <button class="cp-tab ${tab === "equip" ? "sel" : ""}" data-tab="equip">Equipment</button>
          </div>${paneFor(tab)}`
-      : statsBlock + equipBlock;
+      : statsBlock + kitSection() + equipBlock;
 
     // keep the scroll position across a re-render (learning a rank shouldn't jump back to the top);
     // a main-tab switch resets to the top instead

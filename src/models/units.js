@@ -9,6 +9,7 @@ import { ENEMIES } from "../data/enemies.js";
 import { SLOTS } from "../data/items/gearTypes.js";
 import { starterGear } from "../data/items/starter.js";
 import { emptyPoints } from "../systems/Leveling.js";
+import { rollCompanionSkills } from "../systems/Skills.js";
 import { COMPANION_NAMES } from "../data/names.js";
 
 const CLASSES = ["fighter", "mage", "cleric", "rogue"];
@@ -74,7 +75,9 @@ export function makeCompanion(seed, level = 1) {
   const cls = CLASSES[Math.floor(r() * CLASSES.length)];
   const name = COMPANION_NAMES[Math.floor(r() * COMPANION_NAMES.length)];
   const h = makeHero(cls, { name, statSeed: (seed * 13 + 1) >>> 0, portraitSeed: (seed * 7 + 5) >>> 0 });
-  return growTo(h, Math.max(1, level));
+  growTo(h, Math.max(1, level));
+  h.skills = rollCompanionSkills(cls, (seed * 2654435761) >>> 0, h.level);   // seeded 2-active/3-passive kit
+  return h;
 }
 
 let _figCounter = 0; // deterministic-ish figure variety without Math.random

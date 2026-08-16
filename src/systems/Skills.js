@@ -6,6 +6,7 @@
 "use strict";
 
 import { CLASS_SKILLS, TIER_GATES, MAX_RANK } from "../data/skills.js";
+import { mulberry32 } from "../core/rng.js";
 
 /* ---- tree lookups ---- */
 export function classTree(cls) { return CLASS_SKILLS[cls] || null; }
@@ -95,6 +96,33 @@ function passiveVal(u, key) {
   let v = 0;
   if (u && u.skills && u.cls) for (const s of allSkills(u.cls)) { const r = rankOf(u, s.id); if (r && Array.isArray(s.fx[key])) v = Math.max(v, s.fx[key][r - 1]); }
   return v;
+}
+
+/* ---- companion loadouts ------------------------------------------------------------- */
+/* A seeded, class-appropriate kit for an auto-generated companion: exactly 2 active + 3 passive
+   skills, drawn from tiers the companion's level would plausibly reach, all at a level-scaled rank.
+   Deterministic per seed, so re-rolling the tavern is a real hunt for the kit you want. */
+export function rollCompanionSkills(cls, seed, level) {
+  const all = allSkills(cls); if (!all.length) return {};
+  const maxTier = level <= 3 ? 2 : level <= 6 ? 3 : level <= 11 ? 4 : 5;
+  const pool = all.filter(s => s.tier <= maxTier);
+  const actives = pool.filter(s => s.type === "active");
+  const passives = pool.filter(s => s.type === "passive");
+  const r = mulberry32((seed >>> 0) || 1);
+  const draw = (arr, n) => { const a = arr.slice(), out = [];
+    for (let i = 0; i < n && a.length; i++) out.push(a.splice((r() * a.length) | 0, 1)[0]); return out; };
+  const rank = Math.max(1, Math.min(MAX_RANK, 1 + Math.floor((level - 1) / 3)));
+  const skills = {};
+  for (const s of [...draw(actives, 2), ...draw(passives, 3)]) skills[s.id] = rank;
+  return skills;
+}
+/* resolved skill list for display (name / type / rank / branch), e.g. a companion's kit */
+export function heroKit(hero) {
+  if (!hero || !hero.skills || !hero.cls) return [];
+  const out = [];
+  for (const s of allSkills(hero.cls)) { const r = hero.skills[s.id];
+    if (r) out.push({ id: s.id, name: s.name, type: s.type, rank: r, br: s.br }); }
+  return out;
 }
 
 /* ---- actives ------------------------------------------------------------------------ */
