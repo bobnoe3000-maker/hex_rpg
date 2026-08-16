@@ -56,6 +56,9 @@ export const BAL = {
     STEP: { hp: 4, atk: 1, def: 1, dodge: 1, crit: 1 },   // one point = +4 HP, or +1 to any other stat
   },
 
+  // Respec: wiping the skill tree refunds every point for silver — cost rises with how much is invested.
+  SKILL_RESPEC: { BASE: 40, PER_POINT: 15 },
+
   WIPE_DELAY: 1.6,        // seconds after a full wipe before you're pulled back to the Keep
 
   // Shop / economy (silver)

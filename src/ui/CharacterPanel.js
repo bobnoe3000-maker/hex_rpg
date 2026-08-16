@@ -114,6 +114,13 @@ function injectCss() {
   .spips{display:flex;gap:3px;flex:1}
   .spips i{flex:1;height:5px;border-radius:2px;background:#2a2338}
   .cp-skill.off .spips i.f{background:#ff8a5a}.cp-skill.def .spips i.f{background:#79c7e6}
+  .cp-skill.off .spips i.d{background:rgba(255,138,90,.5)}.cp-skill.def .spips i.d{background:rgba(121,199,230,.5)}
+  .cp-skill .pend{font-size:10px;color:var(--gold);font-weight:bold}
+  .cp-respec{width:100%;font-family:inherit;font-weight:bold;font-size:12px;border:1px solid var(--line2);border-radius:8px;
+    padding:9px;cursor:pointer;background:#241a2e;color:#c9a0ff;display:flex;align-items:center;justify-content:center;gap:6px}
+  .cp-respec:disabled{opacity:.4;cursor:default;color:#6f6486}
+  .cp-respec.arm{background:linear-gradient(#7a2020,#4a1414);color:#ffd8c0;border-color:#c0392b}
+  .cp-respec:active:not(:disabled){transform:translateY(1px)}
   .sbtn{width:26px;height:24px;flex:0 0 auto;font-family:inherit;font-size:15px;font-weight:bold;line-height:1;
     border:1px solid var(--line);border-radius:6px;background:#241a2e;color:var(--gold);cursor:pointer;padding:0}
   .sbtn:disabled{opacity:.3;cursor:default;color:#6f6486}
@@ -133,6 +140,8 @@ export function openCharacter(hero, ctx) {
   let tab = "stats";     // main-hero panel tab: "stats" | "skills" | "equip"
   let skillBranch = "off"; // Skills tab sub-tab: "off" | "def"
   let keepScroll = true;   // preserve scroll across re-render (false = jump to top, for main-tab switches)
+  const skillDraft = {};   // pending skill ranks (id → count) not yet committed
+  let skillResetArm = false; // two-tap guard on the paid tree reset
   const draft = {};      // pending, unconfirmed point allocation (stat → signed count)
   for (const k of ASSIGNABLE) draft[k] = 0;
   const draftSum = () => ASSIGNABLE.reduce((a, k) => a + draft[k], 0);
@@ -214,36 +223,60 @@ export function openCharacter(hero, ctx) {
     // immediately (allocation persists); tiers gate on branch investment.
     const skillsBlock = () => {
       const sk = ctx.skills; if (!sk) return "";
-      const R = sk.ranks(), avail = sk.points();
+      const R = sk.ranks();
+      const committedOf = id => R[id] || 0;
+      const draftN = id => skillDraft[id] || 0;
+      const rankOfId = id => committedOf(id) + draftN(id);
+      const draftSum = () => { let n = 0; for (const k in skillDraft) n += skillDraft[k]; return n; };
+      const investedWith = br => sk.tree[br].skills.reduce((n, s) => n + rankOfId(s.id), 0);
+      const unlockedNow = (br, tier) => investedWith(br) >= sk.gates[tier];
+      const avail = sk.points() - draftSum();
+      const dirty = draftSum() > 0;
+      const committedTotal = Object.values(R).reduce((a, b) => a + b, 0);
+
       const branch = (br) => {
         const b = sk.tree[br];
         const rows = b.skills.map(s => {
-          const r = R[s.id] || 0, un = sk.unlocked(br, s.tier), canAdd = un && r < sk.maxRank && avail > 0;
+          const committed = committedOf(s.id), r = rankOfId(s.id), un = unlockedNow(br, s.tier);
+          const canAdd = un && r < sk.maxRank && avail > 0;
+          const canDec = draftN(s.id) > 0;                    // only pending ranks can be pulled back
           const txt = r > 0 ? s.text[r - 1] : s.text[0];
+          const pend = r - committed;
           return `<div class="cp-skill ${r > 0 ? "on" : ""} ${un ? "" : "lk"} ${br}">
-            <div class="sh"><span class="sn">${s.name}</span><span class="stype ${s.type[0]}">${s.type === "active" ? "Active" : "Passive"}</span></div>
+            <div class="sh"><span class="sn">${s.name}${pend > 0 ? ` <span class="pend">+${pend}</span>` : ""}</span><span class="stype ${s.type[0]}">${s.type === "active" ? "Active" : "Passive"}</span></div>
             <div class="sd">${txt}</div>
             <div class="sr">
-              <span class="spips">${[0,1,2,3,4].map(i => `<i class="${i < r ? "f" : ""}"></i>`).join("")}</span>
-              <button class="sbtn" data-sk-dec="${s.id}" ${r <= 0 ? "disabled" : ""}>−</button>
+              <span class="spips">${[0,1,2,3,4].map(i => `<i class="${i < committed ? "f" : i < r ? "d" : ""}"></i>`).join("")}</span>
+              <button class="sbtn" data-sk-dec="${s.id}" ${canDec ? "" : "disabled"}>−</button>
               <button class="sbtn add" data-sk-inc="${s.id}" ${canAdd ? "" : "disabled"}>+</button>
             </div>${un ? "" : `<div class="slock">Locked · needs ${sk.gates[s.tier]} in ${b.name}</div>`}</div>`;
         });
-        // group by tier with a divider
         let out = `<div class="cp-branch ${br}">`;
         let lastT = 0;
         b.skills.forEach((s, i) => { if (s.tier !== lastT) { lastT = s.tier;
           out += `<div class="ctier">${s.tier === 5 ? "Capstone" : "Tier " + s.tier}</div>`; } out += rows[i]; });
         return out + "</div>";
       };
-      const off = sk.tree.off, def = sk.tree.def;
+
+      const off = sk.tree.off, def = sk.tree.def, cost = sk.resetCost();
+      const canReset = committedTotal > 0 && sk.silver() >= cost;
+      const footer = dirty
+        ? `<div class="cp-pts-act" style="margin-top:6px">
+             <button class="cp-reset" data-sk-discard>Discard</button>
+             <button class="cp-confirm" data-sk-commit>Confirm</button></div>`
+        : committedTotal > 0
+          ? `<div class="cp-pts-act" style="margin-top:6px"><button class="cp-respec ${skillResetArm ? "arm" : ""}" data-sk-reset ${canReset ? "" : "disabled"}>
+             ${skillResetArm ? `Tap again to reset · ${iconImg("coin", 11)} ${cost}` : `Reset tree · ${iconImg("coin", 11)} ${cost}`}</button></div>`
+          : "";
+
       return `<div class="cp-pts" style="margin-bottom:11px"><div class="cp-pts-h"><span>Skill points</span><span class="av ${avail ? "" : "none"}">${avail}</span></div>
-        <div class="skhint">Deeper tiers unlock as you invest in a branch</div></div>
+        <div class="skhint">Add points, then Confirm to commit · resetting the tree costs silver</div></div>
         <div class="cp-subtabs">
           <button class="cp-subtab off ${skillBranch === "off" ? "sel" : ""}" data-branch="off">Offensive<b>${off.name}</b><span>${sk.invested("off")} pts</span></button>
           <button class="cp-subtab def ${skillBranch === "def" ? "sel" : ""}" data-branch="def">Defensive<b>${def.name}</b><span>${sk.invested("def")} pts</span></button>
         </div>
-        ${branch(skillBranch)}`;
+        ${branch(skillBranch)}
+        ${footer}`;
     };
 
     // Main hero gets tabs (Stats / Skills / Equipment); companions show one combined view.
@@ -299,14 +332,23 @@ export function openCharacter(hero, ctx) {
       const k = b.getAttribute("data-dec"); const committed = (hero.pts && hero.pts[k]) || 0;
       if (committed + draft[k] > 0) { draft[k]--; render(); }
     });
-    // skill tree: switch branch sub-tab, then learn / unlearn a rank (persists immediately)
-    overlay.querySelectorAll("[data-branch]").forEach(b => b.onclick = () => { skillBranch = b.getAttribute("data-branch"); render(); });
+    // skill tree: sub-tab, draft +/-, then Confirm to commit; Reset (paid) is a two-tap
+    overlay.querySelectorAll("[data-branch]").forEach(b => b.onclick = () => { skillBranch = b.getAttribute("data-branch"); skillResetArm = false; render(); });
     overlay.querySelectorAll("[data-sk-inc]").forEach(b => b.onclick = () => {
-      if (ctx.skills && ctx.skills.learn(b.getAttribute("data-sk-inc"), +1)) render();
+      const id = b.getAttribute("data-sk-inc"); skillDraft[id] = (skillDraft[id] || 0) + 1; skillResetArm = false; render();
     });
     overlay.querySelectorAll("[data-sk-dec]").forEach(b => b.onclick = () => {
-      if (ctx.skills && ctx.skills.learn(b.getAttribute("data-sk-dec"), -1)) render();
+      const id = b.getAttribute("data-sk-dec"); if (skillDraft[id] > 0) { skillDraft[id]--; if (!skillDraft[id]) delete skillDraft[id]; } render();
     });
+    const skCommit = overlay.querySelector("[data-sk-commit]"); if (skCommit) skCommit.onclick = () => {
+      if (ctx.skills && ctx.skills.commit({ ...skillDraft })) { for (const k in skillDraft) delete skillDraft[k]; render(["good", "Skills learned."]); }
+    };
+    const skDiscard = overlay.querySelector("[data-sk-discard]"); if (skDiscard) skDiscard.onclick = () => { for (const k in skillDraft) delete skillDraft[k]; render(); };
+    const skReset = overlay.querySelector("[data-sk-reset]"); if (skReset) skReset.onclick = () => {
+      if (!skillResetArm) { skillResetArm = true; render(); return; }        // first tap arms
+      skillResetArm = false;
+      if (ctx.skills && ctx.skills.reset()) render(["meh", "Skill tree reset."]); else render();
+    };
     const rst = overlay.querySelector("[data-preset]"); if (rst) rst.onclick = () => { clearDraft(); render(); };
     const cf = overlay.querySelector("[data-pconfirm]"); if (cf) cf.onclick = () => {
       if (ctx.assign && ctx.assign({ ...draft })) { clearDraft(); render(["good", "Attributes updated."]); }

@@ -6,7 +6,7 @@ import { fxUpdateDraw, fxClear, fxText, fxSlash, fxBolt, fxDissolve, fxRing, fxB
 import { GCOLS, GROWS, buildGameRoom, cx0g, cy0g, isBlocked } from './engine/dungeon.js';
 import { xpToReach, ROOMS_SPEC } from './engine/combat.js';
 import { unspentPoints, earnedPoints, pointsForLevel, ASSIGNABLE, emptyPoints } from './systems/Leveling.js';
-import { combatMods, activeSkills, unspentSkillPoints, branchInvested, tierUnlocked, rankOf, allSkills,
+import { combatMods, activeSkills, unspentSkillPoints, earnedSkillPoints, spentSkillPoints, branchInvested, tierUnlocked, rankOf, allSkills,
          reflectFrac, guardianFrac, waveHealFrac, lastStand, momentum } from './systems/Skills.js';
 import { CLASS_SKILLS, TIER_GATES, MAX_RANK } from './data/skills.js';
 import { HERO_BASES } from './data/classes.js';
@@ -497,28 +497,31 @@ function assignPoints(h, deltas){
   renderParty(); updateHud(); saveGame();
   return true;
 }
-/* Learn (+1) or unlearn (−1) a skill rank for the main hero. Validated against tier gates and the
-   available skill-point pool; unlearning cascades a refund of any rank left stranded above a gate. */
-function assignSkill(h, id, delta){
+/* Commit a drafted skill allocation for the main hero. `draft` maps skillId→ranks-to-add (all ≥0).
+   Validated against the point pool and tier gates on the RESULTING build, then saved. Committed
+   ranks can't be pulled back for free — respec via resetSkills() (paid). */
+function learnSkills(h, draft){
   if(h!==party[0]) return false;
-  const sk=allSkills(h.cls).find(s=>s.id===id); if(!sk) return false;
-  h.skills=h.skills||{};
-  const cur=h.skills[id]||0;
-  if(delta>0){
-    if(cur>=MAX_RANK) return false;
-    if(!tierUnlocked(h,h.cls,sk.br,sk.tier)) return false;
-    if(unspentSkillPoints(h)<=0) return false;
-    h.skills[id]=cur+1;
-  } else {
-    if(cur<=0) return false;
-    h.skills[id]=cur-1; if(h.skills[id]===0) delete h.skills[id];
-  }
-  // refund any rank whose tier is no longer unlocked
-  let changed=true;
-  while(changed){ changed=false;
-    for(const s of allSkills(h.cls)){ const r=h.skills[s.id]||0;
-      if(r>0 && !tierUnlocked(h,h.cls,s.br,s.tier)){ delete h.skills[s.id]; changed=true; } } }
+  const next={...(h.skills||{})};
+  for(const id in draft){ if(draft[id]>0) next[id]=(next[id]||0)+draft[id]; }
+  let spent=0; for(const id in next) spent+=next[id];
+  if(spent>earnedSkillPoints(h.level)) return false;
+  const inv={off:0,def:0}; for(const s of allSkills(h.cls)) inv[s.br]+=next[s.id]||0;
+  for(const s of allSkills(h.cls)){ const r=next[s.id]||0; if(r>0 && inv[s.br]<TIER_GATES[s.tier]) return false; }
+  for(const id in next) if(next[id]<=0) delete next[id];
+  h.skills=next; renderParty(); updateHud(); saveGame();
+  return true;
+}
+/* Cost to wipe & refund the whole skill tree — rises with how much is invested. */
+function respecCost(h){ return BAL.SKILL_RESPEC.BASE + spentSkillPoints(h)*BAL.SKILL_RESPEC.PER_POINT; }
+/* Reset the skill tree for silver: refunds every point, clearing the build. */
+function resetSkills(h){
+  if(h!==party[0]) return false;
+  if(spentSkillPoints(h)<=0) return false;
+  const cost=respecCost(h); if(state.silver<cost) return false;
+  state.silver-=cost; h.skills={};
   renderParty(); updateHud(); saveGame();
+  log(`${iconImg("spark",14)} <b>${h.name}</b> unlearns every skill for ${iconImg("coin",12)} ${cost}.`,"sys");
   return true;
 }
 function act(u){
@@ -596,12 +599,14 @@ function openHero(h){
     assign: h===party[0] ? d=>assignPoints(h, d) : null,
     skills: h===party[0] && CLASS_SKILLS[h.cls] ? {
       tree: CLASS_SKILLS[h.cls],
-      ranks: ()=>h.skills||{},
-      points: ()=>unspentSkillPoints(h),
+      ranks: ()=>h.skills||{},                 // committed ranks
+      points: ()=>unspentSkillPoints(h),       // unspent (committed) pool
       invested: br=>branchInvested(h,h.cls,br),
-      unlocked: (br,tier)=>tierUnlocked(h,h.cls,br,tier),
       gates: TIER_GATES, maxRank: MAX_RANK,
-      learn: (id,d)=>assignSkill(h,id,d),
+      commit: draft=>learnSkills(h,draft),     // apply a drafted allocation (saves)
+      resetCost: ()=>respecCost(h),
+      reset: ()=>resetSkills(h),
+      silver: ()=>state.silver,
     } : null,
     refresh: renderParty,
     gems: ()=>state.gems,

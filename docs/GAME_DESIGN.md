@@ -106,7 +106,8 @@ Each class owns a **skill tree**: a branching set of skills and passives the mai
 
 - **Two branches per class**, one **offensive** and one **defensive**, of **13 skills each** (5 tiers: 3·3·3·3 + a capstone). 4 classes → 104 skills.
 - **Active or passive.** Passives fold into `StatEngine.derive` (flat + missing-HP multipliers) and per-hit `combatMods` (Executioner, Crushing Blows, Bulwark, Bloodthirst). Actives are cast by the battle AI on cooldown when their trigger fits (`Skills.activeSkills` + the game's `tryCast`) — Cleave, Sunder, Whirlwind, Rampage, Guard, Taunt, Shield Bash, Rallying Cry, and the capstones, all driven through a unified **timed-buff system** (shields, stuns, DEF shred, party auras, immunity, bleeds).
-- **Ranks 1→5**, breakpoints at 3 and 5. **1 skill point per level** (separate from stat points, from level 2). **Tier gates** (0·2·6·12·20 points-in-branch) make deep investment a real cost — respec is free by unlearning.
+- **Ranks 1→5**, breakpoints at 3 and 5. **1 skill point per level** (separate from stat points, from level 2). **Tier gates** (0·2·6·12·20 points-in-branch) make deep investment a real cost.
+- **Draft → Confirm.** Allocating points is a pending draft (add/remove freely, live preview); **Confirm** commits and saves. Committed ranks can't be pulled back for free — **resetting the tree costs silver** (`BAL.SKILL_RESPEC`: base + per-point) and refunds every point, so respec is a deliberate, priced choice.
 - Companions get a fixed class-appropriate loadout that makes recruiting a build choice (Phase 3).
 
 **Flagship example — the Cleric:**
