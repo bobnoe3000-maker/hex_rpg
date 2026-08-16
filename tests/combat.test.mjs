@@ -12,32 +12,32 @@ let fails = 0;
 const ok = (name, cond) => { console.log(`${cond ? "PASS" : "FAIL"}  ${name}`); if (!cond) fails++; };
 const mb = a => () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
 
-const knight = makeHero("knight", 11);
+const fighter = makeHero("fighter", 11);
 const rat = makeEnemy("rat", 1, 1);
 
 // unified schema: heroes and enemies both derive the same six-stat shape
 ok("hero and enemy derive identical stat keys",
-  Object.keys(derive(knight)).sort().join(",") === Object.keys(derive(rat)).sort().join(","));
+  Object.keys(derive(fighter)).sort().join(",") === Object.keys(derive(rat)).sort().join(","));
 ok("derive exposes the six stats",
-  ["atk","def","dodge","crit","aspd"].every(k => k in derive(knight)) && "maxhp" in derive(knight));
+  ["atk","def","dodge","crit","aspd"].every(k => k in derive(fighter)) && "maxhp" in derive(fighter));
 
 // chances are probabilities within the configured clamp
-ok("dodgeChance in [0,0.75]", (() => { const c = dodgeChance(rat, knight); return c >= 0 && c <= 0.75; })());
-ok("critChance in [0,0.75]", (() => { const c = critChance(knight, rat); return c >= 0 && c <= 0.75; })());
+ok("dodgeChance in [0,0.75]", (() => { const c = dodgeChance(rat, fighter); return c >= 0 && c <= 0.75; })());
+ok("critChance in [0,0.75]", (() => { const c = critChance(fighter, rat); return c >= 0 && c <= 0.75; })());
 
 // mitigation reduces damage and is monotonic in def
 ok("mitigate reduces damage", mitigate(100, 24) < 100);
 ok("more def = less damage through", mitigate(100, 40) < mitigate(100, 10));
 
 // determinism: identical seed -> identical result stream; different seed -> differs
-const seq = seed => { const r = mb(seed); return Array.from({ length: 12 }, () => JSON.stringify(resolveAttack(knight, rat, r))).join("|"); };
+const seq = seed => { const r = mb(seed); return Array.from({ length: 12 }, () => JSON.stringify(resolveAttack(fighter, rat, r))).join("|"); };
 ok("same seed is reproducible", seq(123) === seq(123));
 ok("different seed diverges", seq(123) !== seq(777));
 
 // results are well-formed and damage respects the floor
 {
   const r = mb(5); let bad = 0;
-  for (let i = 0; i < 2000; i++) { const res = resolveAttack(knight, rat, r);
+  for (let i = 0; i < 2000; i++) { const res = resolveAttack(fighter, rat, r);
     if (res.type === "hit" && !(res.dmg >= 1 && Number.isInteger(res.dmg))) bad++;
     if (res.type !== "hit" && res.type !== "dodge") bad++; }
   ok("every result is dodge or integer hit >= 1", bad === 0);
@@ -45,8 +45,8 @@ ok("different seed diverges", seq(123) !== seq(777));
 
 // Equipment: equip / unequip / class restriction
 {
-  const h = makeHero("knight", 1);
-  const sword = { n: "Test Sword", slot: "weapon", use: "knight", r: "common", atk: 3 };
+  const h = makeHero("fighter", 1);
+  const sword = { n: "Test Sword", slot: "weapon", use: "fighter", r: "common", atk: 3 };
   const wand  = { n: "Test Wand",  slot: "weapon", use: "mage",   r: "common", atk: 3 };
   const ring  = { n: "Test Ring",  slot: "amulet", use: "any",   r: "common", hp: 5 };
   const inv = [sword, wand, ring];
@@ -70,10 +70,10 @@ ok("different seed diverges", seq(123) !== seq(777));
   ok("generated item has a name, slot and description", !!g1.n && typeof g1.slot === "string" && g1.slot.length > 0 && typeof g1.d === "string");
   ok("generated item carries at least one stat", ["atk","def","hp","dodge","crit","aspd"].some(k => k in g1));
   ok("upgradeLevel starts at 0", g1.upgradeLevel === 0);
-  // class restriction: only knight-usable weapons/items when we ask for knight
+  // class restriction: only fighter-usable weapons/items when we ask for fighter
   const r = mb(7); let offClass = 0;
-  for (let i = 0; i < 300; i++) { const it = generate(r, { classes: ["knight"] });
-    if (it.use !== "any" && it.use !== "knight") offClass++; }
+  for (let i = 0; i < 300; i++) { const it = generate(r, { classes: ["fighter"] });
+    if (it.use !== "any" && it.use !== "fighter") offClass++; }
   ok("class-restricted drops are all usable by the party", offClass === 0);
   // a vampiric item carries the lifesteal proc; procVal reads it
   let sawProc = false; const r2 = mb(3);
@@ -81,9 +81,41 @@ ok("different seed diverges", seq(123) !== seq(777));
   ok("some items roll a proc (lifesteal exists in the pool)", sawProc);
 }
 
+// Armour families: sensible material pairings + class gating (no more "Cotton Mail")
+{
+  const CLOTH = new Set(["Cotton","Linen","Silk","Wool","Runeweave"]);
+  const METAL = new Set(["Iron","Bronze","Steel","Mithril","Adamant"]);
+  const LEATHER = new Set(["Leather","Padded","Studded","Wyvernhide","Dragonhide"]);
+  const famFor = { metal: METAL, leather: LEATHER, cloth: CLOTH };
+  const r = mb(31); let mismatch = 0, sawFam = 0;
+  for (let i = 0; i < 800; i++) {
+    const it = generate(r);
+    if (!it.family) continue;
+    sawFam++;
+    // the material word in the name must belong to the item's own family
+    const words = it.n.split(" ");
+    const hitFamWord = words.some(w => famFor[it.family].has(w));
+    if (!hitFamWord) mismatch++;
+  }
+  ok("every family item's material matches its family (no Cotton Mail)", sawFam > 0 && mismatch === 0);
+
+  // fighter-only party never rolls leather/cloth armour
+  const rf = mb(17); let offFam = 0;
+  for (let i = 0; i < 400; i++) { const it = generate(rf, { classes: ["fighter"] });
+    if (it.family && it.family !== "metal") offFam++; }
+  ok("a fighter party only finds metal armour", offFam === 0);
+
+  // canEquip enforces the family rule
+  const fighterH = makeHero("fighter", 1), mageH = makeHero("mage", 1);
+  const plate = { n: "Steel Plate", slot: "armor", use: "any", family: "metal", def: 8 };
+  const robe  = { n: "Silk Robe",   slot: "armor", use: "any", family: "cloth", def: 5 };
+  ok("a fighter can wear metal but not cloth", canEquip(fighterH, plate) && !canEquip(fighterH, robe));
+  ok("a mage can wear cloth but not metal", canEquip(mageH, robe) && !canEquip(mageH, plate));
+}
+
 // ForgeSystem: success raises stat+level, determinism, max cap, destroy path
 {
-  const mk = () => ({ n: "Iron Sword", slot: "weapon", use: "knight", primary: "atk", atk: 3, upgradeLevel: 0 });
+  const mk = () => ({ n: "Iron Sword", slot: "weapon", use: "fighter", primary: "atk", atk: 3, upgradeLevel: 0 });
   // rng that always succeeds (returns 0 < any success chance)
   const always = () => 0;
   const it = mk();
@@ -106,20 +138,20 @@ ok("different seed diverges", seq(123) !== seq(777));
 
 // isUpgrade: an item that scores higher than the equipped slot is flagged
 {
-  const h = makeHero("knight", 2);
-  const weak = { n: "Iron Sword", slot: "weapon", use: "knight", atk: 3 };
-  const strong = { n: "Steel Greatsword", slot: "weapon", use: "knight", atk: 7 };
+  const h = makeHero("fighter", 2);
+  const weak = { n: "Iron Sword", slot: "weapon", use: "fighter", atk: 3 };
+  const strong = { n: "Steel Greatsword", slot: "weapon", use: "fighter", atk: 7 };
   ok("any item beats an empty slot", isUpgrade(h, weak));
   equip(h, weak, [weak]);
   ok("a higher-scoring item is an upgrade", isUpgrade(h, strong) && itemScore(strong) > itemScore(weak));
-  ok("a lower-scoring item is not an upgrade", !isUpgrade(h, { n:"Rusty", slot:"weapon", use:"knight", atk:1 }));
+  ok("a lower-scoring item is not an upgrade", !isUpgrade(h, { n:"Rusty", slot:"weapon", use:"fighter", atk:1 }));
   ok("wrong-class item is never an upgrade", !isUpgrade(h, { n:"Wand", slot:"weapon", use:"mage", atk:9 }));
 }
 
 // Economy: price scales with score/upgrades, sell < buy
 {
-  const cheap = { n: "Iron Sword", slot: "weapon", use: "knight", atk: 3, upgradeLevel: 0 };
-  const rich  = { n: "Epic Blade", slot: "weapon", use: "knight", atk: 9, crit: 6, upgradeLevel: 3 };
+  const cheap = { n: "Iron Sword", slot: "weapon", use: "fighter", atk: 3, upgradeLevel: 0 };
+  const rich  = { n: "Epic Blade", slot: "weapon", use: "fighter", atk: 9, crit: 6, upgradeLevel: 3 };
   ok("a stronger item costs more", priceOf(rich) > priceOf(cheap));
   ok("upgrades add to the price", priceOf({ ...cheap, upgradeLevel: 4 }) > priceOf(cheap));
   ok("sell price is below buy price", sellPriceOf(rich) < priceOf(rich) && sellPriceOf(rich) >= 2);
@@ -127,21 +159,24 @@ ok("different seed diverges", seq(123) !== seq(777));
 
 // Character creation: rolled stats, starter gear, companions
 {
-  const a = rollStats("knight", 123), b = rollStats("knight", 123), c = rollStats("knight", 999);
+  const a = rollStats("fighter", 123), b = rollStats("fighter", 123), c = rollStats("fighter", 999);
   ok("rollStats is deterministic for a seed", JSON.stringify(a) === JSON.stringify(b));
   ok("rollStats varies with the seed", JSON.stringify(a) !== JSON.stringify(c));
   ok("rolled stats stay near the class base (±~20%)", a.hp > 40 && a.hp < 75 && a.atk >= 1);
-  const h = makeHero("knight", { statSeed: 7, portraitSeed: 42, name: "Test" });
+  const h = makeHero("fighter", { statSeed: 7, portraitSeed: 42, name: "Test" });
   ok("created hero keeps its name and rolled seed", h.name === "Test" && h.portraitSeed === 42);
   ok("every hero starts with a weapon, armor and boots", h.gear.armor && h.gear.boots && h.gear.weapon);
-  ok("caster starter gear is cloth, martial is wooden",
-     makeHero("mage", {}).gear.armor.n === "Cloth Robe" && makeHero("knight", {}).gear.armor.n === "Wooden Armor");
-  ok("starter weapon is class-appropriate + carries range (mage ranged, knight melee)",
-     makeHero("mage", {}).gear.weapon.rng > 1 && makeHero("knight", {}).gear.weapon.rng === 1 && makeHero("rogue", {}).gear.weapon.n === "Worn Dagger");
+  ok("starter armour matches the class family (fighter metal, rogue leather, caster cloth)",
+     makeHero("fighter", {}).gear.armor.family === "metal" &&
+     makeHero("rogue", {}).gear.armor.family === "leather" &&
+     makeHero("mage", {}).gear.armor.family === "cloth" &&
+     makeHero("cleric", {}).gear.armor.family === "cloth");
+  ok("starter weapon is class-appropriate + carries range (mage ranged, fighter melee)",
+     makeHero("mage", {}).gear.weapon.rng > 1 && makeHero("fighter", {}).gear.weapon.rng === 1 && makeHero("rogue", {}).gear.weapon.n === "Worn Dagger");
   const comp = makeCompanion(555), comp2 = makeCompanion(555);
   ok("companions are deterministic per seed", comp.name === comp2.name && comp.cls === comp2.cls);
   ok("companion has a class, name, stats and starter gear",
-     ["knight","mage","cleric"].includes(comp.cls) && !!comp.name && comp.gear.boots && comp.team === 0);
+     ["fighter","mage","cleric"].includes(comp.cls) && !!comp.name && comp.gear.boots && comp.team === 0);
 }
 
 // Companion scaling: growTo raises level & stats; makeCompanion(seed, level) scales
@@ -149,7 +184,7 @@ ok("different seed diverges", seq(123) !== seq(777));
   const c1 = makeCompanion(2024, 1), c3 = makeCompanion(2024, 3);
   ok("same seed + level is deterministic", JSON.stringify(makeCompanion(2024,3)) === JSON.stringify(c3));
   ok("higher-level companion is the same identity, stronger", c3.cls === c1.cls && c3.name === c1.name && c3.level === 3 && c3.maxhp > c1.maxhp && c3.atk >= c1.atk);
-  const h = makeHero("knight", { statSeed: 1 }); const hp0 = h.maxhp;
+  const h = makeHero("fighter", { statSeed: 1 }); const hp0 = h.maxhp;
   growTo(h, 4);
   ok("growTo lifts level and HP", h.level === 4 && h.maxhp > hp0 && h.hp === h.maxhp);
 }

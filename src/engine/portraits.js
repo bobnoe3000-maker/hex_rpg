@@ -327,7 +327,7 @@ function finish(g,pal,f){
 }
 
 const ARCH=[
- {id:"Knight",   sp:"human", gear:["helm","helm","none"], hair:["crop","manbun","bald"], beard:.7, pauld:.9, outfits:["tunic","cloak","tunic"], iris:["#3a2c22","#4a5a6e"]},
+ {id:"Fighter",  sp:"human", gear:["helm","helm","none"], hair:["crop","manbun","bald"], beard:.7, pauld:.9, outfits:["tunic","cloak","tunic"], iris:["#3a2c22","#4a5a6e"]},
  {id:"Mage",     sp:"elf",   gear:["hat","circlet","none"], hair:["long","long","crop"], beard:.1, glow:.5, glowCol:["#7ae0ff","#b48bff"], outfits:["robe","robe","cloak"], iris:["#7a4ad1","#3a7ac9"]},
  {id:"Cleric",   sp:"human", gear:["hood","hood","circlet"], hair:["crop","bald"], beard:.5, outfits:["robe","cloak"], iris:["#5a7a9a","#6e5a3a"]},
  {id:"Rogue",    sp:"human", gear:["hood","hood","none"], hair:["crop","long"], beard:.3, scar:.7, outfits:["vest","cloak","tunic"], iris:["#3a5a3a","#4a4a5e"]},
@@ -389,7 +389,7 @@ function buildPortrait(seed, archIdx){
 
 
 /* engine entry: portrait canvas for a hero class */
-const PORTRAIT_ARCH={knight:0,mage:1,cleric:2,rogue:3};
+const PORTRAIT_ARCH={fighter:0,mage:1,cleric:2,rogue:3};
 function makeHeroPortrait(cls,seed){
   return buildPortrait(seed, PORTRAIT_ARCH[cls]!==undefined?PORTRAIT_ARCH[cls]:0);
 }

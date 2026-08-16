@@ -6,7 +6,9 @@
 "use strict";
 
 export const SLOT_COUNT = 3;
-export const SAVE_VERSION = 1;
+// v2: class "knight" → "fighter" + armour families (metal/leather/cloth). Old v1 saves referenced a
+// class and item shapes that no longer exist, so they're treated as empty slots rather than migrated.
+export const SAVE_VERSION = 2;
 const KEY = slot => `dp_save_${slot}`;
 
 function get(k) { try { return localStorage.getItem(k); } catch { return null; } }

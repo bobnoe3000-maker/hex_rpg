@@ -84,7 +84,7 @@ function loadGame(save){
   state.silver=save.silver||0; state.gems=save.gems||0;
   state.inventory=save.inventory||[]; state.roomIdx=save.roomIdx||0;
 }
-const partyClasses=()=>party.length?[...new Set(party.map(h=>h.cls))]:["knight","mage","cleric","rogue"];
+const partyClasses=()=>party.length?[...new Set(party.map(h=>h.cls))]:["fighter","mage","cleric","rogue"];
 let combatRng=Math.random;  // reseeded deterministically when a fight starts / area changes
 /* tiny currency readout in the log header */
 const hudEl=document.createElement("span");
@@ -161,7 +161,7 @@ function tileOf(u){
     g.strokeStyle=pal.o; g.lineWidth=1; g.strokeRect(-s,-s,s*2,s*2); g.restore(); };
   gem(S/2,bw/2+1); gem(S/2,S-bw/2-1); gem(bw/2+1,S/2); gem(S-bw/2-1,S/2);
   // role icon medallion (top-right) — procedural sprite, not emoji
-  const medal={knight:"sword",mage:"spark",cleric:"cross",rogue:"dagger",rat:"fang",goblin:"fang",
+  const medal={fighter:"sword",mage:"spark",cleric:"cross",rogue:"dagger",rat:"fang",goblin:"fang",
     kobold:"fang",skeleton:"skull",wight:"skull",dragon:"star"};
   const mname=medal[u.cls||u.fig]||"sword", ir=S*0.15;
   g.fillStyle=pal.o; g.beginPath(); g.arc(S-ir*0.9,ir*0.9,ir,0,7); g.fill();
@@ -289,7 +289,7 @@ function attack(att,def){
   if(res.type==="dodge"){
     log(`${who} strikes at ${def.name} — <span class="miss">dodged</span>`);
     fxText(uxS(def),uyS(def)-38,"dodge","#8b7fa8");
-    if(def.team===0&&def.cls==="knight") fxBlock(uxS(def),uyS(def)-18);
+    if(def.team===0&&def.cls==="fighter") fxBlock(uxS(def),uyS(def)-18);
     return;
   }
   const deliver=()=>{

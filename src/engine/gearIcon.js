@@ -8,8 +8,16 @@ import { inkPath, ell, shade } from "./core.js";
 
 const INK = "rgba(12,9,18,.9)";
 const MAT = {
-  iron: "#8a8f98", steel: "#9fb0c0", meteoric: "#8574ab", emberglass: "#e08a3a",
-  cotton: "#d8cdb0", silk: "#c8b6e0", leather: "#9a6e42", dragonhide: "#5f9061",
+  // weapon metals
+  iron: "#8a8f98", bronze: "#b0813f", steel: "#9fb0c0", meteoric: "#8574ab", obsidian: "#4a4658", emberglass: "#e08a3a",
+  // armour metals (fighter)
+  iron_m: "#8a8f98", bronze_m: "#b0813f", steel_m: "#9fb0c0", mithril: "#a9d4dd", adamant: "#6b7280",
+  // leathers (rogue)
+  leather: "#9a6e42", padded: "#b8a06a", studded: "#7d6444", wyvernhide: "#6f8f7a", dragonhide: "#5f9061",
+  // cloths (caster)
+  cotton: "#d8cdb0", linen: "#cdc3a4", silk: "#c8b6e0", wool: "#b7a98c", runeweave: "#a98be0",
+  // trinkets (jewellery)
+  copper: "#c07b4a", silver: "#c8cdd6", jade: "#5fae7a", gold: "#e0b850", onyx: "#3a3646", ruby: "#d0475a",
 };
 const ACCENT = {
   keen: "#ffd166", brutal: "#ff8a5a", sturdy: "#9ad1ff", vital: "#7ee787", swift: "#a6e6ff", vampiric: "#ff5a6a",
@@ -51,10 +59,10 @@ const SHAPE_FOR = {
   wand: "rod", staff: "rod", scepter: "rod",
   sword: "blade", greatsword: "blade", dagger: "blade", kris: "blade", mace: "blade", shortbow: "rod",
   shield: "shield", buckler: "shield", orb: "orb", tome: "chest", cloak: "chest",
-  helm: "helm", hood: "helm", circlet: "helm",
-  plate: "chest", robe: "chest", vestments: "chest", mail: "chest", leathers: "chest",
-  gauntlets: "glove", gloves: "glove", grips: "glove",
-  boots: "boot", greaves: "boot", treads: "boot",
+  helm: "helm", hood: "helm", cowl: "helm",
+  plate: "chest", chainmail: "chest", brigandine: "chest", leathers: "chest", robe: "chest", raiment: "chest",
+  gauntlets: "glove", bracers: "glove", handwraps: "glove",
+  boots: "boot", greaves: "boot", slippers: "boot",
   ring: "ring", band: "ring", signet: "ring",
   amulet: "amulet", pendant: "amulet", talisman: "amulet",
 };

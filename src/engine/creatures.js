@@ -430,7 +430,7 @@ function cGolem(g){
 }
 
 /* ---- hero full-body builders (96-space, standing y≈86) ---- */
-function hKnight(g){
+function hFighter(g){
   const armor="#8f9ec4", armorD="#5b6b96", cloth="#4c5c86";
   ground(g,17);
   limb(g,[[44,64],[42,75],[44,84]],4.4,armorD); limb(g,[[52,64],[54,75],[52,84]],4.4,armorD);
@@ -454,7 +454,7 @@ function hKnight(g){
   inkPath(g,gg=>{ gg.ellipse(48,38,8.5,8,0,0,7); gg.rect(42,37,12,3.4); },1.3);
   g.fillStyle="#8a2a22"; g.beginPath(); g.moveTo(45,28); g.quadraticCurveTo(48,14,58,20); g.quadraticCurveTo(52,24,52,29); g.closePath(); g.fill();
   inkPath(g,gg=>{ gg.moveTo(45,28); gg.quadraticCurveTo(48,14,58,20); },1);
-  return "Knight";
+  return "Fighter";
 }
 function hMage(g){
   const robe="#5c3ea8", robeD="#37246b";
@@ -547,7 +547,7 @@ function hRogue(g){
   return "Rogue";
 }
 const FIGURES={rat:cRat,goblin:cGoblin,kobold:cKobold,skeleton:cSkeleton,wight:cWight,dragon:cDragon,
-  spider:cSpider,lich:cLich,wyvern:cWyvern,golem:cGolem,knight:hKnight,mage:hMage,cleric:hCleric,rogue:hRogue};
+  spider:cSpider,lich:cLich,wyvern:cWyvern,golem:cGolem,fighter:hFighter,mage:hMage,cleric:hCleric,rogue:hRogue};
 function buildFigure(kind,seed){
   seedRng(seed); setParts(null); setBlinks(null);
   const c=document.createElement("canvas"); c.width=c.height=384;
@@ -559,5 +559,5 @@ function buildFigure(kind,seed){
 }
 
 export {
-  cSpider, cKobold, cGoblin, cSkeleton, cRat, cLich, cWight, cWyvern, cDragon, cGolem, hKnight, hMage, hCleric, hRogue, FIGURES, buildFigure
+  cSpider, cKobold, cGoblin, cSkeleton, cRat, cLich, cWight, cWyvern, cDragon, cGolem, hFighter, hMage, hCleric, hRogue, FIGURES, buildFigure
 };

@@ -7,7 +7,7 @@
 
 import { PREFIXES } from "../data/items/prefixes.js";
 import { MATERIALS } from "../data/items/materials.js";
-import { GEAR_TYPES } from "../data/items/gearTypes.js";
+import { GEAR_TYPES, CLASS_FAMILY } from "../data/items/gearTypes.js";
 
 const STAT_ORDER = ["atk", "def", "hp", "dodge", "crit", "aspd"];
 const STAT_LABEL = { atk: "ATK", def: "DEF", hp: "HP", dodge: "Dodge", crit: "Crit", aspd: "Speed" };
@@ -26,10 +26,16 @@ function fmtVal(stat, v) {
   return `${v >= 0 ? "+" : ""}${num} ${STAT_LABEL[stat]}`;
 }
 
-/* Generate one item. opts.classes (array) restricts gear types to those the party can use. */
+/* Generate one item. opts.classes (array) restricts gear types to those the party can use:
+   family armour (fam) only drops in families the party wears; weapons/jewellery gate by `use`. */
 export function generate(rng, opts = {}) {
   let typePool = GEAR_TYPES;
-  if (opts.classes) typePool = GEAR_TYPES.filter(g => g.use === "any" || opts.classes.includes(g.use));
+  if (opts.classes) {
+    const wantFam = new Set(opts.classes.map(c => CLASS_FAMILY[c]).filter(Boolean));
+    typePool = GEAR_TYPES.filter(g =>
+      g.fam ? wantFam.has(g.fam)
+            : (g.use === "any" || opts.classes.includes(g.use)));
+  }
 
   const type = wpick(rng, typePool);
   const material = wpick(rng, MATERIALS.filter(m => m.mat === type.mat));
@@ -58,6 +64,7 @@ export function generate(rng, opts = {}) {
     d: descParts.join(", "),
     parts: { prefix: prefix.id, material: material.id, type: type.id },
   };
+  if (type.fam) item.family = type.fam; // armour family gates who can wear it (Equipment.canEquip)
   if (type.rng) item.rng = type.rng;   // weapons carry their range (drives melee vs ranged combat)
   for (const s in stats) item[s] = stats[s];
   return item;

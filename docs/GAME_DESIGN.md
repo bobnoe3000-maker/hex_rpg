@@ -74,7 +74,9 @@ All randomness flows through a **seeded RNG** (mulberry32, already in the protot
 
 ## 3. Classes ✅ (fighter / mage / rogue / cleric)
 
-Four base classes. Each defines: base stats, per-level growth, allowed gear types, a native **skill pool**, and (future) a **skill tree** for specialization (§4.1). **All four are implemented** (the "fighter" ships as **Knight** in code/UI): Knight, Mage, Cleric, and **Rogue** (nimble skirmisher — high dodge/crit, twin daggers, starts in a Leather Vest; native gear: dagger, kris, shortbow, cloak). Rogue-restricted loot rolls through the same `LootGenerator` class filter as the others.
+Four base classes. Each defines: base stats, per-level growth, allowed gear types, a native **skill pool**, and (future) a **skill tree** for specialization (§4.1). **All four are implemented** as **Fighter, Mage, Cleric, and Rogue** (rogue: nimble skirmisher — high dodge/crit, twin daggers, starts in a Leather Vest; native gear: dagger, kris, shortbow, cloak). Rogue-restricted loot rolls through the same `LootGenerator` class filter as the others. **Knight** is reserved as a future **skill-tree specialization of the Fighter**, not a base class.
+
+**Armour families.** Each class wears one armour family, enforced at equip time (`Equipment.canEquip`) and at drop time (`LootGenerator`): **Fighter → metal**, **Rogue → leather**, **Mage & Cleric → cloth**. A gear type's `fam` selects both which materials can roll (a Plate only rolls metals — no more "Cotton Mail") and who can wear it. Weapons and jewellery have no family and gate by `use`. Materials are grouped into matching categories — `weapon` (atk/crit), `metal` (def/hp), `leather` (dodge/def), `cloth` (hp/dodge/crit), and `trinket` (mixed, for rings & amulets).
 
 | Class | Fantasy | Stat lean | Role |
 |---|---|---|---|
@@ -142,13 +144,14 @@ Every item is composed of **Prefix + Material + Gear Type + Upgrade Level**, and
 > Live in `data/items/{prefixes,materials,gearTypes}.js`; `systems/LootGenerator.js` composes them into drops. Names read `[Prefix] [Material] [Type]` (e.g. *Sturdy Meteoric Wand*), class-restricted, colour-graded by the rarest component. The `lifesteal` proc is wired; `+N` upgrade levels and more procs are still ahead.
 
 - **Gear Type** — defines the **slot**, the **class** it serves, one stat bonus, and (weapons) a **range**.
-  - *Weapon types:* sword, greatsword (knight, melee); wand, staff (mage, **ranged**); mace, scepter (cleric, melee); dagger, kris (rogue, melee), shortbow (rogue, **ranged**).
+  - *Weapon types:* sword, greatsword (fighter, melee); wand, staff (mage, **ranged**); mace, scepter (cleric, melee); dagger, kris (rogue, melee), shortbow (rogue, **ranged**).
   - **Range is weapon-driven** (`StatEngine.derive`): equip a **ranged** weapon and the hero attacks/animates at range (projectile FX); a **melee** weapon (or an unarmed hero) fights up close. Unarmed heroes fall back to their class's innate range, so a fresh mage still casts at range. A rogue is melee with daggers but turns **ranged the moment they equip a shortbow**.
   - **Ranged units kite** (`act()`): they close to firing range, shoot while a safe buffer holds, and **back off a step when a foe closes to melee** (`BAL.KITE_MIN`) — the classic attack/retreat dance. Cornered (no farther cell), they stand and fight. Melee units simply chase and strike.
   - *Wearable types:* helm, chest, gloves, boots, cloak, ring, amulet, shield.
 - **Material** — defines **base stats**; carries one stat bonus and may carry a **drawback**.
-  - *Weapon materials:* iron, steel, meteoric, emberglass… (e.g. *meteoric*: +ATK, −ASPD). **Better materials have a lower drop rate.**
-  - *Wearable materials:* cotton, silk, leather, dragonhide… (e.g. *dragonhide*: +DEF, +HP). **Better materials have a lower drop rate.**
+  - *Weapon materials:* iron, bronze, steel, meteoric, obsidian, emberglass… (e.g. *meteoric*: +ATK, −ASPD). **Better materials have a lower drop rate.**
+  - *Armour materials, by family:* **metal** — iron, bronze, steel, mithril, adamant (fighter); **leather** — leather, padded, studded, wyvernhide, dragonhide (rogue); **cloth** — cotton, linen, silk, wool, runeweave (mage/cleric). A gear type only rolls materials from its own family, so pairings always read sensibly.
+  - *Trinket materials* (rings & amulets): copper, silver, jade, gold, onyx, ruby — small mixed bonuses.
 - **Prefix** — defines a **proc** (special effect) + one stat bonus. `normal` = no proc (the most common roll); **stronger procs have a lower drop rate**.
   - e.g. *fiery* (burn DoT), *icy* (slow/chill), *vampiric* (lifesteal), *keen* (+crit).
 

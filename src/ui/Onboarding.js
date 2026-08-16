@@ -15,7 +15,7 @@ const randomName = () => COMPANION_NAMES[(Math.random() * COMPANION_NAMES.length
 const capw = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 
 const CLASS_INFO = {
-  knight: { name: "Knight", icon: "sword",  blurb: "Frontline bruiser — high HP &amp; armor. Soaks hits and holds the line." },
+  fighter: { name: "Fighter", icon: "sword",  blurb: "Frontline bruiser — high HP &amp; metal armor. Soaks hits and holds the line." },
   mage:   { name: "Mage",   icon: "spark",  blurb: "Glass cannon — high attack &amp; crit, ranged, but fragile." },
   cleric: { name: "Cleric", icon: "cross",  blurb: "Sturdy support — balanced, durable, the party's backbone." },
   rogue:  { name: "Rogue",  icon: "dagger", blurb: "Nimble skirmisher — high dodge &amp; crit with twin daggers, fast strikes." },

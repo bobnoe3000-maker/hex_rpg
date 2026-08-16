@@ -1,10 +1,16 @@
 /* ============ SYSTEM :: Equipment.js — equip / unequip gear ============ */
 /* Pure & DOM-free. Mutates a hero's `gear` and a shared `inventory` array.
-   Class restriction: an item is equippable if it's "any" or matches the hero's class. */
+   Class restriction: armour with a `family` (metal/leather/cloth) is worn only by the classes
+   that use that family (fighters→metal, rogues→leather, casters→cloth); everything else is
+   equippable if it's "any" or matches the hero's class. */
 "use strict";
 
+import { CLASS_FAMILY } from "../data/items/gearTypes.js";
+
 export function canEquip(hero, item) {
-  return !!item && (item.use === "any" || item.use === hero.cls);
+  if (!item) return false;
+  if (item.family) return CLASS_FAMILY[hero.cls] === item.family;
+  return item.use === "any" || item.use === hero.cls;
 }
 
 /* Equip `item` (which must be in `inventory`) into its slot on `hero`.

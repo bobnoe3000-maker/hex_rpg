@@ -1,11 +1,11 @@
 /* ============ DATA :: classes.js — hero class base stats + per-level growth ============ */
-/* Phase 1 keeps the prototype's three heroes (knight/mage/cleric) with six-stat blocks.
-   The fighter/mage/rogue/cleric roster overhaul arrives in later phases. */
+/* The four base classes: fighter/mage/cleric/rogue, each a six-stat block. ("Knight" is a
+   future skill-tree specialization of the fighter, not a base class.) */
 "use strict";
 
 export const HERO_BASES = {
-  knight: {
-    name: "Bram", cls: "knight", rng: 1,
+  fighter: {
+    name: "Bram", cls: "fighter", rng: 1,
     hp: 58, atk: 9, def: 24, dodge: 8, crit: 8, aspd: 1.00,
     growth: { hp: 14, atk: 2, def: 4, dodge: 1, crit: 1 },
   },
