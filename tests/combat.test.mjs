@@ -7,6 +7,8 @@ import { canEquip, equip, unequip, isUpgrade, itemScore } from "../src/systems/E
 import { generate, describeItem } from "../src/systems/LootGenerator.js";
 import { upgrade, canUpgrade, primaryStat } from "../src/systems/ForgeSystem.js";
 import { priceOf, sellPriceOf } from "../src/systems/Economy.js";
+import { xpToReach, xpForNext } from "../src/engine/combat.js";
+import { earnedPoints, pointsForLevel, unspentPoints, pointBonus, STAT_STEP } from "../src/systems/Leveling.js";
 
 let fails = 0;
 const ok = (name, cond) => { console.log(`${cond ? "PASS" : "FAIL"}  ${name}`); if (!cond) fails++; };
@@ -217,6 +219,34 @@ ok("different seed diverges", seq(123) !== seq(777));
   const h = makeHero("fighter", { statSeed: 1 }); const hp0 = h.maxhp;
   growTo(h, 4);
   ok("growTo lifts level and HP", h.level === 4 && h.maxhp > hp0 && h.hp === h.maxhp);
+}
+
+// Leveling: uncapped XP curve + main-hero stat points
+{
+  // XP curve keeps the classic early thresholds and scales forever (no cap)
+  ok("xpToReach matches the classic early curve", xpToReach(2) === 30 && xpToReach(3) === 80 && xpToReach(1) === 0);
+  ok("xpForNext grows every level (no cap)", xpForNext(1) === 30 && xpForNext(2) === 50 && xpForNext(50) < xpForNext(200));
+
+  // points per level: 3 → 2 after 50 → 1 after 100
+  ok("points per level step down at 50 and 100",
+     pointsForLevel(1) === 3 && pointsForLevel(50) === 3 && pointsForLevel(51) === 2 &&
+     pointsForLevel(100) === 2 && pointsForLevel(101) === 1);
+  ok("earnedPoints is cumulative across the bands",
+     earnedPoints(1) === 3 && earnedPoints(50) === 150 && earnedPoints(100) === 250 && earnedPoints(101) === 251);
+
+  // a fresh hero has level-1 points unspent and none committed
+  const h = makeHero("fighter", 1);
+  ok("new hero starts with its level-1 points unspent", unspentPoints(h) === 3);
+  ok("no committed points add nothing in derive", pointBonus(h, "atk") === 0);
+
+  // committing points raises the derived stat by STEP and reduces the unspent pool
+  const atk0 = derive(h).atk;
+  h.pts.atk = 1;
+  ok("a committed ATK point adds STEP.atk to derived ATK", derive(h).atk === atk0 + STAT_STEP.atk);
+  ok("committing reduces the unspent pool", unspentPoints(h) === 2);
+
+  // enemies never carry points, so derive stays clean for them
+  ok("enemies get no point bonus", pointBonus(rat, "atk") === 0 && !rat.pts);
 }
 
 console.log(fails ? `\n${fails} FAILED` : "\nall passed");

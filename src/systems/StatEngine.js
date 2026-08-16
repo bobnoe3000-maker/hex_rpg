@@ -4,6 +4,7 @@
 "use strict";
 
 import { BAL } from "../data/balance.js";
+import { pointBonus } from "./Leveling.js";
 
 const clampN = (v, a, b) => Math.max(a, Math.min(b, v));
 
@@ -17,14 +18,15 @@ export function gearSum(u, key) {
   return t;
 }
 
-/* final six-stats for any unit = base + gear. The single stat source of truth. */
+/* final six-stats for any unit = base + gear + spent level-up points (main hero only; others have
+   no points). The single stat source of truth. */
 export function derive(u) {
   return {
-    maxhp: Math.max(1,   Math.round(u.maxhp + gearSum(u, "hp"))),
-    atk:   Math.max(0,   u.atk   + gearSum(u, "atk")),
-    def:   Math.max(0,   u.def   + gearSum(u, "def")),
-    dodge: Math.max(0,   u.dodge + gearSum(u, "dodge")),
-    crit:  Math.max(0,   u.crit  + gearSum(u, "crit")),
+    maxhp: Math.max(1,   Math.round(u.maxhp + gearSum(u, "hp")    + pointBonus(u, "hp"))),
+    atk:   Math.max(0,   u.atk   + gearSum(u, "atk")   + pointBonus(u, "atk")),
+    def:   Math.max(0,   u.def   + gearSum(u, "def")   + pointBonus(u, "def")),
+    dodge: Math.max(0,   u.dodge + gearSum(u, "dodge") + pointBonus(u, "dodge")),
+    crit:  Math.max(0,   u.crit  + gearSum(u, "crit")  + pointBonus(u, "crit")),
     aspd:  Math.max(0.1, u.aspd  + gearSum(u, "aspd")),
     // range comes from the equipped weapon (ranged weapon → ranged); unarmed falls back to the
     // unit's innate range (mages still cast at range; enemies use their base rng).

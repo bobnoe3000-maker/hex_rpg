@@ -120,8 +120,9 @@ The same pattern applies to every class (e.g. Fighter: *Guardian* tank vs *Berse
 
 ## 5. Progression
 
-- **XP & Levels:** kills grant shared party XP (prototype behavior, generalized). Level cap removed; XP curve is formula-driven in `data/xp-curve.js`.
-- **On level-up:** class-based stat growth + skill point(s).
+- **XP & Levels:** kills grant shared party XP (split among the living). **No level cap** — the XP curve is formula-driven (`engine/combat.js`: `xpToReach(L) = 10·(L²−1)`, keeping the classic early pacing L2=30, L3=80 and scaling forever). **Implemented.**
+- **On level-up (main hero):** **no automatic stat growth** — each level grants **assignable stat points** (`BAL.POINTS`: **3/level up to L50, 2 up to L100, then 1**). The player spends them in the character panel (add/remove with a live preview, then **Confirm**); each point raises a stat by `STAT_STEP` (HP +8, ATK/DEF/Dodge/Crit +2). Points live on the hero as `pts{}` and feed `StatEngine.derive`; the available pool is `earnedPoints(level) − spent`. `systems/Leveling.js` (pure). **Implemented.**
+- **On level-up (companions):** keep the **fixed per-class growth block** in `data/classes.js` (no point allocation) — they auto-scale so the player only micromanages the main hero. **Implemented.**
 - **Skill points:** spent to unlock/upgrade skills.
 - **Main hero** is created by the player — **implemented**: splash → guest login → pick class → **roll stats** (seeded, re-rollable) → **roll portrait** → name. (Feature 1; skills come with Phase 3.)
 - **Companions** are randomly generated recruits (see §7).
@@ -183,7 +184,7 @@ Both the main hero and companions **can die**. A **party wipe** ends the run wit
 
 Individually downed heroes in a fight the party still **wins** are revived at run's end with **no loss** — only a **full party wipe** strips carried items. This turns each dungeon into a risk/reward push: press deeper for better drops, or bank your haul and retreat.
 
-**Current model (pre-Bank):** on a party wipe you're sent back to **the Keep**. The **main hero auto-revives for free** (partial HP — *"You awaken at the Keep"*), but **fallen companions stay dead** until you pay to raise them at the **Temple** (`ui/TempleScreen.js`). The **resurrection fee scales with the companion's level** (`BAL.TEMPLE: RESURRECT_BASE + level*RESURRECT_PER_LEVEL`), so keeping a high-level pal alive is a real silver cost. The item-loss penalty (§7.1, above) activates once the **Bank** exists to hold death-safe valuables.
+**Current model (pre-Bank):** on a party wipe you're sent back to **the Keep**. **Every fallen hero — main and companions alike — is raised at the Temple** (`ui/TempleScreen.js`) for a **level-scaled fee** (`BAL.TEMPLE: RESURRECT_BASE + level*RESURRECT_PER_LEVEL`), so keeping a high-level hero alive is a real silver cost. **Safety net:** if the *whole* party falls (nobody left to earn silver), the **main hero wakes at the Keep for free** at partial HP, so a total wipe can never soft-lock the run — but a main who falls while pals still stand waits at the Temple like anyone else. The item-loss penalty (§7.1, above) activates once the **Bank** exists to hold death-safe valuables.
 
 🔶 **Open:** on a wipe, does the party keep **silver carried on hand**, or only banked silver? *Default assumption: on-hand silver is kept — only carried **items** are lost.*
 

@@ -4,7 +4,8 @@ import { buildFigure } from './engine/creatures.js';
 import { iconImg, iconCanvas } from './engine/icons.js';
 import { fxUpdateDraw, fxClear, fxText, fxSlash, fxBolt, fxDissolve, fxRing, fxBlock } from './engine/fx.js';
 import { GCOLS, GROWS, buildGameRoom, cx0g, cy0g, isBlocked } from './engine/dungeon.js';
-import { XP_NEXT, ROOMS_SPEC } from './engine/combat.js';
+import { xpToReach, ROOMS_SPEC } from './engine/combat.js';
+import { unspentPoints, earnedPoints, pointsForLevel, ASSIGNABLE, emptyPoints } from './systems/Leveling.js';
 import { HERO_BASES } from './data/classes.js';
 import { BAL } from './data/balance.js';
 import { derive } from './systems/StatEngine.js';
@@ -80,7 +81,7 @@ function snapshotState(){
 }
 function saveGame(){ if(activeSlot!==null) writeSlot(activeSlot, snapshotState()); }
 function loadGame(save){
-  party=(save.party||[]).map(h=>({alive:true, ...h}));   // default alive for older saves
+  party=(save.party||[]).map(h=>({alive:true, pts:emptyPoints(), ...h}));   // defaults for older saves
   state.silver=save.silver||0; state.gems=save.gems||0;
   state.inventory=save.inventory||[]; state.roomIdx=save.roomIdx||0;
 }
@@ -330,27 +331,52 @@ function hurt(u,dmg,src){
   }
   if(u.team===0) renderParty();
 }
-const HERO_MAX_LEVEL=3;   // heroes cap here for now (skill trees extend this later)
-/* xp progress toward the next level, for the character panel */
+/* xp progress toward the next level, for the character panel (no cap — always shows a bar) */
 function xpProgress(h){
-  if(h.level>=HERO_MAX_LEVEL) return {max:true};
-  const prev=XP_NEXT[h.level-1]||0, next=XP_NEXT[h.level];
-  return {max:false, cur:Math.max(0,(h.xp||0)-prev), need:next-prev, nextLevel:h.level+1};
+  const prev=xpToReach(h.level), next=xpToReach(h.level+1);
+  return {cur:Math.max(0,(h.xp||0)-prev), need:next-prev, nextLevel:h.level+1};
 }
+/* Award XP to the living party. No level cap. The MAIN hero (party[0]) gains no automatic stats —
+   each level grants assignable points instead (spent in the character panel). Companions keep the
+   fixed per-class growth block. */
 function awardXP(xp){
   const share=Math.ceil(xp/Math.max(1,party.filter(p=>p.alive).length));
   let leveled=false;
   for(const h of party){ if(!h.alive)continue;
+    const isMain=h===party[0];
     h.xp+=share;
-    while(h.level<HERO_MAX_LEVEL&&h.xp>=XP_NEXT[h.level]){
-      h.level++; leveled=true; const gr=HERO_BASES[h.cls].growth;
-      h.atk+=gr.atk; h.def+=gr.def; h.dodge+=gr.dodge; h.crit+=gr.crit; h.maxhp+=gr.hp;
-      h.hp=derive(h).maxhp;
-      log(`${iconImg("spark",14)} <b>${h.name}</b> reaches <span class="sys">level ${h.level}</span>! (+${gr.hp} HP, +${gr.atk} ATK)`,"heal");
+    while(h.xp>=xpToReach(h.level+1)){
+      h.level++; leveled=true;
+      if(isMain){
+        const pts=pointsForLevel(h.level);
+        log(`${iconImg("spark",14)} <b>${h.name}</b> reaches <span class="sys">level ${h.level}</span>! <span class="heal">+${pts} stat point${pts>1?"s":""}</span> to spend.`,"heal");
+      } else {
+        const gr=HERO_BASES[h.cls].growth;
+        h.atk+=gr.atk; h.def+=gr.def; h.dodge+=gr.dodge; h.crit+=gr.crit; h.maxhp+=gr.hp;
+        h.hp=derive(h).maxhp;
+        log(`${iconImg("spark",14)} <b>${h.name}</b> reaches <span class="sys">level ${h.level}</span>! (+${gr.hp} HP, +${gr.atk} ATK)`,"heal");
+      }
       fxRing(uxS(h),uyS(h)+6,"#7ee787"); fxText(uxS(h),uyS(h)-44,"LEVEL UP!","#7ee787",true);
     } }
   renderParty();
   if(leveled) saveGame();   // persist a level-up so hard-won progress survives a reload mid-run
+}
+/* Commit a pending point allocation for the main hero. `deltas` maps stat→signed count (add/remove).
+   Validated against available points; grants any HP increase, clamps current HP on a refund. */
+function assignPoints(h, deltas){
+  if(h!==party[0]) return false;                       // main hero only
+  const next={...emptyPoints(), ...(h.pts||{})};
+  for(const k of ASSIGNABLE) next[k]=Math.max(0,(next[k]||0)+(deltas[k]||0));
+  // reject an allocation that would overspend the earned pool
+  let spent=0; for(const k of ASSIGNABLE) spent+=next[k];
+  if(spent>earnedPoints(h.level)) return false;
+  const before=derive(h).maxhp;
+  h.pts=next;
+  const after=derive(h).maxhp;
+  if(after>before) h.hp=Math.min(after,h.hp+(after-before));   // new HP is granted live
+  else h.hp=Math.min(h.hp,after);                              // refunded HP → clamp down
+  renderParty(); updateHud(); saveGame();
+  return true;
 }
 function act(u){
   if(!u.alive)return;
@@ -418,6 +444,8 @@ function openHero(h){
     portrait: heroPortrait(h),
     isMain: h===party[0],
     xp: xpProgress,
+    points: h===party[0] ? ()=>unspentPoints(h) : null,   // only the main hero allocates points
+    assign: h===party[0] ? d=>assignPoints(h, d) : null,
     refresh: renderParty,
     gems: ()=>state.gems,
     silver: ()=>state.silver,
@@ -427,10 +455,13 @@ function openHero(h){
 /* ---------- scenes: town hub ⇄ dungeon ---------- */
 function enterTown(fromWipe=false){
   state.scene="town"; townEl.classList.add("show");
-  // the main hero always wakes at the Keep, free of charge
+  // The main hero now falls like anyone else and is raised at the Temple. Safety net: only if the
+  // WHOLE party is down (nobody left to earn silver) does the main wake free at the Keep, so a total
+  // wipe can never soft-lock the run. A main who falls with pals still standing waits at the Temple.
   const main=party[0];
-  if(main && !main.alive){ main.alive=true; main.hp=Math.round(derive(main).maxhp*BAL.REVIVE_HEAL_FRAC);
-    log(`${iconImg("spark",14)} <span class="heal">You awaken at the Keep, battered but breathing.</span>`,"sys"); }
+  if(main && !main.alive && !party.some(h=>h.alive)){
+    main.alive=true; main.hp=Math.round(derive(main).maxhp*BAL.REVIVE_HEAL_FRAC);
+    log(`${iconImg("spark",14)} <span class="heal">Your whole party fell — you awaken at the Keep, battered but breathing.</span>`,"sys"); }
   // a wipe ends the delve: reset the battlefield so the next descent starts fresh (fallen pals stay
   // dead until raised at the Temple; they simply won't be placed until then).
   if(fromWipe){ state.phase="idle"; loadRoom(); }

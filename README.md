@@ -21,7 +21,8 @@ automatically (`core` has no dependencies, everything imports from it).
 - `src/ui/TownScreen.js`        — the Keep: hub with party, currency, services, Descend / 🏠
 - `src/ui/ShopScreen.js`        — buy / sell gear, reroll stock, trade silver for gems
 - `src/ui/TavernScreen.js`      — hire randomly-generated companions (party of 4); recruits scale to your level, fee scales with recruit level
-- `src/ui/TempleScreen.js`      — resurrect fallen companions for a level-scaled fee (main hero revives free at the Keep)
+- `src/ui/TempleScreen.js`      — resurrect any fallen hero (main or companion) for a level-scaled fee; a total party wipe wakes the main free at the Keep
+- `src/systems/Leveling.js`     — main-hero level-up stat points (no cap; 3/2/1 per level band) + point→stat derivation
 - `src/ui/ForgeScreen.js`       — Keep's Forge service (Runic Anvil): seat gear + gem, animated fuse, upgrade (+1, +2 …)
 - `src/state/save.js`           — three localStorage save slots (JSON snapshot; art regenerates from seeds)
 - `src/ui/DiagScreen.js`        — Keep's diagnostics/log export (state + captured errors + combat log, copy to clipboard)

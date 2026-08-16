@@ -8,6 +8,7 @@ import { HERO_BASES } from "../data/classes.js";
 import { ENEMIES } from "../data/enemies.js";
 import { SLOTS } from "../data/items/gearTypes.js";
 import { starterGear } from "../data/items/starter.js";
+import { emptyPoints } from "../systems/Leveling.js";
 import { COMPANION_NAMES } from "../data/names.js";
 
 const CLASSES = ["fighter", "mage", "cleric", "rogue"];
@@ -49,6 +50,7 @@ export function makeHero(cls, opts = {}) {
   return {
     name: opts.name || b.name, cls: b.cls, team: 0, level: 1, xp: 0, rng: b.rng,
     hp: stats.hp, maxhp: stats.hp, atk: stats.atk, def: stats.def, dodge: stats.dodge, crit: stats.crit, aspd: stats.aspd,
+    pts: emptyPoints(),   // spent level-up points (only the main hero ever allocates these)
     gear, alive: true, seed, figSeed: pSeed, portraitSeed: pSeed,
   };
 }

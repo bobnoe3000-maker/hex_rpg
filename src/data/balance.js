@@ -45,8 +45,16 @@ export const BAL = {
   // recruits scale to the main hero's level; hire = HIRE_BASE + level*HIRE_PER_LEVEL
   TAVERN: { RECRUITS: 3, HIRE_BASE: 40, HIRE_PER_LEVEL: 20, REFRESH_COST: 10 },
 
-  // Temple: resurrect a fallen companion; fee = RESURRECT_BASE + level*RESURRECT_PER_LEVEL
+  // Temple: resurrect a fallen hero; fee = RESURRECT_BASE + level*RESURRECT_PER_LEVEL
   TEMPLE: { RESURRECT_BASE: 30, RESURRECT_PER_LEVEL: 20 },
+
+  // Level-up points (MAIN hero only — companions use the fixed per-class growth in classes.js).
+  // No level cap. PER_LEVEL points earned per level: 3 up to L50, 2 up to L100, then 1.
+  // STEP = how much one point raises each assignable stat.
+  POINTS: {
+    PER_LEVEL: [{ upTo: 50, pts: 3 }, { upTo: 100, pts: 2 }, { upTo: Infinity, pts: 1 }],
+    STEP: { hp: 8, atk: 2, def: 2, dodge: 2, crit: 2 },
+  },
 
   WIPE_DELAY: 1.6,        // seconds after a full wipe before you're pulled back to the Keep
 

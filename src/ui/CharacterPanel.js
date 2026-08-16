@@ -5,6 +5,7 @@
 
 import { derive } from "../systems/StatEngine.js";
 import { canEquip, equip, unequip, isUpgrade } from "../systems/Equipment.js";
+import { STAT_STEP, ASSIGNABLE } from "../systems/Leveling.js";
 import { SLOTS } from "../data/items/gearTypes.js";
 import { itemNameHtml as itemName } from "./itemView.js";
 import { iconImg } from "../engine/icons.js";
@@ -12,6 +13,8 @@ import { gearIconImg } from "../engine/gearIcon.js";
 
 const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
 const STAT_ROWS = [["ATK", "atk"], ["DEF", "def"], ["Dodge", "dodge"], ["Crit", "crit"]];
+const ATTR_LABEL = { hp: "HP", atk: "ATK", def: "DEF", dodge: "Dodge", crit: "Crit" };
+const fmtStep = (k, n) => k === "aspd" ? n.toFixed(2) : n;   // (aspd isn't assignable, kept for safety)
 
 function injectCss() {
   if (document.getElementById("cp-style")) return;
@@ -57,16 +60,39 @@ function injectCss() {
   .cp-btn.off{background:linear-gradient(#2c2342,#1c1630);color:var(--parchment);box-shadow:0 2px 0 #100b1c}
   .cp-btn:active{transform:translateY(1px)}
   .cp-none{opacity:.55;font-size:11.5px;font-style:italic;padding:2px}
+  .cp-pts{background:#120d1c;border:1px solid var(--line);border-radius:8px;padding:7px 9px;margin-bottom:10px}
+  .cp-pts-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+  .cp-pts-h .av{font-size:11px;color:var(--gold);font-weight:bold}
+  .cp-pts-h .av.none{color:#6f6486;font-weight:normal}
+  .cp-arow{display:flex;align-items:center;gap:8px;font-size:12px;padding:3px 0}
+  .cp-arow .k{color:#9a8fb8;width:44px;flex:0 0 auto}
+  .cp-arow .v{flex:1;color:var(--parchment);font-variant-numeric:tabular-nums}
+  .cp-arow .v .pend{color:#7ee787;font-weight:bold} .cp-arow .v .pend.neg{color:#ff8a5a}
+  .cp-astep{color:#6f6486;font-size:10px}
+  .cp-ab{width:26px;height:26px;flex:0 0 auto;font-family:inherit;font-size:16px;font-weight:bold;line-height:1;
+    border:1px solid var(--line);border-radius:6px;background:#1c1630;color:var(--gold);cursor:pointer;padding:0}
+  .cp-ab:disabled{opacity:.3;cursor:default;color:#6f6486}
+  .cp-ab:active:not(:disabled){transform:translateY(1px)}
+  .cp-pts-act{display:flex;gap:7px;margin-top:8px}
+  .cp-pts-act button{flex:1;font-family:inherit;font-weight:bold;font-size:12px;border:0;border-radius:7px;padding:8px;cursor:pointer}
+  .cp-confirm{background:linear-gradient(#e0b063,#a8722a);color:#241606;box-shadow:0 2px 0 #6e4a14}
+  .cp-reset{background:#2c2342;color:var(--parchment);box-shadow:0 2px 0 #100b1c}
+  .cp-pts-act button:active{transform:translateY(1px)}
   `;
   document.head.appendChild(s);
 }
 
-/* ctx = { inventory, portrait, refresh, gems:()=>n, silver:()=>n, isMain, close }
+/* ctx = { inventory, portrait, refresh, gems:()=>n, silver:()=>n, isMain, xp, close,
+           points:()=>n|null, assign:(deltas)=>bool|null }   // points/assign: main hero only
    (Forging lives at the Keep's Forge now, not here.) */
 export function openCharacter(hero, ctx) {
   injectCss();
   const overlay = document.getElementById("overlay");
   let filterSlot = null; // when set, the bag lists only items for that slot
+  const draft = {};      // pending, unconfirmed point allocation (stat → signed count)
+  for (const k of ASSIGNABLE) draft[k] = 0;
+  const draftSum = () => ASSIGNABLE.reduce((a, k) => a + draft[k], 0);
+  const clearDraft = () => { for (const k of ASSIGNABLE) draft[k] = 0; };
 
   function render(msg) {
     const D = derive(hero);
@@ -98,6 +124,33 @@ export function openCharacter(hero, ctx) {
       `<div class="cp-item">${gearIconImg(it, 26)}<span class="it">${isUpgrade(hero, it) ? `<span class="cp-up" title="Upgrade for an empty/weaker slot">${iconImg("chevron", 11)}</span>` : ""}${itemName(it)}<br><small>${it.d}</small></span>` +
       `<button class="cp-btn" data-eq="${i}">Equip</button></div>`;
 
+    // Attribute point-buy — main hero only (ctx.points supplied). Draft with +/−, then Confirm.
+    const attrSection = () => {
+      if (!ctx.points) return "";
+      const avail = ctx.points();
+      const remaining = avail - draftSum();          // draft>0 spends, draft<0 refunds
+      const dirty = ASSIGNABLE.some(k => draft[k] !== 0);
+      const dval = k => k === "hp" ? D.maxhp : D[k];  // D already includes committed points
+      const arow = k => {
+        const committed = (hero.pts && hero.pts[k]) || 0;
+        const canAdd = remaining > 0, canSub = committed + draft[k] > 0;
+        const preview = dval(k) + draft[k] * STAT_STEP[k];
+        const pend = draft[k] !== 0 ? ` <span class="pend ${draft[k] < 0 ? "neg" : ""}">(${draft[k] > 0 ? "+" : ""}${draft[k] * STAT_STEP[k]})</span>` : "";
+        return `<div class="cp-arow"><span class="k">${ATTR_LABEL[k]}</span>
+          <span class="v">${fmtStep(k, preview)}${pend} <span class="cp-astep">+${STAT_STEP[k]}/pt</span></span>
+          <button class="cp-ab" data-dec="${k}" ${canSub ? "" : "disabled"}>−</button>
+          <button class="cp-ab" data-inc="${k}" ${canAdd ? "" : "disabled"}>+</button></div>`;
+      };
+      return `<div class="cp-sec"><span>Attributes</span><span class="hint">spend level-up points</span></div>
+        <div class="cp-pts">
+          <div class="cp-pts-h"><span>Points to spend</span><span class="av ${remaining ? "" : "none"}">${remaining}</span></div>
+          ${ASSIGNABLE.map(arow).join("")}
+          ${dirty ? `<div class="cp-pts-act">
+            <button class="cp-reset" data-preset>Reset</button>
+            <button class="cp-confirm" data-pconfirm>Confirm</button></div>` : ""}
+        </div>`;
+    };
+
     overlay.innerHTML = `<div class="cpanel">
       <div class="cp-head">
         <canvas width="96" height="96"></canvas>
@@ -113,6 +166,7 @@ export function openCharacter(hero, ctx) {
         <div><span class="k">Speed</span><span class="v">${D.aspd.toFixed(2)}</span></div>
         <div><span class="k">Range</span><span class="v">${D.rng > 1 ? "Ranged" : "Melee"}</span></div>
       </div>
+      ${attrSection()}
       <div class="cp-sec"><span>Equipped</span><span class="hint">tap a slot to filter the bag</span></div>
       ${SLOTS.map(slotRow).join("")}
       <div class="cp-sec"><span>Bag${filterSlot ? ` — ${cap(filterSlot)}` : ""}${others > 0 && !filterSlot ? ` · ${others} for other heroes` : ""}</span>${filterSlot ? `<span class="cp-clear" data-clear="1">show all ✕</span>` : ""}</div>
@@ -134,6 +188,19 @@ export function openCharacter(hero, ctx) {
       e.stopPropagation(); const it = ctx.inventory[+b.getAttribute("data-eq")];
       if (it) { equip(hero, it, ctx.inventory); ctx.refresh(); render(); }
     });
+    // attribute point-buy: draft with +/−, Reset discards, Confirm commits via ctx.assign
+    overlay.querySelectorAll("[data-inc]").forEach(b => b.onclick = () => {
+      const k = b.getAttribute("data-inc");
+      if (ctx.points() - draftSum() > 0) { draft[k]++; render(); }
+    });
+    overlay.querySelectorAll("[data-dec]").forEach(b => b.onclick = () => {
+      const k = b.getAttribute("data-dec"); const committed = (hero.pts && hero.pts[k]) || 0;
+      if (committed + draft[k] > 0) { draft[k]--; render(); }
+    });
+    const rst = overlay.querySelector("[data-preset]"); if (rst) rst.onclick = () => { clearDraft(); render(); };
+    const cf = overlay.querySelector("[data-pconfirm]"); if (cf) cf.onclick = () => {
+      if (ctx.assign && ctx.assign({ ...draft })) { clearDraft(); render(["good", "Attributes updated."]); }
+    };
   }
 
   render();
