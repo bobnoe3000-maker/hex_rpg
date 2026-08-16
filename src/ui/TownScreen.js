@@ -93,7 +93,7 @@ export function openTown(ctx) {
     </div>
     <div class="tw-sec">Services</div>
     <div class="tw-svc">
-      <button class="tw-btn" data-tavern><span class="ic">${iconImg("tankard",20)}</span><span>Tavern<small>Hire pals to fill your party (up to 4)</small></span></button>
+      <button class="tw-btn" data-tavern><span class="ic">${iconImg("tankard",20)}</span><span>Tavern<small>Recruit or replace a companion (party of 3)</small></span></button>
       <button class="tw-btn" data-temple><span class="ic">${iconImg("temple",20)}</span><span>Temple<small>Restore fallen companions (fee scales with level)</small></span></button>
       <button class="tw-btn" data-shop><span class="ic">${iconImg("pouch",20)}</span><span>Shop<small>Buy &amp; sell gear · trade silver for runic gems</small></span></button>
       <button class="tw-btn" disabled><span class="ic">${iconImg("vault",20)}</span><span>Bank<small>Coming soon — a death-safe vault</small></span></button>

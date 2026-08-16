@@ -68,7 +68,8 @@ const liveUnits=()=>{ const a=[]; for(const h of party) if(h.alive) a.push(h);
    so the freeze can never get "stuck" if the overlay is dismissed by any path. */
 let uiFrozen=false;
 const panelShown=()=>overlay.classList.contains("show");
-let party=[];               // filled by onboarding: [main, ...hired companions] (max 4)
+let party=[];               // filled by onboarding: [main, ...companions]
+const PARTY_CAP=3;          // main + 2 companions ("two companions only"); Tavern replaces the fallen
 const partyClasses=()=>party.length?[...new Set(party.map(h=>h.cls))]:["knight","mage","cleric","rogue"];
 let combatRng=Math.random;  // reseeded deterministically when a fight starts / area changes
 /* tiny currency readout in the log header */
@@ -197,8 +198,8 @@ function placeHeroes(){
   // Formation centered on the MAIN hero (party[0], front-center) with companions flanking.
   // Placed by party index so the main keeps the center slot even if a companion has fallen.
   const prow=GROWS-2, ctr=4;
-  const slots=[[prow,ctr],[prow,ctr-2],[prow,ctr+2],[prow-1,ctr]];
-  party.forEach((h,i)=>{ if(!h.alive) return; const s=slots[i%4]; h.r=s[0]; h.c=s[1]; }); // assign first
+  const slots=[[prow,ctr],[prow,ctr-2],[prow,ctr+2]];   // main center-front, two flanks
+  party.forEach((h,i)=>{ if(!h.alive) return; const s=slots[i%slots.length]; h.r=s[0]; h.c=s[1]; }); // assign first
   party.forEach((h,i)=>{ if(!h.alive) return;
     let guard=0; while((isBlocked(state.room,h.r,h.c)||occupied(h.r,h.c,h))&&guard++<12){
       h.r--; if(h.r<GROWS-3)h.r=GROWS-2, h.c=1+((h.c)%(GCOLS-2)); }
@@ -431,11 +432,19 @@ function refreshRecruits(free){
 }
 function hireCompanion(recruit){
   const cost=hireCostFor(recruit);
-  if(party.length>=4 || state.silver<cost) return false;
+  if(state.silver<cost) return false;
   const i=state.recruits.indexOf(recruit); if(i<0) return false;
-  state.silver-=cost; state.recruits.splice(i,1); party.push(recruit);
+  if(party.length<PARTY_CAP){                       // open slot → new pal joins
+    state.silver-=cost; state.recruits.splice(i,1); party.push(recruit);
+    log(`${iconImg("tankard",14)} <b>${recruit.name}</b> the ${recruit.cls} (Lv ${recruit.level}) joins the party!`,"sys");
+  } else {                                           // party full → hire replaces a fallen companion
+    const dead=party.findIndex((h,idx)=>idx>0 && !h.alive);
+    if(dead<0) return false;                         // full and all alive → nothing to replace
+    const fallen=party[dead];
+    state.silver-=cost; state.recruits.splice(i,1); party[dead]=recruit;
+    log(`${iconImg("tankard",14)} <b>${recruit.name}</b> the ${recruit.cls} (Lv ${recruit.level}) replaces the fallen <b>${fallen.name}</b>.`,"sys");
+  }
   renderParty(); updateHud();
-  log(`${iconImg("tankard",14)} <b>${recruit.name}</b> the ${recruit.cls} (Lv ${recruit.level}) joins the party!`,"sys");
   return true;
 }
 function openTavernScreen(){
@@ -648,7 +657,7 @@ function buildDiagnostics(){
 }
 /* boot: splash → login → create the main hero + pick companions, then open the Keep */
 startOnboarding((hero,companions=[])=>{
-  party=[hero, ...companions].slice(0,4);   // main + up to 3 (a 4th is hireable at the Tavern)
+  party=[hero, ...companions].slice(0,PARTY_CAP);   // main + two companions
   state.silver=BAL.STARTING_SILVER;
   const names=party.slice(1).map(h=>`<b>${h.name}</b>`).join(" &amp; ");
   log(`Welcome to <span class="sys">The Emberdeep</span>, <b>${hero.name}</b> the ${hero.cls}.`,"sys");

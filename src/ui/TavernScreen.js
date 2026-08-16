@@ -6,7 +6,7 @@ import { ensureTownCss } from "./TownScreen.js";
 import { derive } from "../systems/StatEngine.js";
 import { iconImg } from "../engine/icons.js";
 
-const CAP = 4;
+const CAP = 3;   // main + 2 companions
 
 let tvCssDone = false;
 function ensureTavernCss() {
@@ -21,6 +21,9 @@ function ensureTavernCss() {
   .tv-slot b{font-size:10.5px;color:var(--gold)} .tv-slot .cls{color:#9a8fb8;text-transform:capitalize;font-style:italic}
   .tv-slot .lv{color:#9ad1ff}
   .tv-slot.empty{opacity:.5;justify-content:center;color:#8fd39a;font-style:italic;cursor:default;min-height:74px}
+  .tv-slot.dead{border-color:#5a2a2a}
+  .tv-slot.dead canvas{filter:grayscale(1) brightness(.6)}
+  .tv-slot.dead .cls{color:#c98a8a}
   .tv-return{font-family:inherit;font-weight:bold;letter-spacing:1.5px;font-size:16px;text-transform:uppercase;
     border:0;border-radius:11px;padding:15px 14px;cursor:pointer;width:100%;margin-top:4px;
     background:linear-gradient(#e0b063,#a8722a);color:#241606;box-shadow:0 4px 0 #6e4a14;
@@ -38,7 +41,10 @@ export function openTavern(ctx) {
   const el = document.getElementById("town");
 
   function render() {
-    const party = ctx.party(), silver = ctx.silver(), full = party.length >= CAP, recruits = ctx.recruits();
+    const party = ctx.party(), silver = ctx.silver(), recruits = ctx.recruits();
+    const hasFallen = party.some((h, i) => i > 0 && !h.alive);
+    const canReplace = party.length >= CAP && hasFallen;   // full, but a fallen pal can be swapped out
+    const full = party.length >= CAP && !hasFallen;        // truly full only when every slot is alive
     const row = (h, i) => {
       const D = derive(h), cost = ctx.hireCost(h);
       return `<div class="shop-row">
@@ -46,21 +52,23 @@ export function openTavern(ctx) {
         <span class="it"><b style="color:var(--gold)">${h.name}</b> · ${h.cls} · Lv ${h.level}<br>
           <small>HP ${D.maxhp} · ATK ${D.atk} · DEF ${D.def} · Dodge ${D.dodge} · Crit ${D.crit}</small></span>
         <span class="price">${iconImg("coin",12)} ${cost}</span>
-        <button class="shop-btn" data-hire="${i}" ${(silver < cost || full) ? "disabled" : ""}>Hire</button>
+        <button class="shop-btn" data-hire="${i}" ${(silver < cost || full) ? "disabled" : ""}>${canReplace ? "Replace" : "Hire"}</button>
       </div>`;
     };
-    // current party — mirrors the dungeon roster so you can see your class mix while hiring
-    const slot = (h, i) => `<div class="tv-slot" data-hero="${i}" title="View ${h.name}'s stats">
+    // current party — mirrors the dungeon roster so you can see your class mix (and who has fallen)
+    const slot = (h, i) => `<div class="tv-slot ${h.alive ? "" : "dead"}" data-hero="${i}" title="View ${h.name}'s stats">
         <canvas width="96" height="96"></canvas>
-        <b>${h.name}</b><span class="cls">${h.cls}</span><span class="lv">Lv ${h.level}</span></div>`;
-    const emptySlots = Array.from({ length: CAP - party.length }, () => `<div class="tv-slot empty">empty</div>`).join("");
+        <b>${i === 0 ? iconImg("crown", 11) + " " : ""}${h.name}</b><span class="cls">${h.alive ? h.cls : "fallen"}</span><span class="lv">Lv ${h.level}</span></div>`;
+    const emptySlots = Array.from({ length: Math.max(0, CAP - party.length) }, () => `<div class="tv-slot empty">empty</div>`).join("");
 
     el.innerHTML = `<div class="tw-wrap">
       <div class="shop-top" style="justify-content:flex-end">
         <span class="tw-cur"><span>${iconImg("coin",13)} ${silver}</span></span>
       </div>
       <div class="tw-head"><h1>Tavern</h1><p style="font-size:12px;color:#9a8fb8;font-style:italic">
-        ${full ? "Your party is full (4)." : `Hire pals to fill your party — ${party.length}/${CAP}.`}</p></div>
+        ${full ? "Your party is full — all present."
+          : canReplace ? "A pal has fallen — hire a recruit to take their place (or revive them at the Temple)."
+          : `Recruit to round out your party — ${party.length}/${CAP}.`}</p></div>
       <div class="tw-sec">Your party — tap to view stats</div>
       <div class="tv-party">${party.map(slot).join("")}${emptySlots}</div>
       <div class="tw-sec">Looking for work</div>
