@@ -1,6 +1,6 @@
 import { mulberry32, R, ri, rf, pick, chance, maskToSnap, applyMask, T, WH, OX, OY, CW, CH, PARTS, newLayer, gradeLayer, seedRng, setParts, setGeom } from './core.js';
 import { STONE, pFloor, pCracked, pMoss, pGrate, pPuddle, pPit, pFirePit, pColumn,
-         pEmber, pRune, pBones, pRubble, pMushroom, pAsh, pPortal } from './tiles.js';
+         pEmber, pRune, pBones, pRubble, pMushroom, pAsh, pWallBlock, pExitWall } from './tiles.js';
 /* ============ DP ENGINE :: dungeon.js — open-floor rooms (no walls; islands over the void) ============ */
 /* A room is now an irregular island of stone floating in the void. Its shape comes from one of five
    generators; the walkable area is guaranteed fully connected (no unreachable tiles); exits are
@@ -46,7 +46,7 @@ const EXIT_LABEL = { onward:"Onward", shrine:"Shrine", vault:"Vault", boss:"Desc
 /* map a decorative tile name → its painter (walkable tiles only) */
 const DECO = { crack:pCracked, moss:pMoss, grate:pGrate, puddle:pPuddle,
   ember:pEmber, rune:pRune, bones:pBones, rubble:pRubble, mushroom:pMushroom, ash:pAsh };
-const BLOCKER = { pit:pPit, column:pColumn, fire:pFirePit };
+const BLOCKER = { pit:pPit, column:pColumn, fire:pFirePit, wall:pWallBlock };
 
 function buildGameRoom(seed, spec){
   setRoomGeom();
@@ -83,13 +83,24 @@ function buildGameRoom(seed, spec){
     return r>0 && !isEntry(r,c) && NEI.every(([dr,dc])=>floor.has((r+dr)+","+(c+dc))); });
   for(let i=interior.length-1;i>0;i--){ const j=(rng()*(i+1))|0; [interior[i],interior[j]]=[interior[j],interior[i]]; }
   const blockers=new Map();                       // cellKey → blocker kind
+  const interiorSet=new Set(interior);
   const kinds=spec.blockerKinds||["column","pit"];
   const maxB=spec.blockers==null?2:spec.blockers;
   for(const k of interior){
-    if(blockers.size>=maxB) break;
-    const test=new Set([...blockers.keys(), k]);
+    if(blockers.size>=maxB || blockers.has(k)) continue;
+    const kind=kinds[(rng()*kinds.length)|0];
+    // walls often come as a short run of 2–3 in a line; other blockers are single cells
+    const group=[k];
+    if(kind==="wall" && rng()<0.72){
+      const [r,c]=k.split(",").map(Number);
+      const [dr,dc]=rng()<.5?[0,1]:[1,0];        // horizontal or vertical run
+      const extra=1+((rng()*2)|0);               // +1 or +2 → total 2 or 3
+      for(let n=1;n<=extra && group.length<3;n++){ const nk=(r+dr*n)+","+(c+dc*n);
+        if(interiorSet.has(nk) && !blockers.has(nk)) group.push(nk); else break; }
+    }
+    const test=new Set([...blockers.keys(), ...group]);
     if(reachFrom(floor,start,test).size === floor.size-test.size)   // still reaches every open tile
-      blockers.set(k, kinds[(rng()*kinds.length)|0]);
+      for(const gk of group) blockers.set(gk, kind);
   }
 
   // 5) decorative (walkable) tiles on the remaining open floor
@@ -124,9 +135,9 @@ function buildGameRoom(seed, spec){
     (d&&DECO[d]?DECO[d]:pFloor)(g,x,y,tone);
     paintRim(g,x,y,floor,r,c);
   }
-  for(const [k,kind] of blockers){ const [r,c]=k.split(",").map(Number);
-    (BLOCKER[kind]||pColumn)(g, cx0g(c), cy0g(r), tone); }
-  for(const e of exits) pPortal(g, cx0g(e.c), cy0g(e.r), e.dir, e.kind, e.label);
+  for(const [k,kind] of [...blockers].sort((a,b)=>(+a[0].split(",")[0])-(+b[0].split(",")[0]))){   // back→front
+    const [r,c]=k.split(",").map(Number); (BLOCKER[kind]||pColumn)(g, cx0g(c), cy0g(r), tone); }
+  for(const e of exits) pExitWall(g, cx0g(e.c), cy0g(e.r), e.dir, e.kind, e.label);
 
   g.font="italic 12px Georgia"; g.textAlign="left";
   g.fillStyle="rgba(6,4,10,.8)"; g.fillText(spec.title+"  ·  #"+(seed%100000), OX+1, 15);
@@ -148,16 +159,17 @@ function buildGameRoom(seed, spec){
 /* darken the inner edge of any tile facing the void + a faint top lip — reads as a raised floor
    over the abyss without any wall geometry */
 function paintRim(g,x,y,floor,r,c){
+  const F=T*.25;   // fade span — halved from T·0.5 for a tighter, crisper drop-off to the void
   const side=(dr,dc,s)=>{ if(floor.has((r+dr)+","+(c+dc))) return;
     let grd;
-    if(s==="N") grd=g.createLinearGradient(x,y,x,y+T*.5);
-    else if(s==="S") grd=g.createLinearGradient(x,y+T,x,y+T*.5);
-    else if(s==="W") grd=g.createLinearGradient(x,y,x+T*.5,y);
-    else grd=g.createLinearGradient(x+T,y,x+T*.5,y);
-    grd.addColorStop(0,"rgba(4,3,9,.75)"); grd.addColorStop(1,"rgba(4,3,9,0)");
+    if(s==="N") grd=g.createLinearGradient(x,y,x,y+F);
+    else if(s==="S") grd=g.createLinearGradient(x,y+T,x,y+T-F);
+    else if(s==="W") grd=g.createLinearGradient(x,y,x+F,y);
+    else grd=g.createLinearGradient(x+T,y,x+T-F,y);
+    grd.addColorStop(0,"rgba(4,3,9,.78)"); grd.addColorStop(1,"rgba(4,3,9,0)");
     g.fillStyle=grd;
-    if(s==="N") g.fillRect(x,y,T,T*.5); else if(s==="S") g.fillRect(x,y+T*.5,T,T*.5);
-    else if(s==="W") g.fillRect(x,y,T*.5,T); else g.fillRect(x+T*.5,y,T*.5,T);
+    if(s==="N") g.fillRect(x,y,T,F); else if(s==="S") g.fillRect(x,y+T-F,T,F);
+    else if(s==="W") g.fillRect(x,y,F,T); else g.fillRect(x+T-F,y,F,T);
     g.strokeStyle="rgba(232,220,200,.12)"; g.lineWidth=1.4; g.beginPath();
     if(s==="N"){ g.moveTo(x,y+1); g.lineTo(x+T,y+1); }
     else if(s==="S"){ g.moveTo(x,y+T-1); g.lineTo(x+T,y+T-1); }

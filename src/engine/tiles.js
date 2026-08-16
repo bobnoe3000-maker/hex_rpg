@@ -286,7 +286,79 @@ function pAsh(g,x,y,tone){ pFloor(g,x,y,tone); g.globalAlpha=.5;
   g.globalAlpha=1;
 }
 
-/* ================= portal (replaces the north door — glows where floor meets the void) ============ */
+/* ================= wall block — old wall art reused as an impassable obstacle ================= */
+/* An extruded stone block sitting on a floor cell. Blocks movement like a column/pit. Variants
+   (solid / broken / mossy) are picked here so a run of them still reads with variety. */
+function pWallBlock(g,x,y,tone){
+  pFloor(g,x,y,tone);
+  const broken=chance(.28), mossy=!broken&&chance(.22);
+  g.save(); g.globalAlpha=.4; ell(g,x+T/2,y+T*0.9,T*0.4,T*0.1,"#050308"); g.restore();   // contact shadow
+  const fx=x+T*0.12, fw=T*0.76, top=y+T*0.14, capH=T*0.34, faceB=y+T*0.9, faceT=top+capH;
+  const cg=g.createLinearGradient(fx,0,fx+fw,0); cg.addColorStop(0,tone[0]); cg.addColorStop(.5,"#8b857a"); cg.addColorStop(1,tone[2]);
+  if(broken){ g.fillStyle=cg; g.beginPath(); g.moveTo(fx,faceT); let jx=fx;
+    while(jx<fx+fw){ g.lineTo(jx+T*0.05, top-rf(0,T*0.08)+capH*0.4); g.lineTo(jx+T*0.1, faceT-capH*0.5); jx+=T*0.1; }
+    g.lineTo(fx+fw,faceT); g.closePath(); g.fill();
+  } else { g.fillStyle=cg; g.fillRect(fx,top,fw,capH); g.fillStyle="rgba(255,255,255,.1)"; g.fillRect(fx,top,fw,3); }
+  const fg=g.createLinearGradient(0,faceT,0,faceB); fg.addColorStop(0,tone[1]); fg.addColorStop(1,tone[2]);
+  g.fillStyle=fg; g.fillRect(fx,faceT,fw,faceB-faceT);
+  const mid=faceT+(faceB-faceT)*0.5;
+  inkPath(g,gg=>{gg.moveTo(fx,mid);gg.lineTo(fx+fw,mid);},1,"rgba(10,8,14,.5)");
+  for(const bx of [fx+fw*0.35, fx+fw*0.7, fx+fw*0.5]){ const y0=bx<fx+fw*0.55?faceT:mid, y1=bx<fx+fw*0.55?mid:faceB;
+    inkPath(g,gg=>{gg.moveTo(bx,y0+1);gg.lineTo(bx,y1-1);},.8,"rgba(10,8,14,.45)"); }
+  g.strokeStyle="rgba(240,230,210,.3)"; g.lineWidth=1.3; g.beginPath(); g.moveTo(fx,faceT+.6); g.lineTo(fx+fw,faceT+.6); g.stroke();
+  inkPath(g,gg=>gg.rect(fx,faceT,fw,faceB-faceT),1.1);
+  if(!broken) inkPath(g,gg=>gg.rect(fx,top,fw,capH),1);
+  if(broken) for(let i=0;i<4;i++) ell(g,x+T*0.1+rf(0,T*0.8),faceB-2+rf(0,4),T*0.05,T*0.035,tone[2]);
+  if(mossy){ g.globalAlpha=.45; for(let i=0;i<7;i++) ell(g,fx+rf(0,fw),faceT+rf(0,faceB-faceT),T*0.06,T*0.04,"#4a6e3a"); g.globalAlpha=1; }
+}
+
+/* ================= exit — a wall segment at the floor's edge with a doorway/arch/stairs cut in ==== */
+const XKIND = { onward:"arch", vault:"arch", shrine:"open", stair:"stairsUp", boss:"stairsUp" };
+const XGLOW = { arch:"255,209,102", open:"121,199,230", stairsUp:"126,231,135" };
+const XLABELC = { arch:"#e8c06a", open:"#a6e0f5", stairsUp:"#8fe6a0" };
+function pExitWall(g,x,y,dir,kind,label){
+  const style=XKIND[kind]||"arch", glow=XGLOW[style], lc=XLABELC[style], tone=STONE[0];
+  const cx=x+T/2, cy=y+T/2;
+  const rot = dir==="N"?0 : dir==="E"?Math.PI/2 : dir==="S"?Math.PI : -Math.PI/2;   // opening faces the void
+  // pulsing glow beyond the opening (animated part layer, rotated to match)
+  part(0,0,{kind:"pulse",base:.4,amp:.28,speed:rf(1.2,2.2),phase:rf(0,6)},pg=>{
+    pg.save(); pg.translate(cx,cy); pg.rotate(rot);
+    const oy=-T*0.34; const rg=pg.createRadialGradient(0,oy,2,0,oy,T*0.9);
+    rg.addColorStop(0,"rgba("+glow+",.55)"); rg.addColorStop(1,"rgba("+glow+",0)");
+    pg.fillStyle=rg; pg.fillRect(-T,oy-T,T*2,T*2); pg.restore();
+  });
+  g.save(); g.translate(cx,cy); g.rotate(rot);
+  const bandTop=-T*0.5-WH*0.5, cap=WH*0.6, faceB=0, faceT=bandTop+cap;
+  const cg=g.createLinearGradient(-T/2,0,T/2,0); cg.addColorStop(0,tone[0]); cg.addColorStop(.5,"#8b857a"); cg.addColorStop(1,tone[2]);
+  g.fillStyle=cg; g.fillRect(-T/2-1,bandTop,T+2,cap);
+  const fg=g.createLinearGradient(0,faceT,0,faceB); fg.addColorStop(0,tone[1]); fg.addColorStop(1,tone[2]);
+  g.fillStyle=fg; g.fillRect(-T/2-1,faceT,T+2,faceB-faceT);
+  g.strokeStyle="rgba(240,230,210,.28)"; g.lineWidth=1.3; g.beginPath(); g.moveTo(-T/2-1,faceT+.6); g.lineTo(T/2+1,faceT+.6); g.stroke();
+  const ow=T*0.44, ox0=-ow/2, otop=faceT+T*0.05, ob=faceB;
+  const cut=gg=>{ if(style==="arch"){ gg.beginPath(); gg.moveTo(ox0,ob); gg.lineTo(ox0,otop+ow/2); gg.arc(0,otop+ow/2,ow/2,Math.PI,0,false); gg.lineTo(ox0+ow,ob); gg.closePath(); } else { gg.beginPath(); gg.rect(ox0,otop,ow,ob-otop); } };
+  g.fillStyle="#07060e"; cut(g); g.fill();
+  const ig=g.createLinearGradient(0,otop,0,ob); ig.addColorStop(0,"rgba("+glow+",.6)"); ig.addColorStop(1,"rgba("+glow+",.05)");
+  g.globalAlpha=.85; g.fillStyle=ig; cut(g); g.fill(); g.globalAlpha=1;
+  if(style==="stairsUp"){ let sy=ob, sw=ow-4, sx=ox0+2;
+    for(let i=0;i<4;i++){ const h=(ob-otop-2)/4;
+      g.fillStyle="rgba("+glow+","+(.15+.2*(i/4))+")"; g.fillRect(sx,sy-h,sw,h*.75);
+      g.strokeStyle="rgba(240,230,210,"+(.12+.2*(i/4))+")"; g.lineWidth=1; g.beginPath(); g.moveTo(sx,sy-h+.6); g.lineTo(sx+sw,sy-h+.6); g.stroke();
+      sy-=h; sx+=1.4; sw-=2.8; } }
+  if(style==="arch"){ for(let i=0;i<=6;i++){ const a=Math.PI+i/6*Math.PI, my=otop+ow/2;
+      const x1=Math.cos(a)*ow/2, y1=my+Math.sin(a)*ow/2, x2=Math.cos(a)*(ow/2+5), y2=my+Math.sin(a)*(ow/2+5);
+      g.strokeStyle=(i===3)?tone[0]:"#6a655c"; g.lineWidth=4.2; g.beginPath(); g.moveTo(x1,y1); g.lineTo(x2,y2); g.stroke(); }
+    inkPath(g,gg=>cut(gg),1.2);
+  } else { g.fillStyle="#6a655c"; g.fillRect(ox0-4,otop,4,ob-otop); g.fillRect(ox0+ow,otop,4,ob-otop);
+    g.fillStyle="#7a746a"; g.fillRect(ox0-5,otop-4,ow+10,5);
+    inkPath(g,gg=>{gg.rect(ox0-4,otop,4,ob-otop);gg.rect(ox0+ow,otop,4,ob-otop);},1); }
+  g.restore();
+  if(label){ g.font="italic 9px Georgia"; g.textAlign="center";
+    let lx=cx, ly=cy;
+    if(dir==="N") ly=cy-T*0.55; else if(dir==="S") ly=cy+T*0.62; else { lx=dir==="W"?cx-T*0.5:cx+T*0.5; ly=cy-T*0.32; }
+    g.fillStyle="rgba(6,4,10,.85)"; g.fillText(label,lx+1,ly+1); g.fillStyle=lc; g.fillText(label,lx,ly); }
+}
+
+/* ================= portal (kept for reference; exits now use pExitWall) ================= */
 const PKIND={ onward:{c:"#e8c06a",g:"255,209,102"}, shrine:{c:"#a6e0f5",g:"121,199,230"},
   vault:{c:"#e8c06a",g:"216,162,74"}, boss:{c:"#ff9a5c",g:"224,115,58"}, stair:{c:"#8fe6a0",g:"126,231,135"} };
 function pPortal(g,x,y,dir,kind,label){
@@ -314,5 +386,5 @@ function pPortal(g,x,y,dir,kind,label){
 
 export {
   STONE, crackLine, pFloor, pCracked, pMoss, pGrate, pPuddle, pPit, pFirePit, pColumn, pWallCap, pWallFace, pWall, doorLabel, pDoor,
-  pEmber, pRune, pBones, pRubble, pMushroom, pAsh, pPortal
+  pEmber, pRune, pBones, pRubble, pMushroom, pAsh, pPortal, pWallBlock, pExitWall
 };

@@ -16,10 +16,10 @@ export const xpForNext = lvl => xpToReach(lvl + 1) - xpToReach(lvl);
    they can't strand a tile), the EXIT kinds to render as portals, and its wave. Spawns no longer
    carry fixed r/c — the game drops each foe on a random reachable floor cell. */
 export const ROOMS_SPEC = [
-  { title: "The Emberdeep — Rat Warren", shape: "full", blockers: 2,
+  { title: "The Emberdeep — Rat Warren", shape: "full", blockers: 4, blockerKinds: ["wall", "column", "pit"],
     tiles: ["crack", "moss", "grate", "puddle", "bones", "rubble"], exits: ["onward"],
     spawn: () => [makeEnemy("rat"), makeEnemy("rat"), makeEnemy("rat"), makeEnemy("goblin"), makeEnemy("goblin")] },
-  { title: "The Emberdeep — Bone Gallery", shape: "cross", blockers: 3, blockerKinds: ["column", "pit"],
+  { title: "The Emberdeep — Bone Gallery", shape: "cross", blockers: 4, blockerKinds: ["column", "wall", "pit"],
     tiles: ["bones", "bones", "crack", "rubble", "ash", "grate"], exits: ["onward"],
     spawn: () => [makeEnemy("skeleton"), makeEnemy("skeleton"), makeEnemy("skeleton"), makeEnemy("goblin")] },
   { title: "The Emberdeep — Ember Causeway", shape: "causeway", blockers: 1, blockerKinds: ["fire", "column"],
@@ -28,10 +28,10 @@ export const ROOMS_SPEC = [
   { title: "The Emberdeep — Fungal Hollow", shape: "cavern", blockers: 2, blockerKinds: ["column", "pit"],
     tiles: ["mushroom", "moss", "rune", "puddle", "crack"], exits: ["shrine", "onward"],
     spawn: () => [makeEnemy("goblin"), makeEnemy("kobold"), makeEnemy("skeleton")] },
-  { title: "The Emberdeep — Flooded Vault", shape: "ring", blockers: 3, blockerKinds: ["column", "pit"],
+  { title: "The Emberdeep — Flooded Vault", shape: "ring", blockers: 4, blockerKinds: ["wall", "column", "pit"],
     tiles: ["puddle", "puddle", "rune", "moss", "grate"], exits: ["vault", "onward"],
     spawn: () => [makeEnemy("skeleton"), makeEnemy("skeleton"), makeEnemy("wight")] },
-  { title: "The Emberdeep — Ashen Approach", shape: "cross", blockers: 3, blockerKinds: ["fire", "column", "pit"],
+  { title: "The Emberdeep — Ashen Approach", shape: "cross", blockers: 4, blockerKinds: ["fire", "wall", "column"],
     tiles: ["ember", "ash", "bones", "rubble"], exits: ["onward"],
     spawn: () => [makeEnemy("wight"), makeEnemy("kobold"), makeEnemy("kobold"), makeEnemy("skeleton")] },
   { title: "The Emberdeep — Ashwing's Hoard", shape: "cavern", blockers: 2, blockerKinds: ["fire", "column"],
