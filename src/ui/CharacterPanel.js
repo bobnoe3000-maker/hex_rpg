@@ -84,6 +84,16 @@ function injectCss() {
   .cp-reset{background:#2c2342;color:var(--parchment);box-shadow:0 2px 0 #100b1c}
   .cp-pts-act button:active{transform:translateY(1px)}
   .skhint{font-size:10.5px;color:#6f6486;margin-top:5px}
+  .cp-subtabs{display:flex;gap:8px;margin-bottom:11px}
+  .cp-subtab{flex:1;font-family:inherit;font-size:9.5px;letter-spacing:1px;text-transform:uppercase;
+    border:1px solid var(--line);border-radius:9px;padding:8px 6px;cursor:pointer;background:#1c1630;color:#9a8fb8;
+    display:flex;flex-direction:column;align-items:center;gap:2px;line-height:1.2}
+  .cp-subtab b{font-family:Georgia,serif;font-size:14px;letter-spacing:0;text-transform:none;color:var(--parchment)}
+  .cp-subtab span{font-size:8.5px;letter-spacing:.5px;color:#6f6486}
+  .cp-subtab.off.sel{border-color:#ff8a5a;background:rgba(255,138,90,.1);color:#ff8a5a}
+  .cp-subtab.def.sel{border-color:#79c7e6;background:rgba(121,199,230,.1);color:#79c7e6}
+  .cp-subtab.sel b{color:var(--parchment)}
+  .cp-subtab:active{transform:translateY(1px)}
   .cp-branch{margin-bottom:12px}
   .cbh{font-family:inherit;font-size:11px;letter-spacing:1px;text-transform:uppercase;font-weight:bold;
     padding:7px 9px;border-radius:8px;margin-bottom:7px;display:flex;justify-content:space-between;align-items:center}
@@ -120,7 +130,9 @@ export function openCharacter(hero, ctx) {
   injectCss();
   const overlay = document.getElementById("overlay");
   let filterSlot = null; // when set, the bag lists only items for that slot
-  let tab = "stats";     // main-hero panel tab: "stats" | "equip"
+  let tab = "stats";     // main-hero panel tab: "stats" | "skills" | "equip"
+  let skillBranch = "off"; // Skills tab sub-tab: "off" | "def"
+  let keepScroll = true;   // preserve scroll across re-render (false = jump to top, for main-tab switches)
   const draft = {};      // pending, unconfirmed point allocation (stat → signed count)
   for (const k of ASSIGNABLE) draft[k] = 0;
   const draftSum = () => ASSIGNABLE.reduce((a, k) => a + draft[k], 0);
@@ -218,15 +230,20 @@ export function openCharacter(hero, ctx) {
             </div>${un ? "" : `<div class="slock">Locked · needs ${sk.gates[s.tier]} in ${b.name}</div>`}</div>`;
         });
         // group by tier with a divider
-        let out = `<div class="cp-branch ${br}"><div class="cbh">${br === "off" ? "Offensive" : "Defensive"} · ${b.name} <span class="inv">${sk.invested(br)} pts</span></div>`;
+        let out = `<div class="cp-branch ${br}">`;
         let lastT = 0;
         b.skills.forEach((s, i) => { if (s.tier !== lastT) { lastT = s.tier;
           out += `<div class="ctier">${s.tier === 5 ? "Capstone" : "Tier " + s.tier}</div>`; } out += rows[i]; });
         return out + "</div>";
       };
-      return `<div class="cp-pts" style="margin-bottom:12px"><div class="cp-pts-h"><span>Skill points</span><span class="av ${avail ? "" : "none"}">${avail}</span></div>
-        <div class="skhint">Learn ranks below · deeper tiers unlock as you invest in a branch</div></div>
-        ${branch("off")}${branch("def")}`;
+      const off = sk.tree.off, def = sk.tree.def;
+      return `<div class="cp-pts" style="margin-bottom:11px"><div class="cp-pts-h"><span>Skill points</span><span class="av ${avail ? "" : "none"}">${avail}</span></div>
+        <div class="skhint">Deeper tiers unlock as you invest in a branch</div></div>
+        <div class="cp-subtabs">
+          <button class="cp-subtab off ${skillBranch === "off" ? "sel" : ""}" data-branch="off">Offensive<b>${off.name}</b><span>${sk.invested("off")} pts</span></button>
+          <button class="cp-subtab def ${skillBranch === "def" ? "sel" : ""}" data-branch="def">Defensive<b>${def.name}</b><span>${sk.invested("def")} pts</span></button>
+        </div>
+        ${branch(skillBranch)}`;
     };
 
     // Main hero gets tabs (Stats / Skills / Equipment); companions show one combined view.
@@ -241,6 +258,10 @@ export function openCharacter(hero, ctx) {
          </div>${paneFor(tab)}`
       : statsBlock + equipBlock;
 
+    // keep the scroll position across a re-render (learning a rank shouldn't jump back to the top);
+    // a main-tab switch resets to the top instead
+    const prevScroll = keepScroll ? ((overlay.querySelector(".cpanel") || {}).scrollTop || 0) : 0;
+    keepScroll = true;
     overlay.innerHTML = `<div class="cpanel">
       <div class="cp-head">
         <canvas width="96" height="96"></canvas>
@@ -253,9 +274,10 @@ export function openCharacter(hero, ctx) {
       ${body}
     </div>`;
 
+    const panel = overlay.querySelector(".cpanel"); if (panel) panel.scrollTop = prevScroll;
     overlay.querySelector(".cp-head canvas").getContext("2d").drawImage(ctx.portrait, 0, 0, 96, 96);
     overlay.querySelector("[data-close]").onclick = () => { overlay.classList.remove("show"); ctx.close(); };
-    overlay.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => { tab = b.getAttribute("data-tab"); render(); });
+    overlay.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => { tab = b.getAttribute("data-tab"); keepScroll = false; render(); });
     const clr = overlay.querySelector("[data-clear]"); if (clr) clr.onclick = () => { filterSlot = null; render(); };
     overlay.querySelectorAll("[data-filter]").forEach(row => row.onclick = () => {
       const key = row.getAttribute("data-filter");
@@ -277,7 +299,8 @@ export function openCharacter(hero, ctx) {
       const k = b.getAttribute("data-dec"); const committed = (hero.pts && hero.pts[k]) || 0;
       if (committed + draft[k] > 0) { draft[k]--; render(); }
     });
-    // skill tree: learn / unlearn a rank (persists immediately)
+    // skill tree: switch branch sub-tab, then learn / unlearn a rank (persists immediately)
+    overlay.querySelectorAll("[data-branch]").forEach(b => b.onclick = () => { skillBranch = b.getAttribute("data-branch"); render(); });
     overlay.querySelectorAll("[data-sk-inc]").forEach(b => b.onclick = () => {
       if (ctx.skills && ctx.skills.learn(b.getAttribute("data-sk-inc"), +1)) render();
     });
