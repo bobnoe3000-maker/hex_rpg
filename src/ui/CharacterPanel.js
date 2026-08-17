@@ -32,9 +32,9 @@ function injectCss() {
   .cpanel{width:100%;max-width:420px;max-height:calc(100dvh - 40px);overflow-y:auto;
     background:linear-gradient(#241b38,#181128);border:1px solid var(--line);border-radius:12px;
     padding:12px 13px;box-shadow:0 6px 24px #000;text-align:left}
-  .cp-tabs{display:flex;gap:8px;margin:2px 0 11px}
-  .cp-tab{flex:1;font-family:inherit;font-weight:bold;letter-spacing:1px;font-size:13px;border:1px solid var(--line);
-    border-radius:9px;padding:10px;cursor:pointer;background:#1c1630;color:#9a8fb8}
+  .cp-tabs{display:flex;gap:6px;margin:2px 0 11px}
+  .cp-tab{flex:1;min-width:0;font-family:inherit;font-weight:bold;letter-spacing:.4px;font-size:12.5px;border:1px solid var(--line);
+    border-radius:9px;padding:10px 5px;cursor:pointer;background:#1c1630;color:#9a8fb8;white-space:nowrap}
   .cp-tab.sel{border-color:var(--gold);background:linear-gradient(#2c2342,#1c1630);color:var(--gold)}
   .cp-tab:active{transform:translateY(1px)}
   .cp-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#e0b063;
@@ -292,7 +292,6 @@ export function openCharacter(hero, ctx) {
         ${stash.length ? stash.map(stackRow).join("") : `<div class="cp-none">Buy at the Apothecary, or find them as loot.</div>`}`;
     };
     const equipBlock = `
-      ${potionBlock()}
       <div class="cp-sec"><span>Equipped</span><span class="hint">tap a slot to filter the bag</span></div>
       ${SLOTS.map(slotRow).join("")}
       <div class="cp-sec"><span>Bag${filterSlot ? ` — ${cap(filterSlot)}` : ""}${others > 0 && !filterSlot ? ` · ${others} for other heroes` : ""}</span>${filterSlot ? `<span class="cp-clear" data-clear="1">show all ✕</span>` : ""}</div>
@@ -377,26 +376,30 @@ export function openCharacter(hero, ctx) {
     const statDot = ctx.points && (ctx.points() - draftSum()) > 0 ? `<span class="cp-dot"></span>` : "";
     const skillDot = ctx.skills && (ctx.skills.points() - skillDraftTotal()) > 0 ? `<span class="cp-dot"></span>` : "";
 
-    // Main hero gets three tabs (Stats / Skills / Equipment). Companions get two: their stats + fixed
-    // skill kit share one tab, gear the other.
+    // Tabs. Main hero: Stats / Skills / Gear / Potions. Companion: Stats & Skills / Gear / Potions.
+    const hasPot = !!ctx.potion;
+    const potTab = hasPot ? `<button class="cp-tab ${tab === "potions" ? "sel" : ""}" data-tab="potions">Potions</button>` : "";
     let body;
     if (ctx.isMain) {
-      const paneFor = t => t === "stats" ? statsBlock : t === "skills" ? skillsBlock() : equipBlock;
+      const paneFor = t => t === "stats" ? statsBlock : t === "skills" ? skillsBlock() : t === "potions" ? potionBlock() : equipBlock;
       body = `<div class="cp-tabs">
            <button class="cp-tab ${tab === "stats" ? "sel" : ""}" data-tab="stats">Stats${statDot}</button>
            ${ctx.skills ? `<button class="cp-tab ${tab === "skills" ? "sel" : ""}" data-tab="skills">Skills${skillDot}</button>` : ""}
-           <button class="cp-tab ${tab === "equip" ? "sel" : ""}" data-tab="equip">Equipment</button>
+           <button class="cp-tab ${tab === "equip" ? "sel" : ""}" data-tab="equip">Gear</button>
+           ${potTab}
          </div>${paneFor(tab)}`;
     } else {
-      const ct = tab === "equip" ? "equip" : "stats";   // companion tabs are stats-&-skills | equipment
+      const ct = tab === "equip" ? "equip" : tab === "potions" ? "potions" : "stats";
       const pend = ctx.pendRolls ? ctx.pendRolls() : 0;  // queued level-up rolls
       const rollDot = pend > 0 ? `<span class="cp-dot roll"></span>` : "";
       const rollCta = pend > 0
         ? `<button class="cp-rollcta" data-openroll>${iconImg("spark", 14)} Level-Up Roll ${pend > 1 ? `<small>· ${pend} pending</small>` : ""} — Roll!</button>` : "";
+      const cPane = ct === "equip" ? equipBlock : ct === "potions" ? potionBlock() : rollCta + statsBlock + kitSection();
       body = `<div class="cp-tabs">
            <button class="cp-tab ${ct === "stats" ? "sel" : ""}" data-tab="stats">Stats &amp; Skills${rollDot}</button>
-           <button class="cp-tab ${ct === "equip" ? "sel" : ""}" data-tab="equip">Equipment</button>
-         </div>${ct === "equip" ? equipBlock : rollCta + statsBlock + kitSection()}`;
+           <button class="cp-tab ${ct === "equip" ? "sel" : ""}" data-tab="equip">Gear</button>
+           ${potTab}
+         </div>${cPane}`;
     }
 
     // keep the scroll position across a re-render (learning a rank shouldn't jump back to the top);
