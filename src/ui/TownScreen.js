@@ -71,38 +71,54 @@ export function ensureTownCss() {
   .shop-btn:active{transform:translateY(1px)}
   .shop-none{opacity:.55;font-style:italic;font-size:11.5px;padding:3px 2px}
 
-  /* ======= illustrated Keep (home hub) ======= */
-  .keephome{position:fixed;inset:0;z-index:1;overflow:hidden;background:#0b0912;
+  /* ======= illustrated Keep (home hub) — stacked: town art · party tiles · nav ======= */
+  .keephome{position:fixed;inset:0;z-index:1;overflow:hidden;background:#0b0912;display:flex;flex-direction:column;
     font-family:Georgia,"Times New Roman",serif;color:var(--parchment);
     -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
-  /* the artwork, sized to its own aspect and centred so hotspot %s stay locked to the buildings */
-  .kh-art{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
-    height:100%;width:auto;aspect-ratio:768/1375;max-width:100%;
-    background:#0b0912 url('assets/home_ui.png') center/cover no-repeat}
-  .kh-vig{position:absolute;inset:0;pointer-events:none;z-index:2;
-    background:linear-gradient(#0b091255 0%,transparent 14%,transparent 60%,#0b0912cc 100%)}
+  /* town image block — fills the space left by the tiles + nav; the art is contain-fit (whole image,
+     never cropped) by a tiny JS calc, so hotspot %s stay locked to the buildings on any phone height */
+  .kh-artwrap{flex:1 1 auto;min-height:0;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  .kh-art{position:relative;background:#0b0912 url('assets/home_ui.png') center/cover no-repeat}
+  .kh-vig{position:absolute;inset:0;pointer-events:none;background:linear-gradient(#0b091240 0%,transparent 12%,transparent 82%,#0b091288 100%)}
+  .kh-wallet{position:absolute;z-index:6;right:11px;top:calc(env(safe-area-inset-top) + 8px);display:flex;gap:9px;font-size:12px;
+    color:#f0d38a;font-variant-numeric:tabular-nums;background:#120d1ccc;border:1px solid var(--line);border-radius:9px;padding:5px 10px;box-shadow:0 2px 6px #0008}
+  .kh-wallet .g{color:#9ad1ff}
   /* building hotspots — a glowing dot + a small standing name plate, both always visible for touch */
   .kh-spot{position:absolute;transform:translate(-50%,-50%);background:none;border:0;padding:0;cursor:pointer;z-index:5;
     display:flex;flex-direction:column;align-items:center;gap:3px}
-  .kh-spot .ring{position:absolute;left:50%;top:0;width:34px;height:34px;transform:translate(-50%,-50%);border-radius:50%;
+  .kh-spot .ring{position:absolute;left:50%;top:0;width:32px;height:32px;transform:translate(-50%,-50%);border-radius:50%;
     border:2px solid var(--sc,#ffd08a);opacity:0;animation:khpulse 2.8s ease-in-out infinite}
   @keyframes khpulse{0%{transform:translate(-50%,-50%) scale(.6);opacity:0}45%{opacity:.5}100%{transform:translate(-50%,-50%) scale(1.15);opacity:0}}
-  .kh-spot .dot{width:11px;height:11px;border-radius:50%;
+  .kh-spot .dot{width:10px;height:10px;border-radius:50%;
     background:radial-gradient(circle at 40% 35%,#fff3d2,var(--sc,#ffb457));box-shadow:0 0 10px 2px var(--sc,#ffb457)}
   .kh-spot .lbl{font-size:10px;letter-spacing:.4px;color:#2c2114;
     background:linear-gradient(#efe2c4,#d6c194);border:1px solid #b49a63;border-radius:3px;padding:1px 7px;
     box-shadow:0 2px 5px #0009;white-space:nowrap}
   .kh-spot.soon .lbl{color:#5a5064;background:linear-gradient(#cfc6d8,#b3a9c2);border-color:#8d84a0}
   .kh-spot:active{transform:translate(-50%,-50%) scale(.9)}
-  /* top chrome — wallet only (meta-nav lives in the bottom bar) */
-  .kh-top{position:absolute;right:11px;top:calc(env(safe-area-inset-top) + 10px);z-index:6}
-  .kh-cur{display:flex;gap:9px;font-size:12px;color:#f0d38a;font-variant-numeric:tabular-nums;
-    background:#120d1ccc;border:1px solid var(--line);border-radius:9px;padding:5px 10px;box-shadow:0 2px 6px #0008}
-  .kh-cur .g{color:#9ad1ff}
-  /* ===== bottom navigation bar (Center-Depart layout) ===== */
-  .kh-nav{position:absolute;left:0;right:0;bottom:0;z-index:7;height:calc(62px + env(safe-area-inset-bottom));
-    padding-bottom:env(safe-area-inset-bottom);display:flex;align-items:stretch;
-    background:linear-gradient(#150f24f2,#0d0a16f7);border-top:1px solid #4a3d68;box-shadow:0 -8px 22px -12px #000}
+  /* ===== party tiles band (between the art and the nav) — main hero centred ===== */
+  .kh-strip{flex:0 0 auto;display:flex;gap:7px;padding:8px 9px calc(8px + env(safe-area-inset-bottom, 0px)*0);
+    background:linear-gradient(#140e24,#0e0a1a);border-top:1px solid #2e2540;box-shadow:0 -6px 14px -10px #000}
+  .kh-tile{flex:1;min-width:0;display:flex;align-items:center;gap:8px;cursor:pointer;text-align:left;
+    background:linear-gradient(#221a38,#191228);border:1px solid #382d52;border-radius:11px;padding:7px 8px;font-family:inherit}
+  .kh-tile:active{transform:translateY(1px)}
+  .kh-tile.dead{border-color:#4a2530;background:linear-gradient(#1f1622,#171019)}
+  .kh-pp{position:relative;width:38px;height:38px;flex:0 0 auto}
+  .kh-pp canvas{width:38px;height:38px;border-radius:8px;border:1px solid #6e5a2a;display:block}
+  .kh-tile.dead .kh-pp canvas{filter:grayscale(1) brightness(.6)}
+  .kh-pp .crown{position:absolute;left:50%;top:-10px;transform:translateX(-50%);line-height:0}
+  .kh-pp .sk{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+  .kh-pdot{position:absolute;top:-4px;right:-4px;width:11px;height:11px;border-radius:50%;background:#e0b063;border:2px solid #191228;box-shadow:0 0 6px #e0b063}
+  .kh-pdot.roll{background:#8fd39a;box-shadow:0 0 6px #8fd39a}
+  .kh-pi{min-width:0;flex:1;display:flex;flex-direction:column;gap:2px}
+  .kh-pi b{font-size:12.5px;color:#f0c877;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .kh-pi .lv{font-size:9.5px;color:#b9add6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .kh-pi .hp{display:block;height:5px;border-radius:3px;background:#3a1f26;overflow:hidden;margin-top:2px}
+  .kh-pi .hp i{display:block;height:100%;background:linear-gradient(90deg,#ff7a70,#e5484d)}
+  .kh-pi .fallen{font-size:9.5px;color:#c98a8a;font-style:italic;margin-top:2px}
+  /* ===== bottom navigation bar (Center-Depart; CTA sits inside the bar) ===== */
+  .kh-nav{flex:0 0 auto;height:calc(62px + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);
+    display:flex;align-items:stretch;position:relative;background:linear-gradient(#150f24,#0d0a16);border-top:1px solid #4a3d68}
   .kh-nav::before{content:"";position:absolute;left:0;right:0;top:-1px;height:1px;
     background:linear-gradient(90deg,transparent,#e0b06355,transparent)}
   .kh-tab{flex:1;background:none;border:0;cursor:pointer;color:#6f6486;position:relative;padding-top:4px;
@@ -114,23 +130,22 @@ export function ensureTownCss() {
   .kh-tab.on::after{content:"";position:absolute;top:0;width:26px;height:2.5px;border-radius:2px;background:#f0c877;box-shadow:0 0 8px #f0c877}
   .kh-tab .badge{position:absolute;top:6px;left:calc(50% + 9px);width:8px;height:8px;border-radius:50%;
     background:#8fd39a;border:2px solid #100b1c;box-shadow:0 0 6px #8fd39a}
-  /* raised center Depart CTA */
-  .kh-cta{flex:0 0 auto;width:74px;display:flex;align-items:flex-start;justify-content:center;position:relative}
-  .kh-cta button{position:absolute;top:-22px;width:60px;height:60px;border-radius:50%;cursor:pointer;border:2px solid #f0c877;
+  /* center Depart CTA — vertically centred within the bar (no longer overlaps the tiles) */
+  .kh-cta{flex:0 0 auto;width:76px;display:flex;align-items:center;justify-content:center}
+  .kh-cta button{width:54px;height:54px;border-radius:50%;cursor:pointer;border:2px solid #f0c877;
     background:radial-gradient(circle at 42% 34%,#f4d493,#c2892f 70%,#9a6b22);color:#241606;
-    box-shadow:0 8px 20px -6px #000,0 0 0 6px #150f24,inset 0 2px 3px #fff3;
-    display:flex;flex-direction:column;align-items:center;justify-content:center}
-  .kh-cta button span{font-family:inherit;font-weight:bold;font-size:9px;letter-spacing:.08em;text-transform:uppercase;margin-top:-1px}
-  .kh-cta button:active{transform:translateY(2px)}
+    box-shadow:0 6px 16px -6px #000,inset 0 2px 3px #fff3;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .kh-cta button span{font-family:inherit;font-weight:bold;font-size:8.5px;letter-spacing:.06em;text-transform:uppercase;margin-top:-2px}
+  .kh-cta button:active{transform:translateY(1px)}
   /* pop-up menu (anchored above the bar) */
-  .kh-menu{position:absolute;right:8px;bottom:calc(70px + env(safe-area-inset-bottom));z-index:9;min-width:212px;
+  .kh-menu{position:absolute;right:8px;bottom:calc(66px + env(safe-area-inset-bottom));z-index:9;min-width:212px;
     background:#170f26;border:1px solid var(--line);border-radius:11px;padding:6px;box-shadow:0 12px 30px -8px #000}
   .kh-menu[hidden]{display:none}
   .kh-menu button{display:flex;align-items:center;gap:9px;width:100%;text-align:left;font-family:inherit;font-size:12.5px;
     color:var(--parchment);background:none;border:0;border-radius:7px;padding:9px 10px;cursor:pointer}
   .kh-menu button:active{background:#241b38}
   .kh-menu button[disabled]{opacity:.4;pointer-events:none}
-  .kh-toast{position:absolute;left:50%;top:calc(env(safe-area-inset-top) + 52px);transform:translateX(-50%);z-index:20;
+  .kh-toast{position:absolute;left:50%;top:calc(env(safe-area-inset-top) + 16px);transform:translateX(-50%);z-index:20;
     background:#120d1cee;border:1px solid var(--gold);color:var(--gold);font-size:12px;padding:7px 13px;border-radius:9px;
     opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap;box-shadow:0 6px 18px #000;max-width:88%;text-align:center}
   .kh-toast.on{opacity:1}
@@ -163,34 +178,72 @@ const NAV_ICON = {
 };
 const navSvg = (k, sz = 22) => `<svg viewBox="0 0 24 24" width="${sz}" height="${sz}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${NAV_ICON[k]}</svg>`;
 
+/* order the party tiles so the main hero (index 0) sits in the centre: [comp, MAIN, comp].
+   Returns original party indices in display order (works for a party of 1, 2 or 3). */
+function partyDisplayOrder(party) {
+  const order = party.map((_, i) => i).filter(i => i !== 0);
+  order.splice(Math.floor(party.length / 2), 0, 0);
+  return order;
+}
+const AR = 768 / 1375;           // artwork aspect (portrait)
+let khResizeObs = null;          // disconnect the previous observer on each re-render
+
 export function openTown(ctx) {
   ensureTownCss();
   const el = document.getElementById("town");
   const hasFlag = ctx.tileFlag && ctx.party.some(h => h.alive && ctx.tileFlag(h)); // badge the Party tab
+  const order = partyDisplayOrder(ctx.party);
 
   const spot = s => `<button class="kh-spot ${s.soon ? "soon" : ""}" data-svc="${s.svc}"
       style="left:${s.x}%;top:${s.y}%;--sc:${s.sc}"><span class="ring"></span><span class="dot"></span>
       <span class="lbl">${s.label}${s.soon ? " · soon" : ""}</span></button>`;
+  const tile = idx => {
+    const h = ctx.party[idx];
+    const flag = h.alive && ctx.tileFlag && ctx.tileFlag(h);
+    const crown = idx === 0 ? `<span class="crown">${iconImg("crown", 12)}</span>` : "";
+    const mark = !h.alive ? `<span class="sk">${iconImg("skull", 16)}</span>`
+      : flag ? `<span class="kh-pdot ${flag === "roll" ? "roll" : ""}"></span>` : "";
+    const foot = h.alive
+      ? `<span class="hp"><i style="width:${Math.max(0, Math.min(100, h.hp / derive(h).maxhp * 100))}%"></i></span>`
+      : `<span class="fallen">fallen</span>`;
+    return `<button class="kh-tile ${h.alive ? "" : "dead"}" data-hero="${idx}" title="${h.name} · Lv ${h.level}">
+      <div class="kh-pp"><canvas width="96" height="96"></canvas>${crown}${mark}</div>
+      <div class="kh-pi"><b>${h.name}</b><span class="lv">Lv ${h.level} · ${h.cls}</span>${foot}</div></button>`;
+  };
 
   el.innerHTML = `<div class="keephome">
-    <div class="kh-art">${SPOTS.map(spot).join("")}</div>
-    <div class="kh-vig"></div>
-    <div class="kh-top">
-      <div class="kh-cur"><span>${iconImg("coin",13)} ${ctx.silver()}</span><span class="g">${iconImg("gem",13)} ${ctx.gems()}</span></div>
-    </div>
+    <div class="kh-artwrap"><div class="kh-art" data-art>
+      <div class="kh-vig"></div>
+      ${SPOTS.map(spot).join("")}
+      <div class="kh-wallet"><span>${iconImg("coin",13)} ${ctx.silver()}</span><span class="g">${iconImg("gem",13)} ${ctx.gems()}</span></div>
+    </div></div>
+    <div class="kh-strip">${order.map(tile).join("")}</div>
+    <nav class="kh-nav">
+      <button class="kh-tab on" data-nav="keep">${navSvg("keep")}Keep</button>
+      <button class="kh-tab" data-nav="arena">${navSvg("arena")}Arena</button>
+      <div class="kh-cta"><button data-nav="depart" title="Descend">${navSvg("depart",22)}<span>Depart</span></button></div>
+      <button class="kh-tab" data-nav="party">${navSvg("party")}Party${hasFlag ? `<span class="badge"></span>` : ""}</button>
+      <button class="kh-tab" data-nav="menu">${navSvg("menu")}Menu</button>
+    </nav>
     <div class="kh-menu" data-menupop hidden>
       <button data-diag>${iconImg("spark",16)} Diagnostics &amp; log export</button>
       <button disabled>${iconImg("hammer",16)} Settings — coming soon</button>
     </div>
-    <nav class="kh-nav">
-      <button class="kh-tab on" data-nav="keep">${navSvg("keep")}Keep</button>
-      <button class="kh-tab" data-nav="arena">${navSvg("arena")}Arena</button>
-      <div class="kh-cta"><button data-nav="depart" title="Descend">${navSvg("depart",24)}<span>Depart</span></button></div>
-      <button class="kh-tab" data-nav="party">${navSvg("party")}Party${hasFlag ? `<span class="badge"></span>` : ""}</button>
-      <button class="kh-tab" data-nav="menu">${navSvg("menu")}Menu</button>
-    </nav>
     <div class="kh-toast" data-toast></div>
   </div>`;
+
+  // draw portraits into the strip tiles (display order)
+  const canvases = el.querySelectorAll(".kh-tile canvas");
+  order.forEach((idx, pos) => canvases[pos].getContext("2d").drawImage(ctx.portrait(ctx.party[idx]), 0, 0, 96, 96));
+
+  // contain-fit the art so the WHOLE image shows and hotspots stay pinned to the buildings
+  const art = el.querySelector("[data-art]"), wrap = art.parentElement;
+  const fit = () => { const w = wrap.clientWidth, h = wrap.clientHeight; if (!w || !h) return;
+    let aw = w, ah = w / AR; if (ah > h) { ah = h; aw = h * AR; }
+    art.style.width = aw + "px"; art.style.height = ah + "px"; };
+  fit();
+  if (khResizeObs) khResizeObs.disconnect();
+  if (typeof ResizeObserver !== "undefined") { khResizeObs = new ResizeObserver(fit); khResizeObs.observe(wrap); }
 
   const toastEl = el.querySelector("[data-toast]");
   const toast = msg => { toastEl.textContent = msg; toastEl.classList.add("on");
@@ -205,6 +258,7 @@ export function openTown(ctx) {
     if (k === "bank") return toast("The Iron Vault is sealed — a death-safe bank is coming soon");
     if (svc[k]) svc[k]();
   });
+  el.querySelectorAll("[data-hero]").forEach(b => b.onclick = () => { closeMenu(); ctx.openHero(ctx.party[+b.getAttribute("data-hero")]); });
 
   const dg = pop.querySelector("[data-diag]");
   if (ctx.openDiag) dg.onclick = () => { closeMenu(); ctx.openDiag(); }; else dg.disabled = true;
