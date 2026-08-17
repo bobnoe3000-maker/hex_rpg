@@ -5,6 +5,7 @@
 "use strict";
 
 import { STAT_STEP, ASSIGNABLE } from "../systems/Leveling.js";
+import { MAX_RANK } from "../data/skills.js";
 import { iconImg } from "../engine/icons.js";
 
 const STAT_LABEL = { hp: "HP", atk: "ATK", def: "DEF", dodge: "Dodge", crit: "Crit" };
@@ -57,6 +58,7 @@ function injectCss() {
   .clv-scell .sn{font-family:Georgia,serif;font-size:15px;font-weight:bold;color:#efe7ff}
   .clv-scell .st{font-family:ui-monospace,monospace;font-size:7.5px;letter-spacing:.1em;text-transform:uppercase;padding:2px 5px;border-radius:4px}
   .clv-scell .st.a{color:#2a0f08;background:#ff9a5c}.clv-scell .st.p{color:#06121a;background:#9ad1ff}
+  .clv-scell.miss .sn{color:#5b5473;font-style:italic;font-weight:normal;font-size:13px}
   .clv-skill.locked{border-color:var(--gold);box-shadow:0 0 0 1px rgba(224,176,99,.25)}
   .clv-skill.pop{animation:clvpop .3s ease}
   .clv-pips{display:flex;gap:3px}
@@ -128,7 +130,12 @@ export function openCompanionRoll(hero, ctx) {
   const hintEl = () => overlay.querySelector("[data-hint]");
   const ctrlEl = () => overlay.querySelector("[data-ctrl]");
   const cellHtml = v => `<div class="clv-cell v${v}">+${v}</div>`;
-  const scellHtml = s => `<div class="clv-scell"><span class="sn">${s ? s.name : "—"}</span>${s ? `<span class="st ${s.type[0]}">${s.type === "active" ? "Active" : "Passive"}</span>` : ""}</div>`;
+  const scellHtml = s => s
+    ? `<div class="clv-scell"><span class="sn">${s.name}</span><span class="st ${s.type[0]}">${s.type === "active" ? "Active" : "Passive"}</span></div>`
+    : `<div class="clv-scell miss"><span class="sn">— no upgrade —</span></div>`;
+  // reel cycle = the companion's skills + 2 blank slots (a roll can land on a blank → no skill this level)
+  const reelList = () => ctx.kit().concat([null, null]);
+  const hasEligible = () => ctx.kit().some(k => k.rank < MAX_RANK);   // any skill left to raise? (else "maxed")
 
   function idle() {
     for (const k of ASSIGNABLE) { const st = stripOf(k); st.style.transform = "translateY(0)"; st.innerHTML = cellHtml(1); effOf(k).textContent = ""; boxOf(k).className = "clv-reel"; }
@@ -155,7 +162,7 @@ export function openCompanionRoll(hero, ctx) {
       const before = s.rank, after = Math.min(5, before + 1), cell = sstrip().firstElementChild;
       if (cell) cell.insertAdjacentHTML("beforeend", `<span class="clv-pips">${[0,1,2,3,4].map(n => `<i class="${n < before ? "f" : n === before ? "n" : ""}"></i>`).join("")}</span>`);
       supEl().innerHTML = `${"★".repeat(before)}<span style="color:#3a3450">${"★".repeat(5 - before)}</span> → <b>${after}★</b>`;
-    } else supEl().textContent = "maxed";
+    } else supEl().textContent = hasEligible() ? "no upgrade" : "maxed";
     skillBox().className = "clv-skill locked";
     phase = "rolled"; hintRoll(roll); controls();
   }
@@ -172,10 +179,12 @@ export function openCompanionRoll(hero, ctx) {
       boxOf(k).className = "clv-reel";
       anims.push({ kind: "stat", k, strip: stripOf(k), endIdx, cellH: 46, dur: reduce ? 240 : 1050 + i * 340 });
     });
-    // skill reel — cycle the kit, land on the rolled skill (or hold if none/maxed)
-    const sIdx = roll.skillId ? Math.max(0, kit.findIndex(s => s.id === roll.skillId)) : 0;
-    const sTurns = turnsBase + ASSIGNABLE.length, sEnd = sTurns * Math.max(1, kit.length) + sIdx;
-    buildStrip(sstrip(), n => scellHtml(kit.length ? kit[n % kit.length] : null), sEnd);
+    // skill reel — cycle the kit + 2 blank slots; land on the rolled skill, or on a blank when the
+    // roll granted no skill (a "miss"). All skills maxed → also settles on a blank ("maxed").
+    const list = reelList();
+    const sIdx = roll.skillId ? Math.max(0, kit.findIndex(s => s.id === roll.skillId)) : kit.length;
+    const sTurns = turnsBase + ASSIGNABLE.length, sEnd = sTurns * Math.max(1, list.length) + sIdx;
+    buildStrip(sstrip(), n => scellHtml(list[n % list.length]), sEnd);
     skillBox().className = "clv-skill";
     anims.push({ kind: "skill", strip: sstrip(), endIdx: sEnd, cellH: 42, dur: reduce ? 300 : 1050 + ASSIGNABLE.length * 340, sIdx, kit, roll });
 
@@ -206,7 +215,7 @@ export function openCompanionRoll(hero, ctx) {
         if (cell && !cell.querySelector(".clv-pips"))
           cell.insertAdjacentHTML("beforeend", `<span class="clv-pips">${[0,1,2,3,4].map(n => `<i class="${n < before ? "f" : n === before ? "n" : ""}"></i>`).join("")}</span>`);
         supEl().innerHTML = `${"★".repeat(before)}<span style="color:#3a3450">${"★".repeat(5 - before)}</span> → <b>${after}★</b>`;
-      } else supEl().textContent = "maxed";
+      } else supEl().textContent = hasEligible() ? "no upgrade" : "maxed";
       setTimeout(() => skillBox().classList.remove("pop"), 320);
     }
   }
@@ -214,7 +223,8 @@ export function openCompanionRoll(hero, ctx) {
   function hintRoll(roll) {
     const parts = ASSIGNABLE.filter(k => roll.stats[k]).map(k => `+${roll.stats[k] * STAT_STEP[k]} ${STAT_LABEL[k]}`);
     const kit = ctx.kit(), s = roll.skillId ? kit.find(x => x.id === roll.skillId) : null;
-    hintEl().innerHTML = `This roll: <b>${parts.join(" · ") || "no stats"}</b>${s ? ` · <b>${s.name} +1</b>` : ""}`;
+    const skillTxt = s ? `<b>${s.name} +1</b>` : (hasEligible() ? `<b>no skill</b>` : "");
+    hintEl().innerHTML = `This roll: <b>${parts.join(" · ") || "no stats"}</b>${skillTxt ? ` · ${skillTxt}` : ""}`;
   }
 
   function controls() {

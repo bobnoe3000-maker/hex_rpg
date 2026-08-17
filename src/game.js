@@ -63,7 +63,7 @@ logBar.onclick=()=>{ const i=LOG_STATES.indexOf(logWrap.dataset.s||"mid");
 setLogState("mid");
 /* phase: idle → fight ⇄ paused. inventory holds dropped loot; respawn/revive are timers. */
 const state={ roomIdx:0, scene:"town", phase:"idle", room:null, foes:[], t:0, speed:1,
-  inventory:[], potions:[], gems:0, silver:0, shopStock:[], recruits:[], respawnAt:null, wipeAt:null,
+  inventory:[], potions:[], gems:0, silver:0, shopStock:[], recruits:[], bench:[], respawnAt:null, wipeAt:null,
   dungeonId:"emberdeep", cleared:[],   // active dungeon + set of cleared-boss ids (persisted)
   bossAt:null, bossInWave:false,       // when the boss may next appear (runtime) + is it on the field now
   rally:null };      // {r,c} flag heroes regroup on when no foe is engaged
@@ -98,13 +98,14 @@ function refreshParty(){ renderParty(); if(state.scene==="town" && townRefresh) 
 /* ---------- persistence: one of three save slots ---------- */
 let activeSlot=null;        // which save slot this run writes to (set by onboarding)
 function snapshotState(){
-  return { v:SAVE_VERSION, party, silver:state.silver, gems:state.gems,
+  return { v:SAVE_VERSION, party, bench:state.bench, silver:state.silver, gems:state.gems,
     inventory:state.inventory, potions:state.potions, roomIdx:state.roomIdx,
     dungeonId:state.dungeonId, cleared:state.cleared, savedAt:new Date().toISOString() };
 }
 function saveGame(){ if(activeSlot!==null) writeSlot(activeSlot, snapshotState()); }
 function loadGame(save){
   party=(save.party||[]).map(h=>({alive:true, pts:emptyPoints(), skills:{}, potion:null, ...h}));   // defaults for older saves
+  state.bench=(save.bench||[]).map(h=>({alive:true, pts:emptyPoints(), skills:{}, potion:null, ...h})); // benched reserves (keep gear)
   state.silver=save.silver||0; state.gems=save.gems||0;
   state.inventory=save.inventory||[]; state.potions=save.potions||[]; state.roomIdx=save.roomIdx||0;
   state.dungeonId=dungeonById(save.dungeonId).id;    // older saves default to the Emberdeep
@@ -629,8 +630,10 @@ function companionRollData(h){
   const stats={};
   for(const k of ASSIGNABLE){ const x=Math.random(); stats[k]= x<0.34?0 : x<0.80?1:2; }
   if(ASSIGNABLE.every(k=>!stats[k])) stats[ASSIGNABLE[(Math.random()*ASSIGNABLE.length)|0]]=1+Math.round(Math.random());
+  // skill: the reel holds the kit + 2 blank slots, so ~2/7 of rolls grant no skill this level.
   const pool=heroKit(h).filter(s=>(h.skills[s.id]||0)<MAX_RANK);
-  const skillId=pool.length ? pool[(Math.random()*pool.length)|0].id : null;
+  const SKILL_MISS=2/7;                       // fixed ~29% "no upgrade" chance, independent of kit size
+  const skillId=(pool.length && Math.random()>=SKILL_MISS) ? pool[(Math.random()*pool.length)|0].id : null;
   return { stats, skillId };
 }
 /* apply the current roll: fold points into pts (derive handles the rest), bump the skill, grant new
@@ -947,29 +950,45 @@ function refreshRecruits(free){
   state.recruits=Array.from({length:BAL.TAVERN.RECRUITS},()=>makeCompanion((Math.random()*1e9)>>>0, mainLevel()));
   updateHud(); saveGame(); return true;
 }
+/* hire a stranger — only into an OPEN slot (party full → bench a companion first) */
 function hireCompanion(recruit){
   const cost=hireCostFor(recruit);
-  if(state.silver<cost) return false;
+  if(state.silver<cost || party.length>=PARTY_CAP) return false;
   const i=state.recruits.indexOf(recruit); if(i<0) return false;
-  if(party.length<PARTY_CAP){                       // open slot → new pal joins
-    state.silver-=cost; state.recruits.splice(i,1); party.push(recruit);
-    log(`${iconImg("tankard",14)} <b>${recruit.name}</b> the ${recruit.cls} (Lv ${recruit.level}) joins the party!`,"sys");
-  } else {                                           // party full → hire replaces a fallen companion
-    const dead=party.findIndex((h,idx)=>idx>0 && !h.alive);
-    if(dead<0) return false;                         // full and all alive → nothing to replace
-    const fallen=party[dead];
-    state.silver-=cost; state.recruits.splice(i,1); party[dead]=recruit;
-    log(`${iconImg("tankard",14)} <b>${recruit.name}</b> the ${recruit.cls} (Lv ${recruit.level}) replaces the fallen <b>${fallen.name}</b>.`,"sys");
-  }
-  renderParty(); updateHud(); saveGame();
-  return true;
+  state.silver-=cost; state.recruits.splice(i,1); party.push(recruit);
+  log(`${iconImg("tankard",14)} <b>${recruit.name}</b> the ${recruit.cls} (Lv ${recruit.level}) joins the party!`,"sys");
+  refreshParty(); updateHud(); saveGame(); return true;
+}
+/* ---------- bench: drop a companion to the reserves (keeps their gear), add them back later ---------- */
+const recallCost=h=>BAL.TAVERN.RECALL_BASE + (h.level||1)*BAL.TAVERN.RECALL_PER_LEVEL;
+function benchCompanion(h){
+  const i=party.indexOf(h);
+  if(i<=0) return false;                              // never the main hero (index 0); must be in the party
+  party.splice(i,1); state.bench.push(h);             // the whole hero moves — equipped gear, skills, potion, rolls all ride along
+  log(`${iconImg("tankard",14)} <b>${h.name}</b> the ${h.cls} steps back to the reserves (gear kept).`,"sys");
+  refreshParty(); updateHud(); saveGame(); return true;
+}
+function addFromBench(h){
+  if(party.length>=PARTY_CAP) return false;           // no open slot
+  const i=state.bench.indexOf(h); if(i<0) return false;
+  const cost=recallCost(h); if(state.silver<cost) return false;
+  state.silver-=cost; state.bench.splice(i,1); party.push(h);
+  log(`${iconImg("tankard",14)} <b>${h.name}</b> the ${h.cls} (Lv ${h.level}) returns to the party.`,"sys");
+  refreshParty(); updateHud(); saveGame(); return true;
+}
+function releaseFromBench(h){
+  const i=state.bench.indexOf(h); if(i<0) return false;
+  state.bench.splice(i,1);
+  log(`${iconImg("tankard",14)} <b>${h.name}</b> parts ways with the company for good.`,"sys");
+  refreshParty(); saveGame(); return true;
 }
 function openTavernScreen(){
   townRefresh=openTavernScreen;
   if(!state.recruits.length) refreshRecruits(true); // first visit fills the tavern for free
-  openTavern({ silver:()=>state.silver, party:()=>party, recruits:()=>state.recruits,
-    hireCost:hireCostFor, refreshCost:BAL.TAVERN.REFRESH_COST,
-    hire:hireCompanion, refresh:()=>refreshRecruits(false), portrait:h=>heroPortrait(h),
+  openTavern({ silver:()=>state.silver, party:()=>party, bench:()=>state.bench, recruits:()=>state.recruits,
+    partyCap:PARTY_CAP, hireCost:hireCostFor, recallCost, refreshCost:BAL.TAVERN.REFRESH_COST,
+    hire:hireCompanion, drop:benchCompanion, addBack:addFromBench, release:releaseFromBench,
+    refresh:()=>refreshRecruits(false), portrait:h=>heroPortrait(h),
     openHero, tileFlag:heroTileFlag, back:openTownScreen });
 }
 /* ---------- temple: resurrect fallen companions (fee scales with level) ---------- */

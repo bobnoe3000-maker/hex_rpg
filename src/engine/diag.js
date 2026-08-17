@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-17 · Keep restacked: whole art + centred-main party tiles, Depart in-bar";
+export const APP_BUILD = "2026-08-17 · Tavern bench/reserves (gear kept, recall fee) + skill roll 2/7 no-upgrade";
 
 const BUF = [];
 const MAX = 400;

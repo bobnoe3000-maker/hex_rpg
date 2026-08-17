@@ -62,7 +62,8 @@ export const BAL = {
 
   // Tavern (hiring companions; party caps at 4 = main + 3)
   // recruits scale to the main hero's level; hire = HIRE_BASE + level*HIRE_PER_LEVEL
-  TAVERN: { RECRUITS: 3, HIRE_BASE: 40, HIRE_PER_LEVEL: 20, REFRESH_COST: 10 },
+  TAVERN: { RECRUITS: 3, HIRE_BASE: 40, HIRE_PER_LEVEL: 20, REFRESH_COST: 10,
+            RECALL_BASE: 15, RECALL_PER_LEVEL: 6 },   // fee to call a benched reserve back into the party
 
   // Temple: resurrect a fallen hero; fee = RESURRECT_BASE + level*RESURRECT_PER_LEVEL
   TEMPLE: { RESURRECT_BASE: 30, RESURRECT_PER_LEVEL: 20 },

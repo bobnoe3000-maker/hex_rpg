@@ -1,5 +1,9 @@
-/* ============ UI :: TavernScreen.js — hire randomly-generated companions ============ */
-/* Renders into #town over the hub; ctx.back returns to the Keep. Party caps at 4 (main + 3). */
+/* ============ UI :: TavernScreen.js — party · reserves · new hires ============ */
+/* Three clearly-separated groups, rendered into #town over the hub (ctx.back → Keep):
+     · your active party (main + up to 2) — companions can be BENCHED
+     · your reserves — benched pals, kept with all their gear; ADD them back for a small recall fee
+     · looking for work — freshly-generated strangers you HIRE for silver
+   Bench a companion to free a slot; nothing is lost while they wait on the bench. */
 "use strict";
 
 import { ensureTownCss } from "./TownScreen.js";
@@ -7,104 +11,161 @@ import { derive } from "../systems/StatEngine.js";
 import { heroKit } from "../systems/Skills.js";
 import { iconImg } from "../engine/icons.js";
 
-const CAP = 3;   // main + 2 companions
-
 let tvCssDone = false;
 function ensureTavernCss() {
   if (tvCssDone) return; tvCssDone = true;
   const s = document.createElement("style"); s.id = "tavern-style";
   s.textContent = `
-  .tv-party{display:flex;gap:6px}
-  .tv-slot{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;
-    background:linear-gradient(#241b38,#1a1328);border:1px solid var(--line);border-radius:9px;padding:7px 4px;font-size:10px}
-  .tv-slot:active{transform:translateY(1px)}
-  .tv-slot canvas{width:40px;height:40px;border-radius:7px;border:1px solid #6e5a2a;display:block}
-  .tv-portwrap{position:relative;width:40px;height:40px}
-  .tv-dot{position:absolute;top:-3px;right:-3px;width:11px;height:11px;border-radius:50%;
-    background:#e0b063;border:2px solid #1a1328;box-shadow:0 0 6px #e0b063;z-index:2}
-  .tv-dot.roll{background:#8fd39a;box-shadow:0 0 6px #8fd39a}
-  .tv-slot b{font-size:10.5px;color:var(--gold)} .tv-slot .cls{color:#9a8fb8;text-transform:capitalize;font-style:italic}
-  .tv-slot .lv{color:#9ad1ff}
-  .tv-slot.empty{opacity:.5;justify-content:center;color:#8fd39a;font-style:italic;cursor:default;min-height:74px}
-  .tv-slot.dead{border-color:#5a2a2a}
-  .tv-slot.dead canvas{filter:grayscale(1) brightness(.6)}
-  .tv-slot.dead .cls{color:#c98a8a}
-  .tv-return{font-family:inherit;font-weight:bold;letter-spacing:1.5px;font-size:16px;text-transform:uppercase;
-    border:0;border-radius:11px;padding:15px 14px;cursor:pointer;width:100%;margin-top:4px;
+  .tv-return{font-family:inherit;font-weight:bold;letter-spacing:1.5px;font-size:15px;text-transform:uppercase;
+    border:0;border-radius:11px;padding:14px;cursor:pointer;width:100%;margin:0 0 10px;
     background:linear-gradient(#e0b063,#a8722a);color:#241606;box-shadow:0 4px 0 #6e4a14;
     display:flex;align-items:center;justify-content:center;gap:9px}
   .tv-return:active{transform:translateY(2px);box-shadow:0 2px 0 #6e4a14}
-  .tv-kit{color:#9a8fb8;font-style:normal !important;font-size:10.5px;line-height:1.5}
+  /* section header with an accent bar */
+  .tv-sech{display:flex;align-items:center;gap:8px;margin:16px 2px 8px}
+  .tv-sech .bar{width:3px;height:15px;border-radius:2px;background:var(--sc,#e0b063)}
+  .tv-sech .t{font-family:ui-monospace,monospace;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--sc,#e0b063)}
+  .tv-sech .n{margin-left:auto;font-family:ui-monospace,monospace;font-size:10px;color:#6d6390}
+  /* member card */
+  .tv-card{display:flex;align-items:center;gap:10px;background:linear-gradient(#1e1633,#171025);
+    border:1px solid var(--line);border-left:3px solid var(--sc,var(--line));border-radius:11px;padding:9px 10px;margin-bottom:7px}
+  .tv-card.tap{cursor:pointer}
+  .tv-card.tap:active{transform:translateY(1px)}
+  .tv-av{position:relative;width:42px;height:42px;flex:0 0 auto}
+  .tv-av canvas{width:42px;height:42px;border-radius:9px;border:1px solid #6e5a2a;display:block}
+  .tv-av.dead canvas{filter:grayscale(1) brightness(.62);border-color:#5a2a2a}
+  .tv-av .crown{position:absolute;left:50%;top:-10px;transform:translateX(-50%);line-height:0}
+  .tv-dot{position:absolute;top:-4px;right:-4px;width:11px;height:11px;border-radius:50%;background:#e0b063;border:2px solid #171025;box-shadow:0 0 6px #e0b063}
+  .tv-dot.roll{background:#8fd39a;box-shadow:0 0 6px #8fd39a}
+  .tv-who{flex:1;min-width:0}
+  .tv-who b{font-family:inherit;font-size:13.5px;color:#f0c877}
+  .tv-who .sub{font-size:10.5px;color:#b9add6;margin-top:1px}
+  .tv-who .sub .cls{text-transform:capitalize;font-style:italic}
+  .tv-who .sub .strg{color:#8fd39a}
+  .tv-who .stat{font-family:ui-monospace,monospace;font-size:9px;color:#9a8fb8;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tv-chips{display:flex;gap:5px;margin-top:4px;flex-wrap:wrap}
+  .tv-chip{font-family:ui-monospace,monospace;font-size:8.5px;letter-spacing:.03em;padding:2px 6px;border-radius:5px;
+    background:#241b38;color:#b9add6;border:1px solid #332a4a}
+  .tv-chip.gear{color:#8fb3d9;border-color:#2f4a63;background:#132030}
+  .tv-chip.lead{color:#f0c877;border-color:#5a4a1e;background:#241d0d}
+  .tv-chip.dead{color:#c98a8a;border-color:#5a2a2a;background:#241417}
+  .tv-act{display:flex;flex-direction:column;gap:5px;align-items:flex-end;flex:0 0 auto}
+  .tv-mut{font-family:ui-monospace,monospace;font-size:9px;color:#6d6390}
+  .tv-price{font-family:ui-monospace,monospace;font-size:11px;color:#f0d38a;display:flex;align-items:center;gap:3px}
+  .tv-b{font-family:inherit;font-weight:bold;font-size:11.5px;border:0;border-radius:8px;padding:8px 11px;cursor:pointer;white-space:nowrap}
+  .tv-b:active{transform:translateY(1px)}
+  .tv-b.bench{background:linear-gradient(#33415e,#222c42);color:#cfe0f5;box-shadow:0 2px 0 #131c2c}
+  .tv-b.add{background:linear-gradient(#e8bf78,#b47f34);color:#241606;box-shadow:0 2px 0 #6e4a14}
+  .tv-b.hire{background:linear-gradient(#8fd39a,#3a8a5a);color:#04140f;box-shadow:0 2px 0 #1c4a30}
+  .tv-b.ghost{background:none;color:#6d6390;font-weight:normal;font-size:10px;padding:2px 4px;box-shadow:none}
+  .tv-b.ghost:active{color:#e5484d}
+  .tv-b[disabled]{opacity:.4;pointer-events:none}
+  .tv-empty{display:flex;align-items:center;justify-content:center;color:#6d6390;font-style:italic;font-size:11.5px;
+    border:1px dashed var(--sc,var(--line));border-radius:11px;padding:13px;margin-bottom:7px;text-align:center}
+  .tv-refresh{width:100%;margin-top:2px;font-family:inherit;font-size:12px;color:var(--parchment);
+    background:linear-gradient(#2c2342,#1c1630);border:0;border-radius:9px;padding:11px;cursor:pointer;
+    box-shadow:0 3px 0 #100b1c;display:flex;align-items:center;justify-content:center;gap:7px}
+  .tv-refresh:active{transform:translateY(1px)}
+  .tv-refresh[disabled]{opacity:.4;pointer-events:none}
   `;
   document.head.appendChild(s);
 }
 
-/* ctx = { silver, party:()=>[], recruits:()=>[], hireCost, refreshCost,
-           hire:(recruit)=>bool, refresh:()=>bool, portrait:(hero)=>canvas,
-           openHero:(hero)=>void, back:()=>void } */
+const GOLD = "#e0b063", STEEL = "#8fb3d9", LIVE = "#8fd39a";
+const gearCount = h => Object.values(h.gear || {}).filter(Boolean).length;
+
+/* ctx = { silver, party, bench, recruits, partyCap, hireCost, recallCost, refreshCost,
+           hire, drop, addBack, release, refresh, portrait, openHero, tileFlag, back } */
 export function openTavern(ctx) {
   ensureTownCss(); ensureTavernCss();
   const el = document.getElementById("town");
 
   function render() {
-    const party = ctx.party(), silver = ctx.silver(), recruits = ctx.recruits();
-    const hasFallen = party.some((h, i) => i > 0 && !h.alive);
-    const canReplace = party.length >= CAP && hasFallen;   // full, but a fallen pal can be swapped out
-    const full = party.length >= CAP && !hasFallen;        // truly full only when every slot is alive
-    const row = (h, i) => {
-      const D = derive(h), cost = ctx.hireCost(h), kit = heroKit(h);
-      const acts = kit.filter(k => k.type === "active").map(k => k.name);
-      const pass = kit.filter(k => k.type === "passive").map(k => k.name);
-      return `<div class="shop-row">
-        <canvas width="96" height="96" style="width:42px;height:42px;border-radius:8px;border:1px solid #6e5a2a;flex:0 0 auto"></canvas>
-        <span class="it"><b style="color:var(--gold)">${h.name}</b> · ${h.cls} · Lv ${h.level}<br>
-          <small>HP ${D.maxhp} · ATK ${D.atk} · DEF ${D.def} · Dodge ${D.dodge} · Crit ${D.crit}</small>
-          ${kit.length ? `<br><small class="tv-kit"><b style="color:#ff9a5c">${acts.join(", ")}</b>${pass.length ? " · " + pass.join(", ") : ""}</small>` : ""}</span>
-        <span class="price">${iconImg("coin",12)} ${cost}</span>
-        <button class="shop-btn" data-hire="${i}" ${(silver < cost || full) ? "disabled" : ""}>${canReplace ? "Replace" : "Hire"}</button>
-      </div>`;
+    const party = ctx.party(), bench = ctx.bench(), recruits = ctx.recruits(), silver = ctx.silver();
+    const cap = ctx.partyCap || 3;
+    const openSlots = Math.max(0, cap - party.length);
+    const roster = [];  // heroes in DOM order, for drawing portraits after innerHTML
+
+    // ---- a member card (party / bench / recruit) ----
+    const card = (h, { accent, crown = false, dot = "", chips = "", stat = "", strayLabel = "", actions = "", tap = false }) => {
+      roster.push(h);
+      const idx = roster.length - 1;
+      return `<div class="tv-card ${tap ? "tap" : ""}" style="--sc:${accent}" ${tap ? `data-view="${idx}"` : ""}>
+        <div class="tv-av ${h.alive ? "" : "dead"}"><canvas width="96" height="96"></canvas>${crown ? `<span class="crown">${iconImg("crown", 11)}</span>` : ""}${dot}</div>
+        <div class="tv-who"><b>${h.name}</b>
+          <div class="sub"><span class="cls">${h.alive ? h.cls : "fallen"}</span> · Lv ${h.level}${strayLabel}</div>
+          ${stat ? `<div class="stat">${stat}</div>` : ""}${chips ? `<div class="tv-chips">${chips}</div>` : ""}</div>
+        <div class="tv-act">${actions}</div></div>`;
     };
-    // current party — mirrors the dungeon roster so you can see your class mix (and who has fallen)
-    const slot = (h, i) => {
+
+    // ---- party ----
+    const partyCards = party.map((h, i) => {
       const flag = h.alive && ctx.tileFlag && ctx.tileFlag(h);
-      const dot = flag ? `<span class="tv-dot ${flag}" title="${flag === "roll" ? "Level-up roll ready" : "Points to spend"}"></span>` : "";
-      return `<div class="tv-slot ${h.alive ? "" : "dead"}" data-hero="${i}" title="View ${h.name}'s stats">
-        <div class="tv-portwrap"><canvas width="96" height="96"></canvas>${dot}</div>
-        <b>${i === 0 ? iconImg("crown", 11) + " " : ""}${h.name}</b><span class="cls">${h.alive ? h.cls : "fallen"}</span><span class="lv">Lv ${h.level}</span></div>`;
-    };
-    const emptySlots = Array.from({ length: Math.max(0, CAP - party.length) }, () => `<div class="tv-slot empty">empty</div>`).join("");
+      const dot = flag ? `<span class="tv-dot ${flag === "roll" ? "roll" : ""}"></span>` : "";
+      const chips = `<span class="tv-chip gear">${gearCount(h)} items</span>${h.alive ? "" : `<span class="tv-chip dead">fallen</span>`}`;
+      const actions = i === 0
+        ? `<span class="tv-mut">leader</span>`
+        : `<button class="tv-b bench" data-drop="${i}">${iconImg("chevron", 11)} Bench</button>`;
+      return card(h, { accent: GOLD, crown: i === 0, dot, chips, actions, tap: true });
+    }).join("");
+    const emptyCards = Array.from({ length: openSlots }, () =>
+      `<div class="tv-empty" style="--sc:${GOLD}">open slot — add a reserve or hire below</div>`).join("");
+
+    // ---- reserves (bench) ----
+    const benchCards = bench.length ? bench.map((h, i) => {
+      const cost = ctx.recallCost(h), room = openSlots > 0, canAfford = silver >= cost;
+      const chips = `<span class="tv-chip gear">${iconImg("gem", 9)} gear kept · ${gearCount(h)} items</span>`;
+      const addBtn = `<button class="tv-b add" data-add="${i}" ${(!room || !canAfford) ? "disabled" : ""}>${iconImg("chevron", 11)} Add · ${iconImg("coin", 10)} ${cost}</button>`;
+      const actions = `${addBtn}<button class="tv-b ghost" data-release="${i}">release</button>`;
+      return card(h, { accent: STEEL, chips, actions, tap: true });
+    }).join("") : `<div class="tv-empty" style="--sc:${STEEL}">No one benched — drop a companion to keep them (and their gear) here.</div>`;
+
+    // ---- for hire (recruits) ----
+    const hireCards = recruits.length ? recruits.map((h, i) => {
+      const D = derive(h), cost = ctx.hireCost(h), full = openSlots === 0, canAfford = silver >= cost;
+      const kit = heroKit(h), acts = kit.filter(k => k.type === "active").map(k => k.name).slice(0, 2);
+      const stat = `HP ${D.maxhp} · ATK ${D.atk} · DEF ${D.def}${acts.length ? ` · ${acts.join(", ")}` : ""}`;
+      const actions = `<span class="tv-price">${iconImg("coin", 11)} ${cost}</span>`
+        + `<button class="tv-b hire" data-hire="${i}" ${(full || !canAfford) ? "disabled" : ""}>Hire</button>`;
+      return card(h, { accent: LIVE, stat, strayLabel: ` · <span class="strg">stranger</span>`, actions });
+    }).join("") : `<div class="tv-empty" style="--sc:${LIVE}">Nobody's here — try <b>New faces</b>.</div>`;
+
+    const subtitle = openSlots > 0
+      ? `${openSlots} open slot${openSlots > 1 ? "s" : ""} — add a reserve or hire a stranger`
+      : "Party full — bench a companion to make room";
 
     el.innerHTML = `<div class="tw-wrap">
-      <button class="tv-return" data-back style="margin:0 0 10px">${iconImg("house",17)} Return to the Keep</button>
-      <div class="shop-top" style="justify-content:flex-end">
-        <span class="tw-cur"><span>${iconImg("coin",13)} ${silver}</span></span>
-      </div>
-      <div class="tw-head"><h1>Tavern</h1><p style="font-size:12px;color:#9a8fb8;font-style:italic">
-        ${full ? "Your party is full — all present."
-          : canReplace ? "A pal has fallen — hire a recruit to take their place (or revive them at the Temple)."
-          : `Recruit to round out your party — ${party.length}/${CAP}.`}</p></div>
-      <div class="tw-sec">Your party — tap to view stats</div>
-      <div class="tv-party">${party.map(slot).join("")}${emptySlots}</div>
-      <div class="tw-sec">Looking for work</div>
-      ${recruits.length ? recruits.map(row).join("") : `<div class="shop-none">Nobody's here — check back later.</div>`}
-      <button class="tw-btn" data-refresh style="justify-content:center" ${silver < ctx.refreshCost ? "disabled" : ""}>${iconImg("refresh",13)} New faces · ${iconImg("coin",12)} ${ctx.refreshCost}</button>
+      <button class="tv-return" data-back>${iconImg("house", 16)} Return to the Keep</button>
+      <div class="shop-top" style="justify-content:flex-end"><span class="tw-cur"><span>${iconImg("coin", 13)} ${silver}</span></span></div>
+      <div class="tw-head"><h1>Tavern</h1><p style="font-size:12px;color:#9a8fb8;font-style:italic">${subtitle}</p></div>
+
+      <div class="tv-sech" style="--sc:${GOLD}"><span class="bar"></span><span class="t">In your party</span><span class="n">${party.length} / ${cap}</span></div>
+      ${partyCards}${emptyCards}
+
+      <div class="tv-sech" style="--sc:${STEEL}"><span class="bar"></span><span class="t">Your reserves · benched</span><span class="n">${bench.length ? bench.length + " kept" : ""}</span></div>
+      ${benchCards}
+
+      <div class="tv-sech" style="--sc:${LIVE}"><span class="bar"></span><span class="t">Looking for work · new hires</span></div>
+      ${hireCards}
+      <button class="tv-refresh" data-refresh ${silver < ctx.refreshCost ? "disabled" : ""}>${iconImg("refresh", 13)} New faces · ${iconImg("coin", 12)} ${ctx.refreshCost}</button>
     </div>`;
 
-    party.forEach((h, i) => {
-      const cv = el.querySelectorAll(".tv-slot canvas")[i];
-      if (cv) cv.getContext("2d").drawImage(ctx.portrait(h), 0, 0, 96, 96);
+    // draw portraits (roster is in DOM order)
+    el.querySelectorAll(".tv-card canvas").forEach((cv, i) => {
+      if (roster[i]) cv.getContext("2d").drawImage(ctx.portrait(roster[i]), 0, 0, 96, 96);
     });
-    recruits.forEach((h, i) => {
-      const cv = el.querySelectorAll(".shop-row canvas")[i];
-      if (cv) cv.getContext("2d").drawImage(ctx.portrait(h), 0, 0, 96, 96);
-    });
-    el.querySelectorAll("[data-back]").forEach(b => b.onclick = () => ctx.back());
-    el.querySelectorAll("[data-hero]").forEach(c => c.onclick = () => ctx.openHero(party[+c.getAttribute("data-hero")]));
+
+    // wire actions
+    el.querySelector("[data-back]").onclick = () => ctx.back();
     el.querySelector("[data-refresh]").onclick = () => { if (ctx.refresh()) render(); };
-    el.querySelectorAll("[data-hire]").forEach(b => b.onclick = () => {
-      const h = ctx.recruits()[+b.getAttribute("data-hire")];
-      if (h && ctx.hire(h)) render();
+    el.querySelectorAll("[data-view]").forEach(c => c.onclick = e => {
+      if (e.target.closest("button")) return;         // let the action buttons handle their own clicks
+      ctx.openHero(roster[+c.getAttribute("data-view")]);
     });
+    el.querySelectorAll("[data-drop]").forEach(b => b.onclick = () => { if (ctx.drop(ctx.party()[+b.getAttribute("data-drop")])) render(); });
+    el.querySelectorAll("[data-add]").forEach(b => b.onclick = () => { if (ctx.addBack(ctx.bench()[+b.getAttribute("data-add")])) render(); });
+    el.querySelectorAll("[data-release]").forEach(b => b.onclick = () => { if (ctx.release(ctx.bench()[+b.getAttribute("data-release")])) render(); });
+    el.querySelectorAll("[data-hire]").forEach(b => b.onclick = () => { const h = ctx.recruits()[+b.getAttribute("data-hire")]; if (h && ctx.hire(h)) render(); });
   }
 
   render();
