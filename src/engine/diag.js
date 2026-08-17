@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-18 · Auto-level companions: menu toggle (both menus) resolves companion level-ups with a free roll — no popup, no silver; turning it on clears the backlog";
+export const APP_BUILD = "2026-08-18 · Party tiles flag a green ▲ when the bag holds an upgrade / empty-slot fit; XP requirements raised 4× (L2=120, L3=320)";
 
 const BUF = [];
 const MAX = 400;

@@ -17,6 +17,7 @@ import { generate, generateRoll, describeItem } from './systems/LootGenerator.js
 import { openLootRoll } from './ui/LootRoll.js';
 import { upgrade as forgeUpgrade, canUpgrade, forgePreview, forgeCost } from './systems/ForgeSystem.js';
 import { priceOf, sellPriceOf } from './systems/Economy.js';
+import { hasGearHint } from './systems/Equipment.js';
 import { openCharacter } from './ui/CharacterPanel.js';
 import { openTown, openPartyRoster } from './ui/TownScreen.js';
 import { openShop } from './ui/ShopScreen.js';
@@ -231,11 +232,12 @@ function renderParty(){
       d.style.cssText="position:absolute;top:-3px;right:-3px;width:12px;height:12px;border-radius:50%;"
         +`background:${col};border:2px solid #181128;box-shadow:0 0 6px ${col};z-index:3`; picWrap.appendChild(d); }
     const bag=Object.values(h.gear).filter(Boolean).length;
+    const gearHint = h.alive && hasGearHint(h, state.inventory);   // bag holds an upgrade or an empty-slot fit
     const info=document.createElement("div");
     info.innerHTML=`${isMain?iconImg("crown",12)+" ":""}<b>${h.name}</b> <span class="lvl">Lv${h.level}</span> <span class="cls">${h.cls}</span><br>
       ${h.alive ? `<span style="opacity:.7">ATK ${D.atk} · DEF ${D.def}</span>
       <div class="bar"><i style="width:${clamp(h.hp/D.maxhp*100,0,100)}%"></i></div>
-      ${h.hp}/${D.maxhp}<div class="gear">${bag} equipped · tap for gear ›</div>`
+      ${h.hp}/${D.maxhp}<div class="gear">${bag} equipped · tap for gear ›${gearHint?`<span class="gear-up" title="An upgrade or new gear is waiting in the bag">▲</span>`:""}</div>`
         : `<span class="fallen">${iconImg("skull",11)} Fallen — restore at the Temple</span>`}`;
     // portrait column: portrait on top, the equipped-potion box below it
     const col=document.createElement("div"); col.style.cssText="display:flex;flex-direction:column;align-items:center;flex:0 0 auto";
@@ -910,7 +912,7 @@ function pumpLoot(){
       state.silver-=cost; rerolls++; roll=generateRoll(Math.random, opts); updateHud(); return roll; },  // rerolls are interactive → Math.random
     accept:()=>{ state.inventory.push(roll.item);
       log(`${iconImg("chest",14)} ${from?`<b>${from}</b> drops `:""}<span class="sys">${roll.item.n}</span> <span style="opacity:.6">→ bag (${state.inventory.length})</span>`);
-      saveGame(); },
+      renderParty(); saveGame(); },   // refresh the party bar so the gear-hint ▲ appears for anyone it fits
     close:()=>{ lootOpen=false; pumpLoot(); },   // next queued drop, or resume the delve
   });
 }

@@ -92,6 +92,11 @@
   .bar{height:5px;background:var(--hpbg);border-radius:3px;overflow:hidden;margin:2px 0}
   .bar i{display:block;height:100%;background:linear-gradient(#ff7a70,var(--hp));transition:width .25s}
   .card .gear{opacity:.8;font-style:italic}
+  /* gear hint: an upgrade or empty-slot fit is waiting in the bag */
+  .card .gear-up{display:inline-block;margin-left:5px;font-style:normal;font-size:8px;line-height:1;
+    color:#8fd39a;vertical-align:1px;filter:drop-shadow(0 0 4px #8fd39a);animation:gearpulse 1.8s ease-in-out infinite}
+  @keyframes gearpulse{0%,100%{opacity:.55}50%{opacity:1}}
+  @media (prefers-reduced-motion:reduce){.card .gear-up{animation:none;opacity:.9}}
   .card.dead{opacity:.8;border-color:#5a2a2a}
   .card.dead .pic{filter:grayscale(1) brightness(.7)}
   /* main hero: centered, slightly larger, gold-framed so the leader stands out */

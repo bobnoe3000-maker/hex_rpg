@@ -254,8 +254,8 @@ ok("different seed diverges", seq(123) !== seq(777));
 // Leveling: uncapped XP curve + main-hero stat points
 {
   // XP curve keeps the classic early thresholds and scales forever (no cap)
-  ok("xpToReach matches the classic early curve", xpToReach(2) === 30 && xpToReach(3) === 80 && xpToReach(1) === 0);
-  ok("xpForNext grows every level (no cap)", xpForNext(1) === 30 && xpForNext(2) === 50 && xpForNext(50) < xpForNext(200));
+  ok("xpToReach follows the 4× curve", xpToReach(2) === 120 && xpToReach(3) === 320 && xpToReach(1) === 0);
+  ok("xpForNext grows every level (no cap)", xpForNext(1) === 120 && xpForNext(2) === 200 && xpForNext(50) < xpForNext(200));
 
   // points per level: 3 → 2 after 50 → 1 after 100
   ok("points per level step down at 50 and 100",

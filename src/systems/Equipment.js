@@ -58,6 +58,19 @@ export function isUpgrade(hero, item) {
   return itemScore(item) > itemScore(hero.gear[item.slot]);
 }
 
+/* Does the shared `inventory` hold anything worth equipping on `hero` right now — either a clear
+   upgrade over a filled slot, or a piece for an empty slot? Uses the same verdict the character
+   panel shows (only "up" / "new" count, never a sidegrade), so a tile hint matches what you'd see
+   inside. Pure & DOM-free. */
+export function hasGearHint(hero, inventory) {
+  if (!hero || !hero.alive || !inventory || !inventory.length) return false;
+  return inventory.some(it => {
+    if (!canEquip(hero, it)) return false;
+    const v = compareToEquipped(hero, it).verdict;
+    return v === "up" || v === "new";
+  });
+}
+
 /* Compare a bag `item` against what the hero has equipped in its slot (and any slot the swap would
    free — a 2H weapon frees the offhand; an offhand frees a 2H weapon). Returns a structured verdict
    the character panel renders: overall up/side/down/new, per-stat from→to→diff, and keyword changes
