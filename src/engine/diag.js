@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-17 · Loot Roll shows available silver in the header";
+export const APP_BUILD = "2026-08-17 · Loot Roll: reroll greys out (cost in red) when silver is too low";
 
 const BUF = [];
 const MAX = 400;

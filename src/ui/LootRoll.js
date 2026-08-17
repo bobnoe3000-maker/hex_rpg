@@ -64,6 +64,8 @@ function injectCss() {
     display:flex;align-items:center;justify-content:center;gap:6px}
   .lr-reroll:active{transform:translateY(2px);box-shadow:0 2px 0 #100b1c}
   .lr-reroll:disabled{opacity:.45;cursor:default;transform:none;box-shadow:0 4px 0 #100b1c}
+  .lr-reroll.cant{opacity:1;cursor:default;transform:none;background:#181423;color:#5a5470;box-shadow:0 4px 0 #0d0a16}
+  .lr-reroll.cant [data-rc]{color:#e5867f}
   .lr-accept{flex:1.3;padding:13px;font-size:14px;text-transform:uppercase;letter-spacing:.08em;color:#241606;background:linear-gradient(#e8bf78,#b47f34);box-shadow:0 4px 0 #6e4a14}
   .lr-accept:active{transform:translateY(2px);box-shadow:0 2px 0 #6e4a14}
   .lr-accept:disabled{opacity:.5;cursor:default;transform:none;box-shadow:0 4px 0 #6e4a14}
@@ -178,7 +180,9 @@ export function openLootRoll(roll, ctx) {
   }
   function syncReroll() {
     const b = el("[data-reroll]"); if (!b) return;
-    b.disabled = spinning || ctx.silver() < ctx.rerollCost();
+    const broke = ctx.silver() < ctx.rerollCost();
+    b.disabled = spinning || broke;
+    b.classList.toggle("cant", broke && !spinning);   // can't afford → clearly greyed, cost in red
   }
 
   function spin(first) {
