@@ -43,6 +43,10 @@ function ensureTavernCss() {
   .tv-who .sub .cls{text-transform:capitalize;font-style:italic}
   .tv-who .sub .strg{color:#8fd39a}
   .tv-who .stat{font-family:ui-monospace,monospace;font-size:9px;color:#9a8fb8;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tv-skrow{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+  .tv-sk{font-family:ui-monospace,monospace;font-size:9px;letter-spacing:.02em;padding:2px 6px;border-radius:5px;line-height:1.4}
+  .tv-sk.a{color:#2a0f08;background:#ff9a5c}
+  .tv-sk.p{color:#06121a;background:#9ad1ff}
   .tv-chips{display:flex;gap:5px;margin-top:4px;flex-wrap:wrap}
   .tv-chip{font-family:ui-monospace,monospace;font-size:8.5px;letter-spacing:.03em;padding:2px 6px;border-radius:5px;
     background:#241b38;color:#b9add6;border:1px solid #332a4a}
@@ -87,16 +91,20 @@ export function openTavern(ctx) {
     const roster = [];  // heroes in DOM order, for drawing portraits after innerHTML
 
     // ---- a member card (party / bench / recruit) ----
-    const card = (h, { accent, crown = false, dot = "", chips = "", stat = "", strayLabel = "", actions = "", tap = false }) => {
+    // view: "manage" → tap opens the owned hero's panel · "preview" → tap opens a read-only look
+    const card = (h, { accent, crown = false, dot = "", chips = "", stat = "", skills = "", strayLabel = "", actions = "", view = null }) => {
       roster.push(h);
       const idx = roster.length - 1;
-      return `<div class="tv-card ${tap ? "tap" : ""}" style="--sc:${accent}" ${tap ? `data-view="${idx}"` : ""}>
+      const attr = view === "preview" ? `data-preview="${idx}"` : view === "manage" ? `data-view="${idx}"` : "";
+      return `<div class="tv-card ${view ? "tap" : ""}" style="--sc:${accent}" ${attr}>
         <div class="tv-av ${h.alive ? "" : "dead"}"><canvas width="96" height="96"></canvas>${crown ? `<span class="crown">${iconImg("crown", 11)}</span>` : ""}${dot}</div>
         <div class="tv-who"><b>${h.name}</b>
           <div class="sub"><span class="cls">${h.alive ? h.cls : "fallen"}</span> · Lv ${h.level}${strayLabel}</div>
-          ${stat ? `<div class="stat">${stat}</div>` : ""}${chips ? `<div class="tv-chips">${chips}</div>` : ""}</div>
+          ${stat ? `<div class="stat">${stat}</div>` : ""}${skills ? `<div class="tv-skrow">${skills}</div>` : ""}${chips ? `<div class="tv-chips">${chips}</div>` : ""}</div>
         <div class="tv-act">${actions}</div></div>`;
     };
+    // every skill the hero carries, as wrapping active/passive chips (so a recruit's whole kit is readable)
+    const skillChips = h => heroKit(h).map(k => `<span class="tv-sk ${k.type[0]}" title="${k.type} · rank ${k.rank}">${k.name}</span>`).join("");
 
     // ---- party ----
     const partyCards = party.map((h, i) => {
@@ -106,7 +114,7 @@ export function openTavern(ctx) {
       const actions = i === 0
         ? `<span class="tv-mut">leader</span>`
         : `<button class="tv-b bench" data-drop="${i}">${iconImg("chevron", 11)} Bench</button>`;
-      return card(h, { accent: GOLD, crown: i === 0, dot, chips, actions, tap: true });
+      return card(h, { accent: GOLD, crown: i === 0, dot, chips, actions, view: "manage" });
     }).join("");
     const emptyCards = Array.from({ length: openSlots }, () =>
       `<div class="tv-empty" style="--sc:${GOLD}">open slot — add a reserve or hire below</div>`).join("");
@@ -117,17 +125,16 @@ export function openTavern(ctx) {
       const chips = `<span class="tv-chip gear">${iconImg("gem", 9)} gear kept · ${gearCount(h)} items</span>`;
       const addBtn = `<button class="tv-b add" data-add="${i}" ${(!room || !canAfford) ? "disabled" : ""}>${iconImg("chevron", 11)} Add · ${iconImg("coin", 10)} ${cost}</button>`;
       const actions = `${addBtn}<button class="tv-b ghost" data-release="${i}">release</button>`;
-      return card(h, { accent: STEEL, chips, actions, tap: true });
+      return card(h, { accent: STEEL, chips, actions, view: "manage" });
     }).join("") : `<div class="tv-empty" style="--sc:${STEEL}">No one benched — drop a companion to keep them (and their gear) here.</div>`;
 
     // ---- for hire (recruits) ----
     const hireCards = recruits.length ? recruits.map((h, i) => {
       const D = derive(h), cost = ctx.hireCost(h), full = openSlots === 0, canAfford = silver >= cost;
-      const kit = heroKit(h), acts = kit.filter(k => k.type === "active").map(k => k.name).slice(0, 2);
-      const stat = `HP ${D.maxhp} · ATK ${D.atk} · DEF ${D.def}${acts.length ? ` · ${acts.join(", ")}` : ""}`;
+      const stat = `HP ${D.maxhp} · ATK ${D.atk} · DEF ${D.def} · Dodge ${D.dodge} · Crit ${D.crit}`;
       const actions = `<span class="tv-price">${iconImg("coin", 11)} ${cost}</span>`
         + `<button class="tv-b hire" data-hire="${i}" ${(full || !canAfford) ? "disabled" : ""}>Hire</button>`;
-      return card(h, { accent: LIVE, stat, strayLabel: ` · <span class="strg">stranger</span>`, actions });
+      return card(h, { accent: LIVE, stat, skills: skillChips(h), strayLabel: ` · <span class="strg">stranger</span>`, actions, view: "preview" });
     }).join("") : `<div class="tv-empty" style="--sc:${LIVE}">Nobody's here — try <b>New faces</b>.</div>`;
 
     const subtitle = openSlots > 0
@@ -161,6 +168,10 @@ export function openTavern(ctx) {
     el.querySelectorAll("[data-view]").forEach(c => c.onclick = e => {
       if (e.target.closest("button")) return;         // let the action buttons handle their own clicks
       ctx.openHero(roster[+c.getAttribute("data-view")]);
+    });
+    el.querySelectorAll("[data-preview]").forEach(c => c.onclick = e => {
+      if (e.target.closest("button")) return;         // Hire button handles its own click
+      (ctx.preview || ctx.openHero)(roster[+c.getAttribute("data-preview")]);
     });
     el.querySelectorAll("[data-drop]").forEach(b => b.onclick = () => { if (ctx.drop(ctx.party()[+b.getAttribute("data-drop")])) render(); });
     el.querySelectorAll("[data-add]").forEach(b => b.onclick = () => { if (ctx.addBack(ctx.bench()[+b.getAttribute("data-add")])) render(); });

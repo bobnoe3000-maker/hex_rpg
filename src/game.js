@@ -839,6 +839,15 @@ function openHero(h){
     close: ()=>{},
   });
 }
+/* Read-only look at a tavern recruit (a stranger you don't own yet): full stats, skills and the gear
+   they'd bring — but no equipping/potion controls, so you can't strand bag gear on someone unhired. */
+function previewRecruit(h){
+  openCharacter(h, {
+    inventory: [], portrait: heroPortrait(h), isMain: false, preview: true, xp: null,   // no XP bar for a stranger
+    pendRolls: null, openRoll: null, points: null, assign: null, skills: null,
+    refresh: ()=>{}, potion: null, gems: ()=>state.gems, silver: ()=>state.silver, close: ()=>{},
+  });
+}
 /* ---------- scenes: town hub ⇄ dungeon ---------- */
 function enterTown(fromWipe=false){
   state.scene="town"; townEl.classList.add("show");
@@ -989,7 +998,7 @@ function openTavernScreen(){
     partyCap:PARTY_CAP, hireCost:hireCostFor, recallCost, refreshCost:BAL.TAVERN.REFRESH_COST,
     hire:hireCompanion, drop:benchCompanion, addBack:addFromBench, release:releaseFromBench,
     refresh:()=>refreshRecruits(false), portrait:h=>heroPortrait(h),
-    openHero, tileFlag:heroTileFlag, back:openTownScreen });
+    openHero, preview:previewRecruit, tileFlag:heroTileFlag, back:openTownScreen });
 }
 /* ---------- temple: resurrect fallen companions (fee scales with level) ---------- */
 const resurrectFee=h=>BAL.TEMPLE.RESURRECT_BASE + h.level*BAL.TEMPLE.RESURRECT_PER_LEVEL;

@@ -196,6 +196,7 @@ export function openCharacter(hero, ctx) {
     const D = derive(hero);
     const gems = ctx.gems ? ctx.gems() : 0;
     const silver = ctx.silver ? ctx.silver() : 0;
+    const preview = !!ctx.preview;   // read-only inspection (e.g. a tavern recruit you don't own yet)
     let usable = ctx.inventory.filter(it => canEquip(hero, it));
     const others = ctx.inventory.length - usable.length;
     if (filterSlot) usable = usable.filter(it => it.slot === filterSlot);
@@ -211,12 +212,11 @@ export function openCharacter(hero, ctx) {
     };
     const slotRow = key => {
       const it = hero.gear[key];
-      return `<div class="cp-slot ${filterSlot === key ? "sel" : ""}" data-filter="${key}"><span class="sl">${cap(key)}</span>` +
-        (it
-          ? `${gearIconImg(it, 26)}<span class="it">${itemName(it)}<br><small>${it.d}</small></span>` +
-            `<button class="cp-btn off" data-uneq="${key}">✕</button>`
-          : `<span class="it cp-empty">— empty —</span>`) +
-        `</div>`;
+      const body = it
+        ? `${gearIconImg(it, 26)}<span class="it">${itemName(it)}<br><small>${it.d}</small></span>` + (preview ? "" : `<button class="cp-btn off" data-uneq="${key}">✕</button>`)
+        : `<span class="it cp-empty">— empty —</span>`;
+      if (preview) return `<div class="cp-slot" style="cursor:default"><span class="sl">${cap(key)}</span>${body}</div>`;
+      return `<div class="cp-slot ${filterSlot === key ? "sel" : ""}" data-filter="${key}"><span class="sl">${cap(key)}</span>${body}</div>`;
     };
     // A bag item shows how it compares to what's equipped in its slot: a verdict pill, always-on
     // stat-delta chips, and a tap-to-open side-by-side (Equipped → This → Δ).
@@ -291,7 +291,11 @@ export function openCharacter(hero, ctx) {
         <div class="cp-sec"><span>Potions${stash.length ? "" : " — none"}</span></div>
         ${stash.length ? stash.map(stackRow).join("") : `<div class="cp-none">Buy at the Shop's Potions tab, or find them as loot.</div>`}`;
     };
-    const equipBlock = `
+    const equipBlock = preview
+      ? `<div class="cp-sec"><span>Equipped</span></div>
+        ${SLOTS.map(slotRow).join("")}
+        <div class="cp-none">Preview — hire ${hero.name} to manage their gear.</div>`
+      : `
       <div class="cp-sec"><span>Equipped</span><span class="hint">tap a slot to filter the bag</span></div>
       ${SLOTS.map(slotRow).join("")}
       <div class="cp-sec"><span>Bag${filterSlot ? ` — ${cap(filterSlot)}` : ""}${others > 0 && !filterSlot ? ` · ${others} for other heroes` : ""}</span>${filterSlot ? `<span class="cp-clear" data-clear="1">show all ✕</span>` : ""}</div>
