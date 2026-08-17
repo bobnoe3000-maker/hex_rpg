@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-18 · Auto-pathing: units now BFS-route around walls (distance-field) instead of wedging against them, so they stop getting stuck out of the fight";
+export const APP_BUILD = "2026-08-18 · Non-boss enemies hit 20% softer (ENEMY_ATK_MULT 0.8) — party keeps ~10pp more HP per trash fight; bosses untouched";
 
 const BUF = [];
 const MAX = 400;

@@ -121,5 +121,6 @@ export function makeEnemy(kind, opts, c) {
     r: opts.r, c: opts.c, alive: true, figSeed: ((++_figCounter) * 2654435761) >>> 0 & 0x7fffffff,
   };
   if (opts.level) scaleEnemy(e, opts.level);
+  if (!e.boss) e.atk = Math.max(1, Math.round(e.atk * BAL.ENEMY_ATK_MULT));   // trash hit ~20% softer (bosses untouched)
   return e;
 }

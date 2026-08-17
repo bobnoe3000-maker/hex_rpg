@@ -36,6 +36,9 @@ export const BAL = {
   // Tuned against tests/balance.sim.mjs so difficulty stays consistent (a gentle ramp) 1→100 while
   // the party keeps pace via level-up points + tier-scaled loot. (Lv 100 skeleton ≈ hp×48, atk×25.)
   ENEMY_SCALE: { hp: 0.48, atk: 0.24, def: 0.18, dodge: 0.05, crit: 0.04, xp: 0.35 },
+  // flat multiplier on every NON-boss enemy's final ATK — a global difficulty dial so trash packs
+  // (and their focus-fire on a squishy hero) hit softer without touching HP/DEF pacing or bosses.
+  ENEMY_ATK_MULT: 0.8,
   // Every dungeon boss spawns from this normalized level-1 block (scaled to the band top by
   // ENEMY_SCALE), NOT from its figure's archetype — so a boss's difficulty is consistent across
   // dungeons and the dragon figure can't make a tier unwinnable. Tuned against tests/balance.sim.mjs.
