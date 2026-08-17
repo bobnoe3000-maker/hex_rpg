@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-17 · Five-star skills: each upgrade is 1 of 25 points (5 lit tips × 5 stars); bonuses interpolate smoothly, actives step per full star";
+export const APP_BUILD = "2026-08-17 · Five-star skills + tappable companion kit skills; companion kit scaling eased (5 stars only at the level cap)";
 
 const BUF = [];
 const MAX = 400;

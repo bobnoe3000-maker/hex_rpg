@@ -242,7 +242,8 @@ ok("different seed diverges", seq(123) !== seq(777));
     ok("every companion kit is 2 active + 3 passive, class-appropriate", bad === 0);
   }
   ok("companion kits are deterministic per seed", JSON.stringify(makeCompanion(77, 8).skills) === JSON.stringify(makeCompanion(77, 8).skills));
-  ok("companion skill points scale with level (whole stars)", Math.max(...Object.values(makeCompanion(3, 1).skills)) === 5 && Math.max(...Object.values(makeCompanion(3, 13).skills)) === 25);
+  ok("companion kit power scales gently with level", Math.max(...Object.values(makeCompanion(3, 1).skills)) === 5 && Math.max(...Object.values(makeCompanion(3, 40).skills)) === 13 && Math.max(...Object.values(makeCompanion(3, 100).skills)) === 25);
+  ok("a level-40 companion is well below five stars (~2.6 stars)", Math.max(...Object.values(makeCompanion(3, 40).skills)) <= 15);
   ok("rollCompanionSkills is class-appropriate", Object.keys(rollCompanionSkills("mage", 5, 6)).every(id => allSkills("mage").some(s => s.id === id)));
   ok("higher-level companion is the same identity, stronger", c3.cls === c1.cls && c3.name === c1.name && c3.level === 3 && c3.maxhp > c1.maxhp && c3.atk >= c1.atk);
   const h = makeHero("fighter", { statSeed: 1 }); const hp0 = h.maxhp;

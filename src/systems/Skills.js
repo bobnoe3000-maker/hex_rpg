@@ -131,8 +131,10 @@ export function rollCompanionSkills(cls, seed, level) {
   const r = mulberry32((seed >>> 0) || 1);
   const draw = (arr, n) => { const a = arr.slice(), out = [];
     for (let i = 0; i < n && a.length; i++) out.push(a.splice((r() * a.length) | 0, 1)[0]); return out; };
-  // Companions start a kit at a whole number of stars scaled by level (1 star per 3 levels).
-  const points = Math.min(MAX_POINTS, Math.max(1, 1 + Math.floor((level - 1) / 3)) * PTS_PER_STAR);
+  // Kit power climbs gently with level: one full star to start, +1 point per ~5 levels, so a pal
+  // reaches five stars only at the level cap (a level-40 stranger sits around 2½ stars — no longer
+  // maxed out). Leaves clear room to grow via the +1-point level-up rolls.
+  const points = Math.max(1, Math.min(MAX_POINTS, Math.round(PTS_PER_STAR + (level - 1) / 5)));
   const skills = {};
   for (const s of [...draw(actives, 2), ...draw(passives, 3)]) skills[s.id] = points;
   return skills;

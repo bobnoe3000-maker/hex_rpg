@@ -6,7 +6,7 @@
 import { derive } from "../systems/StatEngine.js";
 import { canEquip, equip, unequip, compareToEquipped } from "../systems/Equipment.js";
 import { STAT_STEP, ASSIGNABLE } from "../systems/Leveling.js";
-import { heroKit, starTier } from "../systems/Skills.js";
+import { heroKit, starTier, skillDef } from "../systems/Skills.js";
 import { starsHtml, starLabel } from "./stars.js";
 import { SLOTS } from "../data/items/gearTypes.js";
 import { POTION_BY_ID, potionName, potionEffectText } from "../data/potions.js";
@@ -166,12 +166,19 @@ function injectCss() {
   .sbtn:disabled{opacity:.3;cursor:default;color:#6f6486}
   .sbtn:active:not(:disabled){transform:translateY(1px)}
   .slock{font-size:9.5px;color:#8a6a4a;margin-top:5px;font-style:italic}
-  .cp-kit{display:flex;align-items:center;gap:8px;padding:6px 9px;border-radius:8px;background:#1c1630;border:1px solid var(--line);margin-bottom:5px}
+  .cp-kit{padding:6px 9px;border-radius:8px;background:#1c1630;border:1px solid var(--line);margin-bottom:5px;cursor:pointer}
   .cp-kit.off{border-left:2px solid #ff8a5a}.cp-kit.def{border-left:2px solid #79c7e6}
+  .cp-kit.open{background:#231b3a;border-color:var(--line2)}
+  .cp-kit:active{transform:translateY(1px)}
+  .cp-kit-h{display:flex;align-items:center;gap:8px}
   .cp-kit .kn{flex:1;font-size:12.5px;font-weight:bold;color:var(--parchment)}
   .cp-kit .stars{flex:0 0 auto}
   .cp-kit.off .stars{--sc:#ff8a5a}.cp-kit.def .stars{--sc:#79c7e6}
   .cp-kit .kr{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:9px;color:var(--gold);min-width:26px;text-align:right}
+  .cp-kit-caret{color:#6f6486;font-size:10px;flex:0 0 auto;width:10px;text-align:center}
+  .cp-kit-d{margin-top:6px;padding-top:6px;border-top:1px solid var(--line);line-height:1.45}
+  .cp-kit-d .kd{display:block;font-size:11px;color:#9a8fb8;margin-bottom:3px}
+  .cp-kit-d .ke{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10.5px;color:#8fd39a}
   `;
   document.head.appendChild(s);
 }
@@ -189,6 +196,7 @@ export function openCharacter(hero, ctx) {
   let keepScroll = true;   // preserve scroll across re-render (false = jump to top, for main-tab switches)
   const skillDraft = {};   // pending skill ranks (id → count) not yet committed
   let skillResetArm = false; // two-tap guard on the paid tree reset
+  let kitOpen = null;      // companion kit: id of the skill whose effect row is expanded
   const draft = {};      // pending, unconfirmed point allocation (stat → signed count)
   for (const k of ASSIGNABLE) draft[k] = 0;
   const draftSum = () => ASSIGNABLE.reduce((a, k) => a + draft[k], 0);
@@ -366,14 +374,24 @@ export function openCharacter(hero, ctx) {
     };
 
     // Read-only kit for companions (their skills are a fixed, seed-rolled loadout).
+    // Tap a skill to expand its description + the effect at its current star tier.
     const kitSection = () => {
       const kit = heroKit(hero); if (!kit.length) return "";
       const na = kit.filter(k => k.type === "active").length, np = kit.filter(k => k.type === "passive").length;
-      const row = k => `<div class="cp-kit ${k.br}">
-        <span class="stype ${k.type[0]}">${k.type === "active" ? "Active" : "Passive"}</span>
-        <span class="kn">${k.name}</span>
-        ${starsHtml(k.points, 13)}<span class="kr">${starLabel(k.points)}</span></div>`;
-      return `<div class="cp-sec"><span>Skills</span><span class="hint">${na} active · ${np} passive · auto-cast in battle</span></div>
+      const row = k => {
+        const def = skillDef(hero.cls, k.id), open = kitOpen === k.id;
+        const eff = def ? (def.text[k.stars - 1] || def.text[0]) : "";
+        return `<div class="cp-kit ${k.br} ${open ? "open" : ""}" data-kit="${k.id}">
+          <div class="cp-kit-h">
+            <span class="stype ${k.type[0]}">${k.type === "active" ? "Active" : "Passive"}</span>
+            <span class="kn">${k.name}</span>
+            ${starsHtml(k.points, 13)}<span class="kr">${starLabel(k.points)}</span>
+            <span class="cp-kit-caret">${open ? "▾" : "▸"}</span>
+          </div>
+          ${open ? `<div class="cp-kit-d">${def ? `<span class="kd">${def.desc}</span>` : ""}<span class="ke">${eff} · ${k.stars}/5★</span></div>` : ""}
+        </div>`;
+      };
+      return `<div class="cp-sec"><span>Skills</span><span class="hint">${na} active · ${np} passive · tap to read</span></div>
         ${kit.map(row).join("")}`;
     };
 
@@ -459,6 +477,10 @@ export function openCharacter(hero, ctx) {
     overlay.querySelectorAll("[data-dec]").forEach(b => b.onclick = () => {
       const k = b.getAttribute("data-dec");
       if (draft[k] > 0) { draft[k]--; render(); }   // only remove points added this draft, never committed
+    });
+    // companion kit: tap a skill to expand/collapse its description + effect
+    overlay.querySelectorAll("[data-kit]").forEach(el => el.onclick = () => {
+      const id = el.getAttribute("data-kit"); kitOpen = kitOpen === id ? null : id; render();
     });
     // skill tree: sub-tab, draft +/-, then Confirm to commit; Reset (paid) is a two-tap
     overlay.querySelectorAll("[data-branch]").forEach(b => b.onclick = () => { skillBranch = b.getAttribute("data-branch"); skillResetArm = false; render(); });
