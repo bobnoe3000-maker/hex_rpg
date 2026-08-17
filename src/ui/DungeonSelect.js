@@ -36,6 +36,7 @@ function ensureDungeonCss() {
     text-shadow:0 1px 2px #000}
   .ds-body{flex:1;min-width:0}
   .ds-name{font-size:14.5px;color:var(--parchment);line-height:1.15}
+  .ds-sub{font-size:10.5px;color:#9a8fb8;font-style:italic;margin-top:1px}
   .ds-meta{display:flex;gap:8px;align-items:center;margin-top:3px;flex-wrap:wrap}
   .ds-band{font-size:11px;color:var(--acc,#c9bce6);filter:brightness(1.4);letter-spacing:.03em;font-variant-numeric:tabular-nums}
   .ds-boss{font-size:10.5px;color:#9a8fb8} .ds-boss b{color:#d7c6a2}
@@ -87,6 +88,7 @@ export function openDungeonSelect(ctx) {
       <div class="ds-badge">${ROMAN[d.tier - 1]}</div>
       <div class="ds-body">
         <div class="ds-name">${d.name}</div>
+        ${d.sub ? `<div class="ds-sub">${d.sub}</div>` : ""}
         <div class="ds-meta"><span class="ds-band">Lv ${d.band[0]}–${d.band[1]}</span>
           <span class="ds-boss">boss · <b>${d.boss.name}</b></span></div>
         ${showPills ? `<div class="ds-pills"><span class="ds-pill drop ${dropClass}">Drops · ${FLOOR_LABEL[d.dropFloor]}</span><span class="ds-pill rec">Rec. Lv ${d.recLevel}</span></div>` : ""}

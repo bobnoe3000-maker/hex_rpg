@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-17 · Tavern bench/reserves (gear kept, recall fee) + skill roll 2/7 no-upgrade";
+export const APP_BUILD = "2026-08-17 · Dreadmere Trails: 10 dungeons renamed & re-themed to the world map";
 
 const BUF = [];
 const MAX = 400;

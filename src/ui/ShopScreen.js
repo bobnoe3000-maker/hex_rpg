@@ -75,7 +75,7 @@ export function openShop(ctx) {
       </div>`;
     const sellPane = `
       <div class="tw-sec">Sell from your bag</div>
-      ${inv.length ? inv.map(sellRow).join("") : `<div class="shop-none">Your bag is empty — find loot in the Emberdeep.</div>`}`;
+      ${inv.length ? inv.map(sellRow).join("") : `<div class="shop-none">Your bag is empty — find loot down in the dungeons.</div>`}`;
 
     // Potions — brews × priced sizes to buy, plus a sell-back list (was the Apothecary).
     const owned = ctx.potions ? ctx.potions() : [];

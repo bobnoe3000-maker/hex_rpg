@@ -41,76 +41,79 @@ const FLOORS = ["plain", "plain", "fine", "fine", "rare", "rare", "rare", "rare"
 /* dungeon(): assemble one rung. `tier` (1-based) drives the level band, loot power, and drop floor.
    `roster` maps each archetype figure to its themed name; `boss` is {fig,name}; `theme` = {palette,
    tiles} gives the dungeon its own floor stone + decorative tileset so each reads as a distinct place. */
-function dungeon(tier, id, name, accent, crest, boss, roster, blurb, theme) {
+function dungeon(tier, id, name, sub, accent, crest, boss, roster, blurb, theme) {
   const baseLevel = (tier - 1) * 10 + 1;      // 1, 11, 21, … 91
   return {
-    id, tier, name, accent, crest, blurb, boss, roster,
+    id, tier, name, sub, accent, crest, blurb, boss, roster,   // `sub` = the map's short tagline
     palette: theme.palette, tiles: theme.tiles,
     baseLevel, band: [baseLevel, tier * 10], recLevel: tier === 1 ? 1 : baseLevel + 1,
     power: tier, dropFloor: FLOORS[tier - 1],
   };
 }
 
+/* Renamed & re-themed to the Dreadmere Trails world map (assets/world.png). The internal `id`s are
+   kept from the original set so existing saves (active dungeon + cleared-boss list) survive untouched;
+   only the player-facing name/tagline/theme changes. Tier order = the map's difficulty 1 → 10. */
 export const DUNGEONS = [
-  dungeon(1, "emberdeep", "The Emberdeep", "#ff9a5c", "🐲",
-    { fig: "dragon", name: "Ashwing the Young" },
-    { rat: "Emberling Rat", goblin: "Coal Goblin", kobold: "Cinder Kobold", skeleton: "Charred Skeleton", wight: "Barrow Wight" },
-    "The molten roots of the Keep, where every run begins.",
-    { palette: [["#7a7260","#5c5546","#3f3a2e"],["#7e6e58","#5e5244","#403528"]], tiles: ["ember","ash","crack","rubble","bones"] }),
+  dungeon(1, "emberdeep", "The Shaded Foothills", "Safe Ascent", "#8fd39a", "🌲",
+    { fig: "wight", name: "Mosstooth, the Hill Troll" },
+    { rat: "Meadow Rat", goblin: "Foothill Bandit", kobold: "Sling Kobold", skeleton: "Ragged Scarecrow", wight: "Bramble Brute" },
+    "Gentle wooded hills at the edge of camp — where every descent begins.",
+    { palette: [["#6a7250","#4c543a","#323826"],["#727a54","#525a3c","#363c28"]], tiles: ["moss","mushroom","rubble","crack","grate"] }),
 
-  dungeon(2, "frostmere", "Frostmere Catacombs", "#9ad1ff", "💀",
-    { fig: "skeleton", name: "Malketh, the Cold Lich" },
-    { rat: "Crypt Rat", goblin: "Grave Ghoul", kobold: "Frost Acolyte", skeleton: "Frozen Skeleton", wight: "Rimebound Wight" },
-    "Ice-choked tombs where the dead never quite finished dying.",
-    { palette: [["#8a97a8","#5e6b7a","#3a4450"],["#93a2b4","#667486","#414c58"]], tiles: ["frost","puddle","bones","crack","rune"] }),
+  dungeon(2, "frostmere", "The Misty Wetlands", "Boggy Trails", "#6fc2b0", "🐸",
+    { fig: "wight", name: "Mudmaw, the Bog Fiend" },
+    { rat: "Marsh Rat", goblin: "Mire Goblin", kobold: "Fen Croaker", skeleton: "Sunken Corpse", wight: "Marsh Lurker" },
+    "Fog-drowned bogs where the trail sinks and the reeds keep whispering.",
+    { palette: [["#5a6248","#3e4632","#262c20"],["#566048","#3a4430","#242a1e"]], tiles: ["puddle","moss","mushroom","bones","grate"] }),
 
-  dungeon(3, "vael", "Sunken City of Vael", "#4fd0c0", "🔱",
-    { fig: "wight", name: "The Drowned King" },
-    { rat: "Reef Crawler", goblin: "Drowned Thrall", kobold: "Tide Caller", skeleton: "Bloated Dead", wight: "Deep Horror" },
-    "A kingdom the sea took whole — and never gave back.",
-    { palette: [["#5e8079","#3e5a54","#243c38"],["#5a7c86","#3a5660","#22383e"]], tiles: ["puddle","grate","moss","rubble","frost"] }),
+  dungeon(3, "vael", "The Craggy Slopes", "Treacherous Climb", "#c2a878", "⛰️",
+    { fig: "wight", name: "Stonefist, the Crag Ogre" },
+    { rat: "Cliff Rat", goblin: "Crag Goblin", kobold: "Ledge Slinger", skeleton: "Fallen Climber", wight: "Rockback Brute" },
+    "Wind-scoured cliffs and loose scree — one slip is a long way down.",
+    { palette: [["#8a8272","#5e5a4c","#3c3a30"],["#8e8474","#605a4c","#3e3a30"]], tiles: ["rubble","crack","rune","grate","bones"] }),
 
-  dungeon(4, "thornwild", "The Thornwild", "#8fd39a", "🌳",
-    { fig: "wight", name: "Elder Treant Mossheart" },
-    { rat: "Thorn Sprite", goblin: "Feral Goblin", kobold: "Spore Shaman", skeleton: "Bramblewight", wight: "Grovekeeper" },
-    "Where the forest swallowed a kingdom and kept the bones.",
-    { palette: [["#6a7250","#4c543a","#323826"],["#727a54","#525a3c","#363c28"]], tiles: ["moss","mushroom","rubble","crack","bones"] }),
+  dungeon(4, "thornwild", "The Whispering Caverns", "Echoing Depths", "#86b0e0", "🕳️",
+    { fig: "wight", name: "Nharrud, the Cave Terror" },
+    { rat: "Cave Crawler", goblin: "Tunnel Goblin", kobold: "Gloom Kobold", skeleton: "Lost Miner", wight: "Deep Lurker" },
+    "Lightless tunnels where your own footsteps answer back.",
+    { palette: [["#5c6472","#3e4652","#282e38"],["#606876","#424a56","#2a303a"]], tiles: ["crystal","rune","crack","rubble","puddle"] }),
 
-  dungeon(5, "foundry", "Obsidian Foundry", "#ff7a52", "🔥",
-    { fig: "wight", name: "The Forge Golem" },
-    { rat: "Scrap Imp", goblin: "Slag Goblin", kobold: "Ember Artificer", skeleton: "Iron Revenant", wight: "Molten Sentinel" },
-    "Demon-worked forges that have not cooled in an age.",
-    { palette: [["#7a5c52","#4e3a34","#2e2220"],["#6e5a52","#4a3c38","#2c2422"]], tiles: ["ember","ash","grate","rubble","crack"] }),
+  dungeon(5, "foundry", "The Hollowed Crypts", "Restless Dead", "#b7c4d0", "💀",
+    { fig: "skeleton", name: "Malketh, the Crypt Lich" },
+    { rat: "Crypt Rat", goblin: "Grave Ghoul", kobold: "Bone Acolyte", skeleton: "Risen Skeleton", wight: "Barrow Wight" },
+    "Tomb-halls where the buried refuse to lie still.",
+    { palette: [["#77808c","#535a64","#353a42"],["#7c8490","#575e68","#383e46"]], tiles: ["bones","grate","crack","rune","rubble"] }),
 
-  dungeon(6, "shadowfen", "Shadowfen Mire", "#a6c26a", "🐍",
-    { fig: "wight", name: "The Marsh Hag" },
-    { rat: "Bog Leech", goblin: "Mire Stalker", kobold: "Fen Witch", skeleton: "Sunken Dead", wight: "Hydra Spawn" },
-    "A poisoned marsh where the fog itself is hungry.",
-    { palette: [["#5a6248","#3e4632","#262c20"],["#566048","#3a4430","#242a1e"]], tiles: ["moss","mushroom","puddle","bones","ash"] }),
+  dungeon(6, "shadowfen", "The Blighted Grove", "Cursed Forest", "#9fc06a", "🌳",
+    { fig: "wight", name: "Mordwood, the Blight Treant" },
+    { rat: "Rot Sprite", goblin: "Feral Goblin", kobold: "Spore Shaman", skeleton: "Withered Husk", wight: "Grovekeeper" },
+    "A forest curdled to rot, where the trees have grown teeth.",
+    { palette: [["#5e6a44","#404a30","#28301e"],["#626e46","#444e32","#2a3220"]], tiles: ["moss","mushroom","bones","crack","ash"] }),
 
-  dungeon(7, "skyreach", "Skyreach Spire", "#8fb7ff", "🌩",
-    { fig: "dragon", name: "The Storm Roc" },
-    { rat: "Gale Wisp", goblin: "Cloud Reaver", kobold: "Storm Adept", skeleton: "Windworn Husk", wight: "Thunder Warden" },
-    "A tower that pierces the storm — and answers to it.",
-    { palette: [["#8890a0","#646c7e","#424a5a"],["#909aac","#6c7688","#4a5464"]], tiles: ["rune","frost","crack","rubble","grate"] }),
+  dungeon(7, "skyreach", "The Obsidian Wastes", "Scorched Earth", "#ff8a4c", "🌋",
+    { fig: "dragon", name: "Volgaroth, the Ember Wyrm" },
+    { rat: "Cinder Imp", goblin: "Slag Goblin", kobold: "Ember Caster", skeleton: "Charred Dead", wight: "Molten Brute" },
+    "Blackglass plains under a rain of ash, where the ground still burns.",
+    { palette: [["#7a5c52","#4e3a34","#2e2220"],["#7e5648","#523a34","#301f1c"]], tiles: ["ember","ash","crack","rubble","bones"] }),
 
-  dungeon(8, "wastes", "The Bleeding Wastes", "#e0575f", "😈",
-    { fig: "wight", name: "Xar'goth, Pit Fiend" },
-    { rat: "Ashhound Pup", goblin: "Blood Imp", kobold: "Hellcaster", skeleton: "Charred Damned", wight: "Fel Brute" },
-    "Where the world's wounds never scab, and demons drink.",
-    { palette: [["#7a5248","#523632","#31211e"],["#7e4e44","#54322e","#33201c"]], tiles: ["ember","ash","bones","crack","rubble"] }),
+  dungeon(8, "wastes", "The Forgotten Citadel", "Guardians Awake", "#d0a86a", "🏰",
+    { fig: "wight", name: "Kaldmar, the Iron Sentinel" },
+    { rat: "Rubble Rat", goblin: "Ruin Skulker", kobold: "Watch Archer", skeleton: "Fallen Knight", wight: "Stone Guardian" },
+    "A fortress the world forgot — but its stone wardens never slept.",
+    { palette: [["#807868","#585244","#38342a"],["#847c6a","#5c5446","#3a362c"]], tiles: ["rubble","rune","grate","bones","crack"] }),
 
-  dungeon(9, "rimeheart", "Rimeheart Throne", "#bfe3ff", "❄",
-    { fig: "wight", name: "The Frost Titan" },
-    { rat: "Frost Mite", goblin: "Rime Marauder", kobold: "Glacier Seer", skeleton: "Frozen Revenant", wight: "Jarl of Ice" },
-    "The seat of a giant king, throned in eternal winter.",
-    { palette: [["#a8b8c8","#7888a0","#4e5e74"],["#aec0d0","#8090a6","#54647a"]], tiles: ["frost","puddle","bones","rune","crack"] }),
+  dungeon(9, "rimeheart", "The Void Chasm", "Ethereal Peril", "#8fd0ff", "🌀",
+    { fig: "wight", name: "Zhaal, the Rift Devourer" },
+    { rat: "Void Mite", goblin: "Rift Stalker", kobold: "Astral Seer", skeleton: "Hollow Wraith", wight: "Chasm Horror" },
+    "A wound in the world where the stars leak through and nothing holds.",
+    { palette: [["#6a6f92","#484c6c","#2c2e46"],["#6e7396","#4c5070","#2e3048"]], tiles: ["crystal","rune","frost","crack","puddle"] }),
 
-  dungeon(10, "apex", "Draconis Apex", "#d69bff", "🐉",
-    { fig: "dragon", name: "Vurmalax, Elder Wyrm" },
-    { rat: "Void Spawn", goblin: "Dragonkin Zealot", kobold: "Wyrm Cultist", skeleton: "Ancient Guardian", wight: "Dread Drake" },
-    "The summit of the descent, where an elder wyrm still dreams.",
-    { palette: [["#6a5a7a","#483c58","#2c243a"],["#6e5e7e","#4c405c","#2e263c"]], tiles: ["crystal","rune","ember","bones","ash"] }),
+  dungeon(10, "apex", "The Nether Citadel", "Lord's Lair", "#c78aff", "👑",
+    { fig: "dragon", name: "Vurmalax, the Dread Lord" },
+    { rat: "Nether Spawn", goblin: "Doom Zealot", kobold: "Void Cultist", skeleton: "Damned Knight", wight: "Dread Reaver" },
+    "The black spire at the end of all trails, where the Lord of Dreadmere waits.",
+    { palette: [["#63587a","#443c58","#2a243a"],["#67597e","#48405c","#2c263c"]], tiles: ["crystal","rune","ember","bones","ash"] }),
 ];
 
 /* ---- ladder helpers ---- */

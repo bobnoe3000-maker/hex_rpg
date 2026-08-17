@@ -381,7 +381,7 @@ ok("different seed diverges", seq(123) !== seq(777));
   ok("scaled enemy starts at full hp", hi.hp===hi.maxhp);
   ok("legacy makeEnemy(kind,r,c) still works at level 1", (()=>{ const e=makeEnemy("rat",2,3); return e.level===1 && e.r===2 && e.c===3; })());
   ok("scaleEnemy is monotonic in level", (()=>{ let prev=0; for(let L=1;L<=100;L+=9){ const e=makeEnemy("wight",{level:L}); if(e.atk<prev) return false; prev=e.atk; } return true; })());
-  ok("boss token spawns a big named foe", (()=>{ const b=makeEnemy(DUNGEONS[9].boss.fig,{level:100,name:DUNGEONS[9].boss.name,boss:true}); return b.boss && b.name==="Vurmalax, Elder Wyrm" && b.level===100; })());
+  ok("boss token spawns a big named foe", (()=>{ const b=makeEnemy(DUNGEONS[9].boss.fig,{level:100,name:DUNGEONS[9].boss.name,boss:true}); return b.boss && b.name===DUNGEONS[9].boss.name && b.name.length>0 && b.level===100; })());
 
   // loot power scales stat values and lifts the grade floor
   const seed = () => mb(999);
