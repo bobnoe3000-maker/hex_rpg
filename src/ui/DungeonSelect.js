@@ -13,7 +13,7 @@ const FLOOR_LABEL = { plain: "Plain+", fine: "Fine+", rare: "Rare+", epic: "Epic
 /* node centres as % of the artwork, calibrated to the printed locations on world.png (tier 1 → 10) */
 const POS = [
   [27, 88], [49, 83], [64, 80], [23, 65], [62, 58],
-  [67, 49], [17, 43], [64, 31], [21, 24], [21, 13],
+  [64, 43], [17, 38], [64, 31], [21, 24], [21, 13],
 ];
 const AR = 768 / 1376;          // world.png aspect
 let dmObs = null;               // disconnect the previous fit-observer on each re-render
