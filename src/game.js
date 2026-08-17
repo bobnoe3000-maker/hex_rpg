@@ -27,7 +27,6 @@ import { startOnboarding } from './ui/Onboarding.js';
 import { makeCompanion, makeEnemy } from './models/units.js';
 import { openDungeonSelect } from './ui/DungeonSelect.js';
 import { openCompanionRoll } from './ui/CompanionLevelUp.js';
-import { openApothecary } from './ui/Apothecary.js';
 import { POTION_BY_ID, POTION_CAP, potionEffect, potionCost, potionSell, rollLootPotion } from './data/potions.js';
 import { potionTileChip, ensurePotChipCss } from './ui/potionChip.js';
 import { readSlot, writeSlot, SAVE_VERSION } from './state/save.js';
@@ -843,7 +842,7 @@ function openTownScreen(){
   townRefresh=openTownScreen;
   openTown({ silver:()=>state.silver, gems:()=>state.gems, party, portrait:h=>heroPortrait(h),
     openHero, openShop:openShopScreen, openTavern:openTavernScreen, openTemple:openTempleScreen,
-    openForge:openForgeScreen, openApothecary:openApothecaryScreen, openDiag:openDiagScreen, openDungeons:openDungeonBoard,
+    openForge:openForgeScreen, openDiag:openDiagScreen, openDungeons:openDungeonBoard,
     tileFlag:heroTileFlag, activeDungeon:()=>activeDungeon() });
 }
 /* start a fresh delve of a chosen dungeon (resets to its first room) */
@@ -909,11 +908,6 @@ function buyPotion(type,size){
 function sellPotion(type,size){
   if(!takePotion(type,size,1)) return false;
   state.silver+=potionSell(type,size); updateHud(); saveGame(); return true;
-}
-function openApothecaryScreen(){
-  townRefresh=openApothecaryScreen;
-  openApothecary({ silver:()=>state.silver, potions:()=>state.potions,
-    cost:potionCost, sell:potionSell, buy:buyPotion, sellOne:sellPotion, back:openTownScreen });
 }
 /* ---------- tavern: hire companions (scale to the main hero's level) ---------- */
 const mainLevel=()=>party[0]?party[0].level:1;
@@ -992,6 +986,7 @@ function openShopScreen(){
     stock:()=>state.shopStock, inventory:()=>state.inventory,
     priceOf, sellPriceOf, gemPrice:BAL.SHOP.GEM_PRICE, rerollCost:BAL.SHOP.REROLL_COST,
     buy:buyItem, sell:sellItem, buyGem, reroll:()=>rerollStock(false),
+    potions:()=>state.potions, buyPotion, sellPotion,   // potions tab (folded in from the Apothecary)
     back:openTownScreen });
 }
 function nextArea(){

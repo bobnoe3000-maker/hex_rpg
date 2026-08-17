@@ -6,7 +6,7 @@
 
 import { derive } from "../systems/StatEngine.js";
 import { iconImg } from "../engine/icons.js";
-import { potionTileChip, ensurePotChipCss, flaskSvg } from "./potionChip.js";
+import { potionTileChip, ensurePotChipCss } from "./potionChip.js";
 
 let cssDone = false;
 export function ensureTownCss() {
@@ -104,7 +104,6 @@ export function openTown(ctx) {
       <button class="tw-btn" data-temple><span class="ic">${iconImg("temple",20)}</span><span>Temple<small>Restore fallen companions (fee scales with level)</small></span></button>
       <button class="tw-btn" data-shop><span class="ic">${iconImg("pouch",20)}</span><span>Shop<small>Buy &amp; sell gear · trade silver for runic gems</small></span></button>
       <button class="tw-btn" data-forge><span class="ic">${iconImg("anvil",20)}</span><span>Forge<small>Spend runic gems to upgrade gear (+1, +2 …)</small></span></button>
-      <button class="tw-btn" data-apothecary><span class="ic">${flaskSvg("#e5484d",20)}</span><span>Apothecary<small>Buy &amp; sell potions for your heroes' belts</small></span></button>
       <button class="tw-btn" disabled><span class="ic">${iconImg("vault",20)}</span><span>Bank<small>Coming soon — a death-safe vault</small></span></button>
     </div>
     <div class="tw-sec">Party — tap to manage gear</div>
@@ -122,7 +121,6 @@ export function openTown(ctx) {
   el.querySelector("[data-temple]").onclick = () => ctx.openTemple();
   el.querySelector("[data-shop]").onclick = () => ctx.openShop();
   const fg = el.querySelector("[data-forge]"); if (fg && ctx.openForge) fg.onclick = () => ctx.openForge();
-  const ap = el.querySelector("[data-apothecary]"); if (ap && ctx.openApothecary) ap.onclick = () => ctx.openApothecary();
   el.querySelector("[data-enter]").onclick = () => (ctx.openDungeons ? ctx.openDungeons() : ctx.enterDungeon());
   const dg = el.querySelector("[data-diag]"); if (dg && ctx.openDiag) dg.onclick = () => ctx.openDiag();
 }

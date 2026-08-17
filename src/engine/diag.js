@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-17 · stat points are add-only (can't refund committed stats)";
+export const APP_BUILD = "2026-08-17 · potions folded into a Shop tab (Apothecary removed)";
 
 const BUF = [];
 const MAX = 400;

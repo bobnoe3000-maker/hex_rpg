@@ -289,7 +289,7 @@ export function openCharacter(hero, ctx) {
       return `<div class="cp-sec"><span>Potion Belt</span><span class="hint">auto-quaffed in battle on a cooldown</span></div>
         ${slot}
         <div class="cp-sec"><span>Potions${stash.length ? "" : " — none"}</span></div>
-        ${stash.length ? stash.map(stackRow).join("") : `<div class="cp-none">Buy at the Apothecary, or find them as loot.</div>`}`;
+        ${stash.length ? stash.map(stackRow).join("") : `<div class="cp-none">Buy at the Shop's Potions tab, or find them as loot.</div>`}`;
     };
     const equipBlock = `
       <div class="cp-sec"><span>Equipped</span><span class="hint">tap a slot to filter the bag</span></div>
