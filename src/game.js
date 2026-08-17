@@ -50,18 +50,18 @@ installDiag(); // start capturing console errors / uncaught exceptions immediate
 "use strict";
 const cvG=document.getElementById("cv"), G=cvG.getContext("2d");
 const logEl=document.getElementById("log"), partyEl=document.getElementById("party"),
-      overlay=document.getElementById("overlay"), btnStart=document.getElementById("btnStart"),
-      dheadEl=document.getElementById("dhead"), dnavEl=document.getElementById("dnav"),
+      overlay=document.getElementById("overlay"),
+      dheadEl=document.getElementById("dhead"),
       dtoastEl=document.getElementById("dtoast"), townEl=document.getElementById("town"),
-      logWrap=document.getElementById("logwrap"), logBar=document.getElementById("logbar"),
-      logToggle=document.getElementById("logToggle");
-/* combat log: cycle min → mid → max → min */
-const LOG_STATES=["min","mid","max"], LOG_LABEL={min:"▤ expand",mid:"▤ full · ▁ min",max:"▁ minimize"};
-function setLogState(st){ logWrap.dataset.s=st; logToggle.textContent=LOG_LABEL[st];
+      dlogfab=document.getElementById("dlogfab"), dlogov=document.getElementById("dlogov"),
+      dmenuEl=document.getElementById("dmenu");
+/* combat log now lives in a pop-up opened from a floating button; new lines flag the button while closed */
+let logUnread=0;
+function openDLog(){ closeDMenu(); dlogov.classList.add("show"); logUnread=0; dlogfab.classList.remove("alert");
   logEl.scrollTop=logEl.scrollHeight; }
-logBar.onclick=()=>{ const i=LOG_STATES.indexOf(logWrap.dataset.s||"mid");
-  setLogState(LOG_STATES[(i+1)%LOG_STATES.length]); };
-setLogState("mid");
+function closeDLog(){ dlogov.classList.remove("show"); }
+dlogfab.onclick=openDLog;
+dlogov.querySelectorAll("[data-dclose]").forEach(x=>x.onclick=closeDLog);
 /* phase: idle → fight ⇄ paused. inventory holds dropped loot; respawn/revive are timers. */
 const state={ roomIdx:0, scene:"town", phase:"idle", room:null, foes:[], t:0, speed:1,
   inventory:[], potions:[], gems:0, silver:0, shopStock:[], recruits:[], bench:[], respawnAt:null, wipeAt:null,
@@ -115,11 +115,9 @@ function loadGame(save){
 }
 const partyClasses=()=>party.length?[...new Set(party.map(h=>h.cls))]:["fighter","mage","cleric","rogue"];
 let combatRng=Math.random;  // reseeded deterministically when a fight starts / area changes
-/* tiny currency readout in the log header */
-const hudEl=document.createElement("span");
-hudEl.style.cssText="font-size:10px;color:#d8c47a;letter-spacing:1px;margin:0 6px 0 auto";
-logBar.insertBefore(hudEl, logToggle);
-function updateHud(){ hudEl.innerHTML=`${iconImg("coin",13)} ${state.silver}&nbsp;&nbsp;${iconImg("gem",13)} ${state.gems}`; }
+/* currency readout lives in the slim dungeon header (rebuilt on each header render) */
+function updateHud(){ const c=dheadEl.querySelector(".dh-cur");
+  if(c) c.innerHTML=`${iconImg("coin",12)} ${state.silver}&nbsp;&nbsp;${iconImg("gem",12)} ${state.gems}`; }
 const FIGCACHE={}, PORTCACHE={}, TILECACHE={}, HEROPORT={};
 /* per-hero portrait bust, cached by the hero's portrait seed (rolled at creation) */
 function heroPortrait(h){
@@ -202,7 +200,10 @@ function tileOf(u){
 }
 function log(msg,cls){ const p=document.createElement("div"); if(cls)p.className=cls; p.innerHTML=msg;
   logEl.appendChild(p); while(logEl.children.length>40)logEl.removeChild(logEl.firstChild);
-  logEl.scrollTop=logEl.scrollHeight; }
+  logEl.scrollTop=logEl.scrollHeight;
+  // while the log pop-up is closed, flag the floating button with an unread count
+  if(!dlogov.classList.contains("show")){ logUnread=Math.min(99,logUnread+1);
+    const b=dlogfab.querySelector(".badge"); if(b) b.textContent=logUnread; dlogfab.classList.add("alert"); } }
 /* display order for the party HUD: the MAIN hero sits in the middle, companions flank it
    (mirrors the combat formation) */
 function hudOrder(){
@@ -780,16 +781,6 @@ function onBossDown(){
   updateHud(); saveGame();
 }
 /* ---------- controls & menus ---------- */
-function syncButtons(){
-  // the nav bar's center CTA: Pause while fighting, Resume/Fight otherwise
-  const fighting = state.phase==="fight";
-  const label = fighting ? "Pause" : state.phase==="paused" ? "Resume" : "Fight";
-  const span=btnStart.querySelector("span"); if(span) span.textContent=label;
-  const svg=btnStart.querySelector("svg");
-  if(svg) svg.innerHTML = fighting ? '<path d="M9 5v14M15 5v14"/>' : '<path d="M8 5v14l11-7z"/>';
-  btnStart.classList.toggle("resume", !fighting);
-  btnStart.disabled=false;
-}
 function removeItem(item){
   const i=state.inventory.indexOf(item); if(i>=0){ state.inventory.splice(i,1); return; }
   for(const h of party) for(const s in h.gear) if(h.gear[s]===item){ h.gear[s]=null; return; }
@@ -897,7 +888,8 @@ function enterTown(fromWipe=false){
   // dead until raised at the Temple; they simply won't be placed until then).
   if(fromWipe){ state.phase="idle"; loadRoom(); }
   renderParty();
-  dheadEl.classList.remove("show");   // hide the dungeon header while at the Keep
+  dheadEl.classList.remove("show");   // hide the dungeon header + delve controls while at the Keep
+  dlogfab.classList.remove("show"); closeDLog(); closeDMenu();
   openTownScreen();
   saveGame();          // persist the run whenever you're back at the Keep (loot, revives, etc.)
   diag("scene", `keep${fromWipe?" · wipe":""} · party ${party.filter(h=>h.alive).length}/${party.length}`);
@@ -907,7 +899,7 @@ function enterDungeon(){
   state.roomMax=Math.max(state.roomMax||0, state.roomIdx||0);
   if(state.phase==="idle") seedBattle();
   placeHeroes();              // form up the living party (incl. any pals hired/resurrected since)
-  state.phase="fight"; syncButtons(); renderDungeonHeader();
+  state.phase="fight"; renderDungeonHeader();   // the delve auto-runs — there is no manual start/pause
   diag("scene", `descend · room ${state.roomIdx} · party ${party.filter(h=>h.alive).length}`);
 }
 function openTownScreen(){
@@ -1091,12 +1083,12 @@ function goToRoom(idx){
   const wasFighting=state.phase!=="idle";
   loadRoom(); seedBattle();
   state.phase = wasFighting ? "fight" : "idle";
-  renderParty(); syncButtons(); renderDungeonHeader(); saveGame();
+  renderParty(); renderDungeonHeader(); saveGame();
 }
-/* the dungeon header: dungeon/room title · tappable room minimap · boss timer + speed */
+/* the slim dungeon header: [☰ menu] title · currency  /  tappable minimap · speed · boss timer */
 function renderDungeonHeader(){
-  if(state.scene!=="dungeon" || !state.room){ dheadEl.classList.remove("show"); return; }
-  dheadEl.classList.add("show");
+  if(state.scene!=="dungeon" || !state.room){ dheadEl.classList.remove("show"); dlogfab.classList.remove("show"); return; }
+  dheadEl.classList.add("show"); dlogfab.classList.add("show");
   const d=activeDungeon(), idx=state.roomIdx, max=state.roomMax||0, reach=Math.min(BOSS_ROOM,max+1);
   const roomName = idx===BOSS_ROOM ? d.boss.name : LAYOUTS[idx].roomName;
   let nodes="";
@@ -1112,10 +1104,16 @@ function renderDungeonHeader(){
     const txt=onCd?`BOSS ${Math.floor(rem/60)}:${String(Math.floor(rem%60)).padStart(2,"0")}`:"BOSS ✦ READY";
     bossPill=`<span class="dh-boss ${onCd?"":"ready"}" data-boss>${txt}</span>`;
   }
-  dheadEl.innerHTML=`<div class="dh-top"><div class="tt"><b>${d.name}</b> <span>· ${roomName}</span></div>${bossPill}<span class="dh-spd" data-spd>${state.speed}×</span></div>
-    <div class="dh-mini">${nodes}</div>`;
+  const menuIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>`;
+  dheadEl.innerHTML=`<div class="dh-r1">
+      <button class="dh-menu" data-menu aria-label="Menu">${menuIcon}</button>
+      <div class="dh-title"><b>${d.name}</b> <span>· ${roomName}</span></div>
+      <span class="dh-cur"></span></div>
+    <div class="dh-r2"><div class="dh-mini">${nodes}</div><span class="dh-spd" data-spd>${state.speed}×</span>${bossPill}</div>`;
+  dheadEl.querySelector("[data-menu]").onclick=openDMenu;
   dheadEl.querySelectorAll("[data-room]").forEach(b=>b.onclick=()=>goToRoom(+b.getAttribute("data-room")));
   dheadEl.querySelector("[data-spd]").onclick=()=>{ state.speed=state.speed===1?2:1; renderDungeonHeader(); };
+  updateHud();
 }
 /* live boss-timer text (cheap; only touches the DOM when the displayed value changes) */
 function tickDungeonHeader(){
@@ -1127,22 +1125,42 @@ function tickDungeonHeader(){
 }
 function dtoast(msg){ dtoastEl.textContent=msg; dtoastEl.classList.add("on");
   clearTimeout(dtoast._h); dtoast._h=setTimeout(()=>dtoastEl.classList.remove("on"),1800); }
-/* nav bar center CTA = Pause/Resume */
-btnStart.onclick=()=>{
-  if(state.phase==="idle"){ seedBattle(); state.phase="fight"; }
-  else if(state.phase==="fight"){ state.phase="paused"; }
-  else if(state.phase==="paused"){ state.phase="fight"; }
-  syncButtons();
+/* the game-menu bottom sheet (replaces the old nav bar): Keep · World · Arena · Speed · Diagnostics.
+   The delve auto-runs, so there is no Pause/Start — leaving to the Keep is how you stop. */
+const MENU_ICONS={
+  keep:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-9l2.5-1.6M20 21v-9l-2.5-1.6M6.5 10.4V4.6l2 1.1 1.7-1.1 1.8 1.1 1.7-1.1 2 1.1v5.8M4 12h16M9.5 21v-4.2h5V21"/></svg>`,
+  world:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.4"/><path d="M3.6 12h16.8M12 3.6c2.4 2.3 3.7 5.3 3.7 8.4S14.4 18.1 12 20.4C9.6 18.1 8.3 15.1 8.3 12S9.6 5.9 12 3.6Z"/></svg>`,
+  arena:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4l9.5 9.5M4 8.5L8.5 4M15.5 15.5L20 20M15 19l4-4M19 4l-9.5 9.5M20 8.5L15.5 4M8.5 15.5L4 20M9 19l-4-4"/></svg>`,
+  speed:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 18a7 7 0 1 1 14 0"/><path d="M12 13l3.6-3.6"/></svg>`,
+  diag:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v2.5M12 18.5V21M4.2 7.5l2.2 1.3M17.6 15.2l2.2 1.3M19.8 7.5l-2.2 1.3M6.4 15.2l-2.2 1.3"/></svg>`,
 };
-/* nav bar tabs: leave the delve for the Keep / World map / Menu, or the Arena stub */
-function navTo(dest){
-  if(state.scene!=="dungeon") return;
-  if(dest==="keep") return enterTown();
-  if(dest==="world"){ enterTown(); openDungeonBoard(); return; }
-  if(dest==="arena") return dtoast("The Arena opens soon — PvP challenges are in the forge");
-  if(dest==="menu"){ enterTown(); openDiagScreen(); return; }
+function openDMenu(){
+  closeDLog();
+  dmenuEl.innerHTML=`<div class="dscrim" data-dclose></div>
+    <div class="dsheet"><div class="dsh"><span class="t">Menu</span>
+      <span class="cur">${iconImg("coin",12)} ${state.silver}&nbsp;&nbsp;${iconImg("gem",12)} ${state.gems}</span>
+      <span class="x" data-dclose>✕</span></div>
+    <div class="dmgrid">
+      <div class="dmrow" data-mact="keep">${MENU_ICONS.keep}<span>Keep</span></div>
+      <div class="dmrow" data-mact="world">${MENU_ICONS.world}<span>World map</span></div>
+      <div class="dmrow" data-mact="arena">${MENU_ICONS.arena}<span>Arena</span></div>
+      <div class="dmrow" data-mact="speed">${MENU_ICONS.speed}<span>Speed ${state.speed}×</span></div>
+      <div class="dmrow wide" data-mact="diag">${MENU_ICONS.diag}<span>Diagnostics &amp; log export</span></div>
+    </div></div>`;
+  dmenuEl.querySelectorAll("[data-dclose]").forEach(x=>x.onclick=closeDMenu);
+  dmenuEl.querySelectorAll("[data-mact]").forEach(b=>b.onclick=()=>menuAct(b.getAttribute("data-mact")));
+  dmenuEl.classList.add("show");
 }
-dnavEl.querySelectorAll(".dn-tab").forEach(b=>b.onclick=()=>navTo(b.getAttribute("data-nav")));
+function closeDMenu(){ dmenuEl.classList.remove("show"); }
+function menuAct(a){
+  if(a==="speed"){ state.speed=state.speed===1?2:1; renderDungeonHeader(); openDMenu(); return; }   // stay open; reflect new speed
+  closeDMenu();
+  if(state.scene!=="dungeon") return;
+  if(a==="keep") return enterTown();
+  if(a==="world"){ enterTown(); openDungeonBoard(); return; }
+  if(a==="arena") return dtoast("The Arena opens soon — PvP challenges are in the forge");
+  if(a==="diag"){ enterTown(); openDiagScreen(); return; }
+}
 { let fav=document.querySelector("link[rel='icon']");
   if(!fav){ fav=document.createElement("link"); fav.rel="icon"; document.head.appendChild(fav); }
   fav.href=iconCanvas("sword",64).toDataURL(); }
@@ -1300,7 +1318,7 @@ function buildDiagnostics(){
 }
 /* boot: splash → login → pick a save slot → (new) create a hero, or (continue) load the slot */
 function beginRun(){
-  loadRoom(); renderParty(); syncButtons(); updateHud();
+  loadRoom(); renderParty(); updateHud();
   saveGame();           // persist the freshly created/loaded state
   enterTown();          // open the hub, not straight into a fight
   requestAnimationFrame(loop);

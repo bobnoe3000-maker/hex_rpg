@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-17 · Five-star skills + tappable companion kit skills; companion kit scaling eased (5 stars only at the level cap)";
+export const APP_BUILD = "2026-08-17 · Dungeon view V1: slim header (menu · title · currency / minimap · speed · boss), floating combat-log button, nav folded into ☰ menu, Pause removed (delve auto-runs)";
 
 const BUF = [];
 const MAX = 400;
