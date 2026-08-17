@@ -1,65 +1,87 @@
-/* ============ UI :: DungeonSelect.js — the Dungeons board (tiered descent) ============ */
-/* Renders the ladder of dungeons into #town over the Keep. A "Continue" banner resumes the active
-   delve; each rung shows its level band, boss, and loot floor. Unlocked rungs start a delve; locked
-   rungs show what boss to beat first. Pure UI — all state/logic comes through ctx. */
+/* ============ UI :: DungeonSelect.js — the world map (tiered descent) ============ */
+/* The Depart button opens this: the illustrated Dreadmere Trails map (assets/world.png) with a
+   tappable node per dungeon. A node's ring shows its state (cleared ✓ / open / locked); tapping one
+   raises a detail sheet — level band, boss, drops — and a Descend/Resume button, or the unlock
+   requirement when it's locked. Pure UI: all state/logic comes through ctx. */
 "use strict";
 
 import { ensureTownCss } from "./TownScreen.js";
 import { isUnlocked, prevDungeon, ROOM_COUNT } from "../data/dungeons.js";
 import { iconImg } from "../engine/icons.js";
 
-const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
-const FLOOR_LABEL = { plain: "Plain+", fine: "Fine+", rare: "Rare+", epic: "Epic" };
-const FLOOR_CLASS = { plain: "", fine: "", rare: "rare", epic: "epic" };
+const FLOOR_LABEL = { plain: "Plain+", fine: "Fine+", rare: "Rare+", epic: "Epic+" };
+/* node centres as % of the artwork, calibrated to the printed locations on world.png (tier 1 → 10) */
+const POS = [
+  [27, 88], [49, 83], [64, 80], [23, 65], [62, 58],
+  [67, 49], [17, 43], [64, 31], [21, 24], [21, 13],
+];
+const AR = 768 / 1376;          // world.png aspect
+let dmObs = null;               // disconnect the previous fit-observer on each re-render
 
 let dsCssDone = false;
 function ensureDungeonCss() {
   if (dsCssDone) return; dsCssDone = true;
   const s = document.createElement("style"); s.id = "dungeon-style";
   s.textContent = `
-  .ds-cont{display:flex;align-items:center;gap:11px;border-radius:12px;padding:11px 13px;cursor:pointer;
-    background:linear-gradient(100deg,#2a2140,#221a36);border:1px solid #4a3d68;margin-bottom:4px}
-  .ds-cont:active{transform:translateY(1px)}
-  .ds-cont .cbtn{width:36px;height:36px;border-radius:9px;flex:0 0 auto;display:grid;place-items:center;
-    background:radial-gradient(circle at 35% 30%,#3a5aa0,#16243f);border:1px solid #3f5c94}
-  .ds-cont .ct{flex:1;min-width:0} .ds-cont .ct b{font-size:12.5px;color:var(--parchment)}
-  .ds-cont .ct small{display:block;color:#9a8fb8;font-size:10.5px;margin-top:2px}
-  .ds-cont .go{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#9ad1ff;white-space:nowrap}
-
-  .ds-card{position:relative;display:flex;gap:11px;align-items:center;padding:11px 12px;border-radius:12px;
-    border:1px solid var(--line);background:linear-gradient(#231a37,#1b1430);overflow:hidden;cursor:pointer}
-  .ds-card:active{transform:translateY(1px)}
-  .ds-card .rail{position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--acc,#6a5a8c)}
-  .ds-badge{width:44px;height:44px;flex:0 0 auto;border-radius:10px;display:grid;place-items:center;
-    font-family:Georgia,serif;font-weight:bold;font-size:15px;color:#f0e6d2;border:1px solid var(--line2,#4a3d68);
-    background:radial-gradient(circle at 35% 25%,color-mix(in srgb,var(--acc) 60%,transparent),transparent 62%),#191125;
-    text-shadow:0 1px 2px #000}
-  .ds-body{flex:1;min-width:0}
-  .ds-name{font-size:14.5px;color:var(--parchment);line-height:1.15}
-  .ds-sub{font-size:10.5px;color:#9a8fb8;font-style:italic;margin-top:1px}
-  .ds-meta{display:flex;gap:8px;align-items:center;margin-top:3px;flex-wrap:wrap}
-  .ds-band{font-size:11px;color:var(--acc,#c9bce6);filter:brightness(1.4);letter-spacing:.03em;font-variant-numeric:tabular-nums}
-  .ds-boss{font-size:10.5px;color:#9a8fb8} .ds-boss b{color:#d7c6a2}
-  .ds-pills{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
-  .ds-pill{font-size:9px;letter-spacing:.06em;text-transform:uppercase;padding:2.5px 7px;border-radius:999px;
-    border:1px solid var(--line2,#4a3d68);color:#9a8fb8;background:#00000030}
-  .ds-pill.drop{color:#d8c47a;border-color:#5a4a2a}
-  .ds-pill.drop.rare{color:#8fb7ff;border-color:#38466e}
-  .ds-pill.drop.epic{color:#d69bff;border-color:#5a3a72}
-  .ds-pill.rec{color:#9ad1ff;border-color:#33506e}
-  .ds-num{position:absolute;right:10px;top:8px;font-size:9px;color:#6d6390;letter-spacing:.1em}
-  .ds-flag{position:absolute;right:9px;bottom:9px;font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;
-    font-weight:bold;padding:3px 8px;border-radius:7px}
-  .ds-flag.cleared{color:#8fd39a;background:#173021;border:1px solid #2f5a3e}
-  .ds-flag.active{color:#0f0a1c;background:linear-gradient(#ffd98a,#e0a94e);border:1px solid #f0c877}
-  .ds-flag.new{color:#e0b063;background:#2a2036;border:1px solid #5a4630}
-  .ds-flag.locked{color:#6d6390;background:#1a1428;border:1px solid #322a46}
-  .ds-card.cleared{opacity:.74} .ds-card.cleared .ds-badge{filter:grayscale(.35)}
-  .ds-card.active{border-color:#e0a94e;box-shadow:0 0 0 1px #e0a94e55}
-  .ds-card.locked{opacity:.6;cursor:default} .ds-card.locked:active{transform:none}
-  .ds-card.locked .ds-name{color:#9a8fb8} .ds-card.locked .ds-badge{filter:grayscale(.85) brightness(.7)}
-  .ds-lock{font-size:10px;color:#c98a8a;margin-top:5px}
-  .ds-list{display:flex;flex-direction:column;gap:9px}
+  .dsmap{position:fixed;inset:0;z-index:1;overflow:hidden;background:#0b0912;display:flex;flex-direction:column;
+    font-family:Georgia,"Times New Roman",serif;color:var(--parchment);
+    -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+  .dm-artwrap{flex:1 1 auto;min-height:0;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  .dm-art{position:relative;background:#0b0912 url('assets/world.png') center/cover no-repeat}
+  .dm-vig{position:absolute;inset:0;pointer-events:none;background:linear-gradient(#0b091255 0%,transparent 10%,transparent 60%,#0b0912dd 100%)}
+  /* top chrome */
+  .dm-top{position:absolute;left:0;right:0;top:0;z-index:8;display:flex;align-items:center;justify-content:space-between;
+    padding:calc(env(safe-area-inset-top) + 9px) 11px 0}
+  .dm-back{font-size:13px;color:#9ad1ff;cursor:pointer;background:#120d1ccc;border:1px solid var(--line);border-radius:9px;padding:6px 11px}
+  .dm-back:active{transform:translateY(1px)}
+  .dm-cur{font-size:12px;color:#f0d38a;font-variant-numeric:tabular-nums;background:#120d1ccc;border:1px solid var(--line);border-radius:9px;padding:5px 10px;display:flex;gap:9px}
+  .dm-cur .g{color:#9ad1ff}
+  /* nodes */
+  .dm-node{position:absolute;transform:translate(-50%,-50%);width:30px;height:30px;border-radius:50%;cursor:pointer;z-index:6;
+    border:2px solid var(--nc,#f0c877);background:radial-gradient(circle at 40% 35%,#241b38,#0d0a16);
+    display:grid;place-items:center;font-family:inherit;font-weight:bold;font-size:12px;color:var(--nc,#f0c877);
+    box-shadow:0 3px 9px #000a,0 0 0 3px #0b091288}
+  .dm-node:active{transform:translate(-50%,-50%) scale(.9)}
+  .dm-node.cleared{--nc:#8fd39a}
+  .dm-node.cleared::after{content:"✓";position:absolute;font-size:14px;color:#8fd39a}
+  .dm-node.cleared .num{display:none}
+  .dm-node.locked{--nc:#6d6390;border-color:#4a4360;color:#6d6390;filter:saturate(.6)}
+  .dm-node.current .ring{position:absolute;inset:-6px;border-radius:50%;border:2px solid var(--nc,#f0c877);animation:dmpulse 2s ease-out infinite}
+  @keyframes dmpulse{0%{transform:scale(.85);opacity:.8}100%{transform:scale(1.5);opacity:0}}
+  .dm-node.sel{box-shadow:0 0 0 3px var(--nc),0 4px 12px #000b}
+  /* hint pill */
+  .dm-hint{position:absolute;left:50%;bottom:calc(env(safe-area-inset-bottom) + 14px);transform:translateX(-50%);z-index:7;
+    font-size:11px;letter-spacing:.02em;color:#b9add6;background:#120d1ce8;border:1px solid var(--line);border-radius:999px;
+    padding:7px 14px;white-space:nowrap;box-shadow:0 4px 14px #000a;transition:opacity .2s}
+  .dm-hint b{color:#f0c877}
+  /* detail sheet */
+  .dm-sheet{position:absolute;left:0;right:0;bottom:0;z-index:9;background:linear-gradient(#181026f2,#0f0a1af8);
+    border-top:1px solid #4a3d68;box-shadow:0 -10px 26px -12px #000;padding:8px 14px calc(14px + env(safe-area-inset-bottom));
+    transform:translateY(115%);transition:transform .26s cubic-bezier(.2,.8,.2,1)}
+  .dm-sheet.open{transform:translateY(0)}
+  .dm-grab{display:flex;align-items:center;justify-content:center;position:relative;height:14px;margin-bottom:2px}
+  .dm-grab i{width:34px;height:4px;border-radius:2px;background:#4a3d68}
+  .dm-grab .x{position:absolute;right:0;top:-2px;font-size:16px;color:#6d6390;cursor:pointer;padding:2px 6px;line-height:1}
+  .dm-hd{display:flex;align-items:center;gap:10px}
+  .dm-crest{width:40px;height:40px;flex:0 0 auto;border-radius:9px;border:1px solid var(--sc,#6e5a2a);display:grid;place-items:center;font-size:20px;
+    background:radial-gradient(circle at 40% 30%,color-mix(in srgb,var(--sc,#e0b063) 40%,#1a1228),#120d1c)}
+  .dm-tt{flex:1;min-width:0}
+  .dm-tt b{font-size:16px;color:#f0c877}
+  .dm-tt .sub{font-size:11px;color:#b9add6;font-style:italic}
+  .dm-flag{font-family:ui-monospace,monospace;font-size:8.5px;letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;border-radius:999px;white-space:nowrap}
+  .dm-flag.cleared{color:#8fd39a;background:#173021;border:1px solid #2f5a3e}
+  .dm-flag.open{color:#0f0a1c;background:linear-gradient(#ffd98a,#e0a94e);border:1px solid #f0c877}
+  .dm-flag.locked{color:#6d6390;background:#1a1428;border:1px solid #322a46}
+  .dm-meta{display:flex;gap:15px;margin:10px 2px 0;font-size:11.5px;color:#b9add6;flex-wrap:wrap}
+  .dm-meta b{color:var(--parchment)}
+  .dm-meta .k{font-family:ui-monospace,monospace;font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:#6d6390;display:block;margin-bottom:1px}
+  .dm-cta{margin-top:12px}
+  .dm-btn{width:100%;font-family:inherit;font-weight:bold;letter-spacing:.08em;text-transform:uppercase;font-size:15px;border:0;border-radius:12px;padding:13px;cursor:pointer}
+  .dm-btn.go{background:linear-gradient(#e8bf78,#b47f34);color:#241606;box-shadow:0 4px 0 #6e4a14}
+  .dm-btn.go:active{transform:translateY(2px);box-shadow:0 2px 0 #6e4a14}
+  .dm-btn.farm{background:linear-gradient(#8fd39a,#3a8a5a);color:#04140f;box-shadow:0 4px 0 #1c4a30}
+  .dm-btn.farm:active{transform:translateY(2px);box-shadow:0 2px 0 #1c4a30}
+  .dm-btn.lock{background:#1a1428;color:#6d6390;border:1px solid #322a46;box-shadow:none;cursor:default;text-transform:none;font-weight:normal;font-size:12px;letter-spacing:0;display:flex;align-items:center;justify-content:center;gap:6px}
   `;
   document.head.appendChild(s);
 }
@@ -71,53 +93,83 @@ export function openDungeonSelect(ctx) {
   const el = document.getElementById("town");
   const cleared = ctx.cleared || [];
   const activeId = ctx.active;
-  const activeD = ctx.dungeons.find(d => d.id === activeId) || ctx.dungeons[0];
+  const D = ctx.dungeons;
 
-  const card = d => {
-    const unlocked = isUnlocked(d, cleared);
-    const done = cleared.includes(d.id);
-    const here = d.id === activeId && ctx.resumable;
-    const state = !unlocked ? "locked" : here ? "active" : done ? "cleared" : "new";
-    const flag = { locked: "Locked", active: "In Progress", cleared: "Cleared ✓", new: "✦ New" }[state];
-    const dropClass = FLOOR_CLASS[d.dropFloor] || "";
-    const showPills = unlocked && !done;   // keep cleared rows tidy; live rungs advertise the spoils
-    const lockHint = !unlocked
-      ? `<div class="ds-lock">${iconImg("skull", 10)} Defeat ${prevDungeon(d) ? prevDungeon(d).boss.name : "the previous boss"}</div>` : "";
-    return `<div class="ds-card ${state}" ${unlocked ? `data-go="${d.id}"` : ""} style="--acc:${d.accent}">
-      <span class="rail"></span>
-      <div class="ds-badge">${ROMAN[d.tier - 1]}</div>
-      <div class="ds-body">
-        <div class="ds-name">${d.name}</div>
-        ${d.sub ? `<div class="ds-sub">${d.sub}</div>` : ""}
-        <div class="ds-meta"><span class="ds-band">Lv ${d.band[0]}–${d.band[1]}</span>
-          <span class="ds-boss">boss · <b>${d.boss.name}</b></span></div>
-        ${showPills ? `<div class="ds-pills"><span class="ds-pill drop ${dropClass}">Drops · ${FLOOR_LABEL[d.dropFloor]}</span><span class="ds-pill rec">Rec. Lv ${d.recLevel}</span></div>` : ""}
-        ${lockHint}
-      </div>
-      <span class="ds-num">${ROMAN[d.tier - 1]}</span>
-      <span class="ds-flag ${state}">${flag}</span>
-    </div>`;
-  };
+  const stateOf = d => !isUnlocked(d, cleared) ? "locked" : cleared.includes(d.id) ? "cleared" : "open";
 
-  const roomsInto = ctx.resumable ? `Room ${Math.min(ROOM_COUNT, ctx.roomIdx + 1)} of ${ROOM_COUNT}` : "Ready to descend";
-  const cont = `<div class="ds-cont" data-resume>
-      <div class="cbtn">${iconImg("sword", 18)}</div>
-      <div class="ct"><b>Continue — ${activeD.name}</b><small>${roomsInto} · party Lv ${ctx.partyLevel}</small></div>
-      <span class="go">Resume ›</span>
-    </div>`;
+  const nodes = D.map((d, i) => {
+    const st = stateOf(d), isActive = d.id === activeId && st !== "locked";
+    const [x, y] = POS[d.tier - 1] || [50, 50];
+    return `<button class="dm-node ${st}${isActive ? " current" : ""}" data-i="${i}" style="left:${x}%;top:${y}%">${isActive ? `<span class="ring"></span>` : ""}<span class="num">${d.tier}</span></button>`;
+  }).join("");
 
-  el.innerHTML = `<div class="tw-wrap">
-    <button class="tw-btn primary" data-back style="justify-content:center;margin-bottom:6px">${iconImg("house", 16)} Return to the Keep</button>
-    <div class="shop-top" style="justify-content:flex-end">
-      <span class="tw-cur"><span>${iconImg("coin", 12)} ${ctx.silver}</span> <span class="g">${iconImg("gem", 12)} ${ctx.gems}</span></span>
+  el.innerHTML = `<div class="dsmap">
+    <div class="dm-artwrap"><div class="dm-art" data-art>
+      <div class="dm-vig"></div>
+      ${nodes}
+    </div></div>
+    <div class="dm-top">
+      <span class="dm-back" data-back>‹ Keep</span>
+      <span class="dm-cur"><span>${iconImg("coin",12)} ${ctx.silver}</span><span class="g">${iconImg("gem",12)} ${ctx.gems}</span></span>
     </div>
-    <div class="tw-head"><h1>Dungeons</h1><p>Descend deeper for deadlier foes — and richer spoils.</p></div>
-    ${cont}
-    <div class="tw-sec">The Descent — clear a boss to open the next</div>
-    <div class="ds-list">${ctx.dungeons.map(card).join("")}</div>
+    <div class="dm-hint" data-hint>Tap a trail · <b>◆ open</b> · ✓ cleared · 🔒 locked</div>
+    <div class="dm-sheet" data-sheet></div>
   </div>`;
 
+  const art = el.querySelector("[data-art]"), wrap = art.parentElement;
+  const sheet = el.querySelector("[data-sheet]"), hint = el.querySelector("[data-hint]");
+
+  // contain-fit the map so the whole image shows and node %s stay pinned to the locations
+  const fit = () => { const w = wrap.clientWidth, h = wrap.clientHeight; if (!w || !h) return;
+    let aw = w, ah = w / AR; if (ah > h) { ah = h; aw = h * AR; }
+    art.style.width = aw + "px"; art.style.height = ah + "px"; };
+  fit();
+  if (dmObs) dmObs.disconnect();
+  if (typeof ResizeObserver !== "undefined") { dmObs = new ResizeObserver(fit); dmObs.observe(wrap); }
+
+  const nodeEls = [...el.querySelectorAll(".dm-node")];
+  const close = () => { sheet.classList.remove("open"); nodeEls.forEach(b => b.classList.remove("sel")); hint.style.opacity = "1"; };
+
+  function select(i) {
+    const d = D[i], st = stateOf(d);
+    const isActive = d.id === activeId && st !== "locked";
+    const resumeHere = isActive && ctx.resumable;
+    nodeEls.forEach((b, j) => b.classList.toggle("sel", j === i));
+    const flag = st === "cleared" ? `<span class="dm-flag cleared">Cleared ✓</span>`
+      : st === "open" ? `<span class="dm-flag open">Open</span>`
+      : `<span class="dm-flag locked">Locked</span>`;
+    let cta;
+    if (st === "locked") {
+      const prev = prevDungeon(d);
+      cta = `<button class="dm-btn lock">${iconImg("skull", 12)} Defeat ${prev ? prev.boss.name : "the prior boss"} to unlock</button>`;
+    } else if (resumeHere) {
+      cta = `<button class="dm-btn go" data-resume>${iconImg("sword", 14)} Resume · Room ${Math.min(ROOM_COUNT, ctx.roomIdx + 1)}/${ROOM_COUNT}</button>`;
+    } else if (st === "cleared") {
+      cta = `<button class="dm-btn farm" data-go="${d.id}">${iconImg("sword", 14)} Descend · Farm</button>`;
+    } else {
+      cta = `<button class="dm-btn go" data-go="${d.id}">${iconImg("sword", 14)} Descend</button>`;
+    }
+    sheet.innerHTML = `<div class="dm-grab"><i></i><span class="x" data-close>✕</span></div>
+      <div class="dm-hd"><div class="dm-crest" style="--sc:${d.accent}">${d.crest || ""}</div>
+        <div class="dm-tt"><b>${d.name}</b><div class="sub">${d.sub || ""}</div></div>${flag}</div>
+      <div class="dm-meta">
+        <div><span class="k">Levels</span><b>Lv ${d.band[0]}–${d.band[1]}</b></div>
+        <div><span class="k">Boss</span><b>${d.boss.name}</b></div>
+        <div><span class="k">Drops</span><b>${FLOOR_LABEL[d.dropFloor] || d.dropFloor}</b></div>
+      </div>
+      <div class="dm-cta">${cta}</div>`;
+    sheet.classList.add("open"); hint.style.opacity = "0";
+    sheet.querySelector("[data-close]").onclick = e => { e.stopPropagation(); close(); };
+    const g = sheet.querySelector("[data-go]"); if (g) g.onclick = () => ctx.select(g.getAttribute("data-go"));
+    const r = sheet.querySelector("[data-resume]"); if (r) r.onclick = () => ctx.resume();
+  }
+
+  nodeEls.forEach((b, i) => b.onclick = e => { e.stopPropagation(); select(i); });
+  art.onclick = () => { if (sheet.classList.contains("open")) close(); };
   el.querySelector("[data-back]").onclick = () => ctx.back();
-  el.querySelector("[data-resume]").onclick = () => ctx.resume();
-  el.querySelectorAll("[data-go]").forEach(c => c.onclick = () => ctx.select(c.getAttribute("data-go")));
+
+  // land on the trail the player is most likely to want: the active dungeon, else the deepest open one
+  let start = D.findIndex(d => d.id === activeId && stateOf(d) !== "locked");
+  if (start < 0) { for (let i = D.length - 1; i >= 0; i--) if (stateOf(D[i]) === "open") { start = i; break; } }
+  if (start >= 0) select(start);
 }
