@@ -28,7 +28,7 @@ import { makeCompanion, makeEnemy } from './models/units.js';
 import { openDungeonSelect } from './ui/DungeonSelect.js';
 import { openCompanionRoll } from './ui/CompanionLevelUp.js';
 import { POTION_BY_ID, POTION_CAP, potionEffect, potionCost, potionSell, rollLootPotion } from './data/potions.js';
-import { potionTileChip, ensurePotChipCss } from './ui/potionChip.js';
+import { potionTileChip, ensurePotChipCss, setPotRing, flashPotBox } from './ui/potionChip.js';
 import { readSlot, writeSlot, SAVE_VERSION } from './state/save.js';
 import { installDiag, diag, diagText, APP_BUILD } from './engine/diag.js';
 installDiag(); // start capturing console errors / uncaught exceptions immediately
@@ -206,8 +206,10 @@ function hudOrder(){
   const others=party.slice(1), mid=Math.floor(party.length/2);
   return [...others.slice(0,mid), party[0], ...others.slice(mid)].filter(Boolean);
 }
+let potBoxes=[];   // {h, el} for each hero's HUD potion box — the loop drives their recharge rings live
 function renderParty(){
   ensurePotChipCss();
+  potBoxes=[];
   partyEl.innerHTML="";
   for(const h of hudOrder()){
     const D=derive(h), isMain=h===party[0];
@@ -232,13 +234,34 @@ function renderParty(){
       <div class="bar"><i style="width:${clamp(h.hp/D.maxhp*100,0,100)}%"></i></div>
       ${h.hp}/${D.maxhp}<div class="gear">${bag} equipped · tap for gear ›</div>`
         : `<span class="fallen">${iconImg("skull",11)} Fallen — restore at the Temple</span>`}`;
-    // portrait column: portrait on top, the equipped-potion chip below it
+    // portrait column: portrait on top, the equipped-potion box below it
     const col=document.createElement("div"); col.style.cssText="display:flex;flex-direction:column;align-items:center;flex:0 0 auto";
     col.appendChild(picWrap);
-    if(h.alive){ const pc=document.createElement("div"); pc.innerHTML=potionTileChip(h.potion); col.appendChild(pc.firstElementChild); }
+    if(h.alive){ const pc=document.createElement("div"); pc.innerHTML=potionTileChip(h.potion);
+      const boxEl=pc.firstElementChild; col.appendChild(boxEl); if(boxEl) potBoxes.push({h, el:boxEl}); }
     c.appendChild(col); c.appendChild(info); partyEl.appendChild(c);
   }
+  tickPotionBoxes();   // set each ring to its current cooldown state right away (no ready→cooling flicker)
 }
+/* Drive the HUD potion boxes' recharge rings + cooldown timers from live combat state (called each
+   frame while delving). Cheap: only sets stroke-dashoffset / a label / a class on existing nodes. */
+function tickPotionBoxes(){
+  for(const {h, el} of potBoxes){
+    if(!el || !el.isConnected) continue;
+    const p=h.potion; if(!p || p.qty<=0) continue;               // depleted boxes are rebuilt as "empty" by renderParty
+    const cnt=el.querySelector(".potn"); if(cnt && cnt.textContent!==String(p.qty)) cnt.textContent=p.qty;
+    const cdEnd=h.potCd||0, cdEl=el.querySelector(".potcd");
+    if(state.t<cdEnd){
+      const eff=potionEffect(p.type,p.size), frac=eff&&eff.cd?1-(cdEnd-state.t)/eff.cd:1;
+      el.classList.add("cooling"); el.classList.remove("ready"); setPotRing(el,frac);
+      if(cdEl) cdEl.textContent=Math.ceil(cdEnd-state.t)+"s";
+    } else {
+      el.classList.remove("cooling"); el.classList.add("ready"); setPotRing(el,1);
+      if(cdEl && cdEl.textContent) cdEl.textContent="";
+    }
+  }
+}
+function flashHeroPot(u,color){ const b=potBoxes.find(x=>x.h===u); if(b) flashPotBox(b.el,color); }
 const ease=k=>k*k*(3-2*k);
 function uxS(u){ const k=(u.moveT===undefined)?1:ease(u.moveT);
   const c=(u.cc===undefined?u.c:u.cc)+((u.c)-(u.cc===undefined?u.c:u.cc))*k;
@@ -396,7 +419,7 @@ function tryQuaff(u){
   if(!fire) return;
   applyPotion(u,eff);
   p.qty=Math.max(0,p.qty-1); u.potCd=state.t+eff.cd;
-  if(u.team===0) renderParty();                            // update the charge badge live
+  if(u.team===0){ renderParty(); flashHeroPot(u,eff.color); }   // refresh HP/charge, then flare the box
 }
 function applyPotion(u,eff){
   const mh=derive(u).maxhp, c=eff.color;
@@ -1165,6 +1188,7 @@ function loop(now){
         u.moveT=Math.min(1,u.moveT+dt*6.5); }
     }
     render(frozen?0:dt);
+    if(state.scene==="dungeon" && !frozen) tickPotionBoxes();   // live recharge rings on the HUD
   }catch(err){
     // Recovered per-frame error: log the first few (with a state snapshot) to the diagnostics
     // buffer so it can be exported from the Keep, but never spam or break the frame chain.
