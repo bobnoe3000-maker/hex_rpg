@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-17 · Loot Roll: reroll greys out (cost in red) when silver is too low";
+export const APP_BUILD = "2026-08-17 · Dungeon: tappable room minimap + nav bar; boss timer no longer resets on room hop";
 
 const BUF = [];
 const MAX = 400;

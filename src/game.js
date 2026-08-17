@@ -51,8 +51,8 @@ installDiag(); // start capturing console errors / uncaught exceptions immediate
 const cvG=document.getElementById("cv"), G=cvG.getContext("2d");
 const logEl=document.getElementById("log"), partyEl=document.getElementById("party"),
       overlay=document.getElementById("overlay"), btnStart=document.getElementById("btnStart"),
-      btnNext=document.getElementById("btnNext"), btnSpeed=document.getElementById("btnSpeed"),
-      btnTown=document.getElementById("btnTown"), townEl=document.getElementById("town"),
+      dheadEl=document.getElementById("dhead"), dnavEl=document.getElementById("dnav"),
+      dtoastEl=document.getElementById("dtoast"), townEl=document.getElementById("town"),
       logWrap=document.getElementById("logwrap"), logBar=document.getElementById("logbar"),
       logToggle=document.getElementById("logToggle");
 /* combat log: cycle min → mid → max → min */
@@ -65,7 +65,7 @@ setLogState("mid");
 /* phase: idle → fight ⇄ paused. inventory holds dropped loot; respawn/revive are timers. */
 const state={ roomIdx:0, scene:"town", phase:"idle", room:null, foes:[], t:0, speed:1,
   inventory:[], potions:[], gems:0, silver:0, shopStock:[], recruits:[], bench:[], respawnAt:null, wipeAt:null,
-  dungeonId:"emberdeep", cleared:[],   // active dungeon + set of cleared-boss ids (persisted)
+  dungeonId:"emberdeep", cleared:[], roomMax:0,   // active dungeon + set of cleared-boss ids (persisted) + furthest room reached this delve
   bossAt:null, bossInWave:false,       // when the boss may next appear (runtime) + is it on the field now
   rally:null };      // {r,c} flag heroes regroup on when no foe is engaged
 /* the dungeon the party is currently delving (falls back to the Emberdeep) */
@@ -101,7 +101,7 @@ let activeSlot=null;        // which save slot this run writes to (set by onboar
 function snapshotState(){
   return { v:SAVE_VERSION, party, bench:state.bench, silver:state.silver, gems:state.gems,
     inventory:state.inventory, potions:state.potions, roomIdx:state.roomIdx,
-    dungeonId:state.dungeonId, cleared:state.cleared, savedAt:new Date().toISOString() };
+    dungeonId:state.dungeonId, cleared:state.cleared, roomMax:state.roomMax, savedAt:new Date().toISOString() };
 }
 function saveGame(){ if(activeSlot!==null) writeSlot(activeSlot, snapshotState()); }
 function loadGame(save){
@@ -111,6 +111,7 @@ function loadGame(save){
   state.inventory=save.inventory||[]; state.potions=save.potions||[]; state.roomIdx=save.roomIdx||0;
   state.dungeonId=dungeonById(save.dungeonId).id;    // older saves default to the Emberdeep
   state.cleared=Array.isArray(save.cleared)?save.cleared.slice():[];
+  state.roomMax=Math.max(save.roomMax||0, state.roomIdx||0);   // reached rooms are jumpable on the minimap
 }
 const partyClasses=()=>party.length?[...new Set(party.map(h=>h.cls))]:["fighter","mage","cleric","rogue"];
 let combatRng=Math.random;  // reseeded deterministically when a fight starts / area changes
@@ -337,7 +338,8 @@ function loadRoom(){
     blockerKinds:L.blockerKinds, tiles:d.tiles||L.tiles, exits:L.exits, palette:d.palette };
   state.room=buildGameRoom((Date.now()+idx*7919)|0,spec);
   state.foes=[]; fxClear(); state.respawnAt=null; state.wipeAt=null; state.rally=null;
-  state.bossAt=null; state.bossInWave=false;   // boss is available the moment you arrive at its room
+  state.bossInWave=false;   // re-determined by spawnWave; the boss RESPAWN timer (bossAt) persists across
+                            // room hops so travelling the minimap never re-rolls it (set fresh in startDungeon)
   placeHeroes(); spawnWave();
   log(`— <span class="sys">${spec.title.split("— ")[1]}</span> —`);
 }
@@ -779,9 +781,14 @@ function onBossDown(){
 }
 /* ---------- controls & menus ---------- */
 function syncButtons(){
-  btnStart.textContent = state.phase==="idle" ? "Fight!" : state.phase==="fight" ? "Pause" : "Resume";
+  // the nav bar's center CTA: Pause while fighting, Resume/Fight otherwise
+  const fighting = state.phase==="fight";
+  const label = fighting ? "Pause" : state.phase==="paused" ? "Resume" : "Fight";
+  const span=btnStart.querySelector("span"); if(span) span.textContent=label;
+  const svg=btnStart.querySelector("svg");
+  if(svg) svg.innerHTML = fighting ? '<path d="M9 5v14M15 5v14"/>' : '<path d="M8 5v14l11-7z"/>';
+  btnStart.classList.toggle("resume", !fighting);
   btnStart.disabled=false;
-  btnNext.disabled=false;
 }
 function removeItem(item){
   const i=state.inventory.indexOf(item); if(i>=0){ state.inventory.splice(i,1); return; }
@@ -890,15 +897,17 @@ function enterTown(fromWipe=false){
   // dead until raised at the Temple; they simply won't be placed until then).
   if(fromWipe){ state.phase="idle"; loadRoom(); }
   renderParty();
+  dheadEl.classList.remove("show");   // hide the dungeon header while at the Keep
   openTownScreen();
   saveGame();          // persist the run whenever you're back at the Keep (loot, revives, etc.)
   diag("scene", `keep${fromWipe?" · wipe":""} · party ${party.filter(h=>h.alive).length}/${party.length}`);
 }
 function enterDungeon(){
   state.scene="dungeon"; townEl.classList.remove("show");
+  state.roomMax=Math.max(state.roomMax||0, state.roomIdx||0);
   if(state.phase==="idle") seedBattle();
   placeHeroes();              // form up the living party (incl. any pals hired/resurrected since)
-  state.phase="fight"; syncButtons();
+  state.phase="fight"; syncButtons(); renderDungeonHeader();
   diag("scene", `descend · room ${state.roomIdx} · party ${party.filter(h=>h.alive).length}`);
 }
 function openTownScreen(){
@@ -915,7 +924,8 @@ function openPartyScreen(){
 }
 /* start a fresh delve of a chosen dungeon (resets to its first room) */
 function startDungeon(id){
-  state.dungeonId=dungeonById(id).id; state.roomIdx=0; state.phase="idle";
+  state.dungeonId=dungeonById(id).id; state.roomIdx=0; state.roomMax=0; state.phase="idle";
+  state.bossAt=null; state.bossInWave=false;      // boss is ready the first time you reach its room
   loadRoom(); saveGame(); enterDungeon();
 }
 function openDungeonBoard(){
@@ -1073,26 +1083,69 @@ function openShopScreen(){
     potions:()=>state.potions, buyPotion, sellPotion,   // potions tab (folded in from the Apothecary)
     back:openTownScreen });
 }
-function nextArea(){
-  state.roomIdx=Math.min(BOSS_ROOM, state.roomIdx+1);   // descend toward the boss; the boss room is the finish line
-  const wasFighting = state.phase!=="idle";
+/* Travel to a room via the minimap — any reached room + the next one. Tapping the current room is a
+   no-op (never re-seeds), and loadRoom no longer touches the boss timer, so hops don't reset it. */
+function goToRoom(idx){
+  if(idx===state.roomIdx || idx<0 || idx>Math.min(BOSS_ROOM,(state.roomMax||0)+1)) return;
+  state.roomIdx=idx; state.roomMax=Math.max(state.roomMax||0, idx);
+  const wasFighting=state.phase!=="idle";
   loadRoom(); seedBattle();
   state.phase = wasFighting ? "fight" : "idle";
-  renderParty(); syncButtons();
+  renderParty(); syncButtons(); renderDungeonHeader(); saveGame();
 }
+/* the dungeon header: dungeon/room title · tappable room minimap · boss timer + speed */
+function renderDungeonHeader(){
+  if(state.scene!=="dungeon" || !state.room){ dheadEl.classList.remove("show"); return; }
+  dheadEl.classList.add("show");
+  const d=activeDungeon(), idx=state.roomIdx, max=state.roomMax||0, reach=Math.min(BOSS_ROOM,max+1);
+  const roomName = idx===BOSS_ROOM ? d.boss.name : LAYOUTS[idx].roomName;
+  let nodes="";
+  for(let i=0;i<ROOM_COUNT;i++){
+    const boss=i===BOSS_ROOM, cur=i===idx, done=i<=max&&!cur, next=i===max+1;
+    const cls = cur?"cur": done?"done": next?"next":"lock";
+    const glyph = boss?"☠": done?"✓":(i+1);
+    nodes+=`<button class="dh-node ${cls} ${boss?"boss":""}" ${i<=reach?`data-room="${i}"`:""}>${cur?'<span class="ring"></span>':''}<span class="dot">${glyph}</span></button>`;
+  }
+  let bossPill="";
+  if(idx===BOSS_ROOM){
+    const onCd=state.bossAt!==null&&state.t<state.bossAt, rem=onCd?Math.max(0,state.bossAt-state.t):0;
+    const txt=onCd?`BOSS ${Math.floor(rem/60)}:${String(Math.floor(rem%60)).padStart(2,"0")}`:"BOSS ✦ READY";
+    bossPill=`<span class="dh-boss ${onCd?"":"ready"}" data-boss>${txt}</span>`;
+  }
+  dheadEl.innerHTML=`<div class="dh-top"><div class="tt"><b>${d.name}</b> <span>· ${roomName}</span></div>${bossPill}<span class="dh-spd" data-spd>${state.speed}×</span></div>
+    <div class="dh-mini">${nodes}</div>`;
+  dheadEl.querySelectorAll("[data-room]").forEach(b=>b.onclick=()=>goToRoom(+b.getAttribute("data-room")));
+  dheadEl.querySelector("[data-spd]").onclick=()=>{ state.speed=state.speed===1?2:1; renderDungeonHeader(); };
+}
+/* live boss-timer text (cheap; only touches the DOM when the displayed value changes) */
+function tickDungeonHeader(){
+  if(state.scene!=="dungeon" || state.roomIdx!==BOSS_ROOM) return;
+  const el=dheadEl.querySelector("[data-boss]"); if(!el) return;
+  const onCd=state.bossAt!==null&&state.t<state.bossAt, rem=onCd?Math.max(0,state.bossAt-state.t):0;
+  const txt=onCd?`BOSS ${Math.floor(rem/60)}:${String(Math.floor(rem%60)).padStart(2,"0")}`:"BOSS ✦ READY";
+  if(el.textContent!==txt){ el.textContent=txt; el.classList.toggle("ready",!onCd); }
+}
+function dtoast(msg){ dtoastEl.textContent=msg; dtoastEl.classList.add("on");
+  clearTimeout(dtoast._h); dtoast._h=setTimeout(()=>dtoastEl.classList.remove("on"),1800); }
+/* nav bar center CTA = Pause/Resume */
 btnStart.onclick=()=>{
   if(state.phase==="idle"){ seedBattle(); state.phase="fight"; }
   else if(state.phase==="fight"){ state.phase="paused"; }
   else if(state.phase==="paused"){ state.phase="fight"; }
   syncButtons();
 };
-btnNext.onclick=()=>{ if(state.phase!=="paused") nextArea(); };
-btnTown.onclick=()=>{ if(state.scene==="dungeon") enterTown(); };
-btnTown.innerHTML=iconImg("house",18);   // replace the emoji label with a sprite
+/* nav bar tabs: leave the delve for the Keep / World map / Menu, or the Arena stub */
+function navTo(dest){
+  if(state.scene!=="dungeon") return;
+  if(dest==="keep") return enterTown();
+  if(dest==="world"){ enterTown(); openDungeonBoard(); return; }
+  if(dest==="arena") return dtoast("The Arena opens soon — PvP challenges are in the forge");
+  if(dest==="menu"){ enterTown(); openDiagScreen(); return; }
+}
+dnavEl.querySelectorAll(".dn-tab").forEach(b=>b.onclick=()=>navTo(b.getAttribute("data-nav")));
 { let fav=document.querySelector("link[rel='icon']");
   if(!fav){ fav=document.createElement("link"); fav.rel="icon"; document.head.appendChild(fav); }
   fav.href=iconCanvas("sword",64).toDataURL(); }
-btnSpeed.onclick=()=>{ state.speed=state.speed===1?2:1; btnSpeed.textContent=`${state.speed}×`; };
 /* tap the dungeon floor to plant a rally flag; idle pals (no foe engaged) regroup there */
 cvG.addEventListener("click", e=>{
   if(state.scene!=="dungeon" || panelShown() || !state.room) return;
@@ -1165,39 +1218,7 @@ function drawFlag(cx,cy){
   G.strokeStyle="#6e4a14"; G.lineWidth=1; G.stroke();               // pennant
   G.restore();
 }
-/* Rune Compass — a corner dial of the descent: current room glows, cleared rooms fill, the boss
-   room carries a ring. Overlays the top-right void margin so it never covers the fight. */
-function drawCompass(){
-  if(!state.room) return;
-  const n=ROOM_COUNT, cur=state.roomIdx;
-  const pw=Math.min(CW-16, 52+(n-1)*20), ph=40, x=CW-pw-8, y=8;
-  G.fillStyle="rgba(12,9,22,.82)"; rrp(G,x,y,pw,ph,9); G.fill();
-  G.strokeStyle="rgba(216,162,74,.45)"; G.lineWidth=1.2; rrp(G,x,y,pw,ph,9); G.stroke();
-  G.fillStyle="#d8a24a"; G.font="bold 8px monospace"; G.textAlign="left"; G.textBaseline="alphabetic";
-  G.fillText("ROOM "+(cur+1)+" / "+n, x+9, y+13);
-  const nx0=x+13, span=(pw-26), ny=y+27, X=i=> nx0+span*(n>1?i/(n-1):0);
-  for(let i=0;i<n-1;i++){ G.strokeStyle= i<cur?"rgba(216,162,74,.6)":"rgba(120,110,150,.3)"; G.lineWidth=2;
-    G.beginPath(); G.moveTo(X(i),ny); G.lineTo(X(i+1),ny); G.stroke(); }
-  for(let i=0;i<n;i++){ const nx=X(i), isCur=i===cur, past=i<cur, boss=i===n-1;
-    if(isCur){ const pl=1+.25*Math.sin(state.t*3); const rg=G.createRadialGradient(nx,ny,0,nx,ny,8*pl);
-      rg.addColorStop(0,"rgba(216,162,74,.6)"); rg.addColorStop(1,"rgba(216,162,74,0)"); G.fillStyle=rg;
-      G.beginPath(); G.arc(nx,ny,8*pl,0,7); G.fill(); }
-    G.fillStyle= isCur?"#f0d48a": past?"#d8a24a": boss?"#7a3f2c":"#2f2740";
-    G.beginPath(); G.arc(nx,ny, boss?4.2:isCur?4:3,0,7); G.fill();
-    if(boss){ G.strokeStyle=isCur?"#ff9a5c":"#8a4a34"; G.lineWidth=1.2; G.beginPath(); G.arc(nx,ny,6,0,7); G.stroke(); } }
-  G.textBaseline="alphabetic";
-  // In the boss room, surface the boss respawn timer (or a READY flare) just below the compass dial.
-  if(state.roomIdx===BOSS_ROOM){
-    const onCd = state.bossAt!==null && state.t<state.bossAt;
-    const rem = onCd ? Math.max(0,state.bossAt-state.t) : 0;
-    const txt = onCd ? `BOSS ${Math.floor(rem/60)}:${String(Math.floor(rem%60)).padStart(2,"0")}` : "BOSS ✦ READY";
-    const bw=onCd?52:74, bx=x+pw-bw, by=y+ph+3;
-    G.fillStyle="rgba(12,9,22,.82)"; rrp(G,bx,by,bw,15,6); G.fill();
-    G.strokeStyle=onCd?"rgba(216,162,74,.4)":"rgba(255,154,92,.7)"; G.lineWidth=1; rrp(G,bx,by,bw,15,6); G.stroke();
-    G.fillStyle=onCd?"#e0b063":"#ff9a5c"; G.font="bold 8px monospace"; G.textAlign="center"; G.textBaseline="middle";
-    G.fillText(txt, bx+bw/2, by+8); G.textBaseline="alphabetic"; G.textAlign="left";
-  }
-}
+/* (The room compass + boss timer moved to the DOM dungeon header — see renderDungeonHeader.) */
 function render(dt){
   G.setTransform(2,0,0,2,0,0);
   G.drawImage(state.room.base,0,0,CW,CH);
@@ -1207,7 +1228,6 @@ function render(dt){
   const sorted=[...party,...state.foes].sort((a,b)=>a.r-b.r||a.c-b.c);
   for(const u of sorted) drawUnit(u);
   fxUpdateDraw(G,dt);
-  drawCompass();
   if(state.phase==="idle"){
     G.fillStyle="#e8dcc4"; G.font="bold 13px monospace"; G.textAlign="center";
     G.fillText("Press Fight! to begin",CW/2,CH-8);
@@ -1250,7 +1270,7 @@ function loop(now){
         u.moveT=Math.min(1,u.moveT+dt*6.5); }
     }
     render(frozen?0:dt);
-    if(state.scene==="dungeon" && !frozen) tickPotionBoxes();   // live recharge rings on the HUD
+    if(state.scene==="dungeon" && !frozen){ tickPotionBoxes(); tickDungeonHeader(); }   // live recharge rings + boss timer
   }catch(err){
     // Recovered per-frame error: log the first few (with a state snapshot) to the diagnostics
     // buffer so it can be exported from the Keep, but never spam or break the frame chain.

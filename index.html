@@ -75,13 +75,59 @@
   .card.main .picwrap,.card.main .pic{width:44px;height:44px}
   .card.main .pic{border-color:var(--gold)}
 
-  #controls{flex:0 0 auto;display:flex;gap:8px;margin-top:6px}
   button{font-family:inherit;font-weight:bold;letter-spacing:1px;font-size:12.5px;border:0;border-radius:8px;
-    padding:11px 0;flex:1;cursor:pointer;background:linear-gradient(#e0b063,#a8722a);color:#241606;
-    box-shadow:0 3px 0 #6e4a14}
+    padding:11px 0;flex:1;cursor:pointer;background:linear-gradient(#e0b063,#a8722a);color:#241606;box-shadow:0 3px 0 #6e4a14}
   button:active{transform:translateY(2px);box-shadow:0 1px 0 #6e4a14}
-  button.ghost{flex:0 0 auto;padding:11px 16px;background:linear-gradient(#2c2342,#1c1630);color:var(--parchment);box-shadow:0 3px 0 #100b1c}
   button[disabled]{opacity:.45;pointer-events:none}
+
+  /* --- dungeon header: title · tappable room minimap · boss timer + speed --- */
+  #dhead{flex:0 0 auto;display:none;flex-direction:column;gap:7px;margin-bottom:6px;padding:8px 11px 9px;
+    border:1px solid var(--line);border-radius:10px;background:linear-gradient(#1b1330,#150f24)}
+  #dhead.show{display:flex}
+  .dh-top{display:flex;align-items:center;gap:8px}
+  .dh-top .tt{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dh-top .tt b{font-size:12.5px;color:#f0c877} .dh-top .tt span{font-size:10px;color:#b9add6;font-style:italic}
+  .dh-boss{font-family:monospace;font-size:9px;letter-spacing:.06em;color:var(--gold);background:#120d1c;border:1px solid #5a4a2a;border-radius:999px;padding:2px 7px;white-space:nowrap}
+  .dh-boss.ready{color:#ff9a5c;border-color:#6a3a2a}
+  .dh-spd{font-family:monospace;font-size:10px;color:#b9add6;background:#241b38;border:1px solid var(--line);border-radius:7px;padding:3px 8px;cursor:pointer;flex:0 0 auto}
+  .dh-mini{display:flex;align-items:center;gap:0;width:100%}
+  .dh-node{position:relative;flex:1;height:26px;display:flex;align-items:center;justify-content:center;cursor:pointer;background:none;box-shadow:none;padding:0;border-radius:0}
+  .dh-node:active{transform:none}
+  .dh-node::before{content:"";position:absolute;left:-50%;right:50%;top:50%;height:2px;background:var(--seg,#3a2f52);z-index:0}
+  .dh-node:first-child::before{display:none}
+  .dh-node .dot{position:relative;z-index:1;width:16px;height:16px;border-radius:50%;border:1.5px solid var(--nc,#4a4360);
+    background:radial-gradient(circle at 40% 35%,#241b38,#0d0a16);display:grid;place-items:center;font-family:monospace;font-size:8px;font-weight:bold;color:var(--nc,#6d6390)}
+  .dh-node.done{--nc:#8fd39a;--seg:#2f5a3e} .dh-node.done+.dh-node::before{--seg:#2f5a3e}
+  .dh-node.cur .dot{--nc:#f0c877;color:#f0c877;box-shadow:0 0 0 3px rgba(240,200,119,.18)}
+  .dh-node.cur .ring{position:absolute;inset:-4px;border-radius:50%;border:1.5px solid #f0c877;animation:dhpulse 1.8s ease-out infinite;z-index:0}
+  @keyframes dhpulse{0%{transform:scale(.8);opacity:.7}100%{transform:scale(1.5);opacity:0}}
+  .dh-node.next .dot{border-style:dashed;--nc:#c9a04a}
+  .dh-node.boss .dot{border-color:#c0553f} .dh-node.boss.cur .dot{border-color:#f0c877}
+  .dh-node.lock{cursor:default} .dh-node.lock .dot{opacity:.5}
+  .dh-node.cur:active .dot,.dh-node.done:active .dot,.dh-node.next:active .dot{transform:scale(.85)}
+
+  /* --- bottom nav bar (Keep · World · Pause · Arena · Menu) --- */
+  #dnav{flex:0 0 auto;display:flex;align-items:stretch;height:60px;margin-top:6px;position:relative;
+    background:linear-gradient(#150f24,#0d0a16);border:1px solid #4a3d68;border-radius:12px;overflow:visible}
+  #dnav::before{content:"";position:absolute;left:12px;right:12px;top:0;height:1px;background:linear-gradient(90deg,transparent,#e0b06355,transparent)}
+  .dn-tab{flex:1;background:none;box-shadow:none;color:#6f6486;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+    font-family:inherit;font-weight:normal;font-size:10px;letter-spacing:.02em;padding:0;border-radius:0}
+  .dn-tab:active{transform:translateY(1px);box-shadow:none}
+  .dn-tab svg{width:21px;height:21px;opacity:.9}
+  .dn-cta{flex:0 0 auto;width:74px;display:flex;align-items:center;justify-content:center;position:relative}
+  #btnStart{width:52px;height:52px;flex:0 0 auto;border-radius:50%;padding:0;border:2px solid #f0c877;color:#241606;
+    background:radial-gradient(circle at 42% 34%,#f4d493,#c2892f 70%,#9a6b22);box-shadow:0 5px 14px -5px #000,inset 0 2px 3px #fff3;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0}
+  #btnStart svg{width:20px;height:20px}
+  #btnStart span{font-size:8px;font-weight:bold;text-transform:uppercase;letter-spacing:.04em;margin-top:-1px}
+  #btnStart:active{transform:translateY(1px);box-shadow:0 3px 10px -5px #000}
+  #btnStart.resume{background:radial-gradient(circle at 42% 34%,#a7d6b0,#3a8a5a 70%,#256b40);color:#04140f;border-color:#8fd39a}
+
+  #dtoast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 74px);transform:translateX(-50%);z-index:6;
+    background:#120d1cee;border:1px solid var(--gold);color:var(--gold);font-family:monospace;font-size:11px;padding:7px 13px;
+    border-radius:9px;opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap;box-shadow:0 6px 18px #000;max-width:88vw;text-align:center}
+  #dtoast.on{opacity:1}
+  @media (prefers-reduced-motion:reduce){.dh-node.cur .ring{animation:none}}
 
   #overlay{position:absolute;inset:0;background:rgba(8,5,14,.6);display:none;flex-direction:column;
     align-items:center;justify-content:center;gap:12px;padding:20px;z-index:5;backdrop-filter:blur(1.5px)}
@@ -106,14 +152,17 @@
     </div>
     <div id="log"></div>
   </div>
+  <div id="dhead"></div>
   <div id="stage"><canvas id="cv" width="752" height="1128"></canvas></div>
   <div id="party"></div>
-  <div id="controls">
-    <button id="btnStart">Fight!</button>
-    <button id="btnNext" class="ghost">Area →</button>
-    <button id="btnTown" class="ghost">Home</button>
-    <button id="btnSpeed" class="ghost">1×</button>
-  </div>
+  <nav id="dnav">
+    <button class="dn-tab" data-nav="keep"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-9l2.5-1.6M20 21v-9l-2.5-1.6M6.5 10.4V4.6l2 1.1 1.7-1.1 1.8 1.1 1.7-1.1 2 1.1v5.8M4 12h16M9.5 21v-4.2h5V21"/></svg>Keep</button>
+    <button class="dn-tab" data-nav="world"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.4"/><path d="M3.6 12h16.8M12 3.6c2.4 2.3 3.7 5.3 3.7 8.4S14.4 18.1 12 20.4C9.6 18.1 8.3 15.1 8.3 12S9.6 5.9 12 3.6Z"/></svg>World</button>
+    <div class="dn-cta"><button id="btnStart" data-nav="pause"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 5v14M15 5v14"/></svg><span>Pause</span></button></div>
+    <button class="dn-tab" data-nav="arena"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4l9.5 9.5M4 8.5L8.5 4M15.5 15.5L20 20M15 19l4-4M19 4l-9.5 9.5M20 8.5L15.5 4M8.5 15.5L4 20M9 19l-4-4"/></svg>Arena</button>
+    <button class="dn-tab" data-nav="menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>Menu</button>
+  </nav>
+  <div id="dtoast"></div>
   <div id="overlay"></div>
   <div id="town"></div>
   <div id="flow"></div>

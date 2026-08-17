@@ -139,10 +139,7 @@ function buildGameRoom(seed, spec){
   for(const [k,kind] of [...blockers].sort((a,b)=>(+a[0].split(",")[0])-(+b[0].split(",")[0]))){   // back→front
     const [r,c]=k.split(",").map(Number); (BLOCKER[kind]||pColumn)(g, cx0g(c), cy0g(r), tone); }
   for(const e of exits) pExitWall(g, cx0g(e.c), cy0g(e.r), e.dir, e.kind, e.label, tone);
-
-  g.font="italic 12px Georgia"; g.textAlign="left";
-  g.fillStyle="rgba(6,4,10,.8)"; g.fillText(spec.title+"  ·  #"+(seed%100000), OX+1, 15);
-  g.fillStyle="#d8a24a"; g.fillText(spec.title+"  ·  #"+(seed%100000), OX, 14);
+  // (room title lives in the DOM dungeon header now, so it no longer overlaps the canvas compass)
 
   gradeLayer(layer);
   const parts=PARTS; setParts(null);
