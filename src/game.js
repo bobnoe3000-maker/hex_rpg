@@ -17,7 +17,7 @@ import { generate, describeItem } from './systems/LootGenerator.js';
 import { upgrade as forgeUpgrade, canUpgrade, forgePreview, forgeCost } from './systems/ForgeSystem.js';
 import { priceOf, sellPriceOf } from './systems/Economy.js';
 import { openCharacter } from './ui/CharacterPanel.js';
-import { openTown } from './ui/TownScreen.js';
+import { openTown, openPartyRoster } from './ui/TownScreen.js';
 import { openShop } from './ui/ShopScreen.js';
 import { openTavern } from './ui/TavernScreen.js';
 import { openTemple } from './ui/TempleScreen.js';
@@ -864,9 +864,14 @@ function enterDungeon(){
 function openTownScreen(){
   townRefresh=openTownScreen;
   openTown({ silver:()=>state.silver, gems:()=>state.gems, party, portrait:h=>heroPortrait(h),
-    openHero, openShop:openShopScreen, openTavern:openTavernScreen, openTemple:openTempleScreen,
+    openHero, openParty:openPartyScreen, openShop:openShopScreen, openTavern:openTavernScreen, openTemple:openTempleScreen,
     openForge:openForgeScreen, openDiag:openDiagScreen, openDungeons:openDungeonBoard,
     tileFlag:heroTileFlag, activeDungeon:()=>activeDungeon() });
+}
+/* Party roster (reached from the Keep's Party tab) — tap a pal to open their character screen */
+function openPartyScreen(){
+  townRefresh=openPartyScreen;
+  openPartyRoster({ party, portrait:h=>heroPortrait(h), tileFlag:heroTileFlag, openHero, back:openTownScreen });
 }
 /* start a fresh delve of a chosen dungeon (resets to its first room) */
 function startDungeon(id){

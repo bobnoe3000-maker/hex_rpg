@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-17 · illustrated Keep home: tappable buildings + corner nav";
+export const APP_BUILD = "2026-08-17 · Keep bottom nav bar (Center Depart) + Party roster";
 
 const BUF = [];
 const MAX = 400;
