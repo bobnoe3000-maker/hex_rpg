@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-17 · Keep nav: dropped the gold active-tab glow + top line (no more gold arcs); Menu is now a dungeon-style bottom sheet with Save & exit to login";
+export const APP_BUILD = "2026-08-18 · Keep nav: killed the dark-gold bracket under each tab (global button drop-shadow was bleeding into the nav tabs)";
 
 const BUF = [];
 const MAX = 400;

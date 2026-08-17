@@ -119,11 +119,11 @@ export function ensureTownCss() {
   /* ===== bottom navigation bar (Center-Depart; CTA sits inside the bar) ===== */
   .kh-nav{flex:0 0 auto;height:calc(62px + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);
     display:flex;align-items:stretch;position:relative;background:linear-gradient(#150f24,#0d0a16);border-top:1px solid #2e2540}
-  .kh-tab{flex:1;background:none;border:0;cursor:pointer;color:#6f6486;position:relative;padding-top:4px;
+  .kh-tab{flex:1;background:none;border:0;box-shadow:none;border-radius:0;cursor:pointer;color:#6f6486;position:relative;padding-top:4px;
     display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
     font-family:inherit;font-size:10px;letter-spacing:.02em}
   .kh-tab svg{opacity:.9}
-  .kh-tab:active{transform:translateY(1px)}
+  .kh-tab:active{transform:translateY(1px);box-shadow:none}
   .kh-tab.on{color:#f0c877}
   .kh-tab .badge{position:absolute;top:6px;left:calc(50% + 9px);width:8px;height:8px;border-radius:50%;
     background:#8fd39a;border:2px solid #100b1c;box-shadow:0 0 6px #8fd39a}
