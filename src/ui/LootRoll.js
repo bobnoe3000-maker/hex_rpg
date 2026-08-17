@@ -29,8 +29,10 @@ function injectCss() {
   .lr-who{flex:1;min-width:0}
   .lr-who .eye{font-family:ui-monospace,monospace;font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:#e0b063;opacity:.85}
   .lr-who b{font-size:17px;display:block;line-height:1.15;color:var(--gc)}
+  .lr-tr{display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex:0 0 auto}
   .lr-grade{font-family:ui-monospace,monospace;font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;padding:3px 8px;border-radius:999px;
     white-space:nowrap;color:var(--gc);border:1px solid color-mix(in srgb,var(--gc) 55%,transparent);background:color-mix(in srgb,var(--gc) 12%,transparent)}
+  .lr-purse{font-family:ui-monospace,monospace;font-size:11.5px;color:#f0d38a;white-space:nowrap;display:flex;align-items:center;gap:4px;font-variant-numeric:tabular-nums}
   .lr-reels{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:12px}
   .lr-reel{background:linear-gradient(#181022,#120c1c);border:1px solid var(--line,#332a48);border-radius:11px;padding:7px 5px}
   .lr-reel .rl{font-family:ui-monospace,monospace;font-size:8px;letter-spacing:.14em;text-transform:uppercase;color:#6d6390;text-align:center;display:block;margin-bottom:5px}
@@ -132,7 +134,10 @@ export function openLootRoll(roll, ctx) {
       <div class="lr-top">
         <div class="lr-slot" data-slot>${gearIconImg(roll.item, 28)}</div>
         <div class="lr-who"><span class="eye" data-eye>${cap(roll.item.slot)} drop${ctx.from ? ` · ${ctx.from}` : ""}</span><b data-nm>${roll.item.n}</b></div>
-        <span class="lr-grade" data-grade>${roll.item.grade}</span>
+        <div class="lr-tr">
+          <span class="lr-grade" data-grade>${roll.item.grade}</span>
+          <span class="lr-purse">${iconImg("coin", 11)} <span data-silver>${ctx.silver()}</span></span>
+        </div>
       </div>
       <div class="lr-reels">
         ${["prefix", "material", "type"].map(k => `<div class="lr-reel" data-reel="${k}"><span class="rl">${k}</span><div class="lr-win"><div class="lr-strip"></div></div></div>`).join("")}
@@ -168,6 +173,7 @@ export function openLootRoll(roll, ctx) {
     if (it.proc) chips.push(`<span class="lr-chip kw">${cap(it.proc.kind)}</span>`);
     el("[data-istats]").innerHTML = chips.join("");
     const rc = el("[data-rc]"); if (rc) rc.textContent = ctx.rerollCost();
+    const sv = el("[data-silver]"); if (sv) sv.textContent = ctx.silver();
     syncReroll();
   }
   function syncReroll() {
@@ -208,6 +214,7 @@ export function openLootRoll(roll, ctx) {
     const nr = ctx.reroll();
     if (!nr) { el("[data-hint]").innerHTML = `<b>Not enough silver</b> to reroll.`; return; }
     roll = nr;
+    const sv = el("[data-silver]"); if (sv) sv.textContent = ctx.silver();   // spent immediately
     stopAuto();                                    // fresh spin → the countdown restarts on settle
     el("[data-hint]").textContent = "Rolling…";
     spin(false);

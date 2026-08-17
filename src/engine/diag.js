@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-17 · Loot Roll: drop splash, 10s auto-accept, no-stack, battle runs behind, drops −75%";
+export const APP_BUILD = "2026-08-17 · Loot Roll shows available silver in the header";
 
 const BUF = [];
 const MAX = 400;
