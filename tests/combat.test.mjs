@@ -383,7 +383,13 @@ ok("different seed diverges", seq(123) !== seq(777));
   ok("ten dungeons, tiers 1..10 in order", DUNGEONS.length === 10 && DUNGEONS.every((d,i)=>d.tier===i+1));
   ok("bands tile 1..100 without gaps", DUNGEONS.every((d,i)=>d.band[0]===i*10+1 && d.band[1]===(i+1)*10));
   ok("top dungeon caps at Lv 100", DUNGEONS[9].band[1] === 100);
-  ok("every dungeon has a named boss + 5-figure roster", DUNGEONS.every(d=>d.boss.name && d.boss.fig && Object.keys(d.roster).length===5));
+  ok("every dungeon has a named boss + 13-figure roster", DUNGEONS.every(d=>d.boss.name && d.boss.fig && Object.keys(d.roster).length===13));
+  // every non-BOSS archetype that any room can spawn is given a themed name in every dungeon's roster
+  {
+    const spawnTokens = [...new Set(LAYOUTS.flatMap(L=>L.comp).filter(t=>t!=="BOSS"))];
+    ok("every room's spawn token is named in every dungeon roster",
+      DUNGEONS.every(d=>spawnTokens.every(t=>typeof d.roster[t]==="string" && d.roster[t].length)));
+  }
   ok("every dungeon has a themed palette + tileset", DUNGEONS.every(d=>Array.isArray(d.palette)&&d.palette.length&&Array.isArray(d.tiles)&&d.tiles.length));
   // bosses spawn from a normalized block, so difficulty is figure-independent (dragon can't break a tier)
   ok("boss stats are figure-independent (normalized)", (()=>{

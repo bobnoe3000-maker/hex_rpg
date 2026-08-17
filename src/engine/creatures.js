@@ -429,6 +429,85 @@ function cGolem(g){
   return "Golem";
 }
 
+function cSlime(g){
+  const goo=pick(["#5e7a3a","#4a6e5a","#6e6a34","#3a6e56"]), gooD=shade(goo,.55), gooHi=shade(goo,1.5);
+  const glow=pick(["#c2ff7a","#7ee7c8","#d8e77a","#8ad0ff"]);
+  ground(g,32);
+  const by=85, w=27, h=34, lean=rf(-2.5,2.5);
+  // bulbous, slightly lopsided dome sitting in a puddle
+  ell(g,48,by-1,w*1.02,7,gooD);
+  const blob=gg=>{ gg.moveTo(48-w,by);
+    gg.quadraticCurveTo(48-w-3,by-h*.62, 48-w*.44+lean,by-h*.92);
+    gg.quadraticCurveTo(48+lean,by-h*1.12, 48+w*.52+lean,by-h*.88);
+    gg.quadraticCurveTo(48+w+3,by-h*.6, 48+w,by); gg.closePath(); };
+  g.fillStyle=goo; g.beginPath(); blob(g); g.fill();
+  hatch(g,blob,48-w,48+w,by-h,by);
+  // translucent core + top-left sheen
+  g.globalAlpha=.5; ell(g,48+lean*.6,by-h*.5,w*.6,h*.44,gooHi); g.globalAlpha=1;
+  g.globalAlpha=.4; ell(g,40+lean*.5,by-h*.72,7,9,"#f4ffe0",-.5); g.globalAlpha=1;
+  // suspended contents: bubbles + a half-dissolved bone
+  for(let i=0;i<4;i++){ g.globalAlpha=.55; ell(g,48+rf(-14,14),by-rf(6,26),rf(1.4,3),rf(1.4,3),gooD); g.globalAlpha=1; }
+  if(chance(.7)){ g.save(); g.globalAlpha=.7; g.strokeStyle="#d8d0b8"; g.lineWidth=2; g.lineCap="round";
+    g.beginPath(); g.moveTo(52,by-14); g.quadraticCurveTo(58,by-18,57,by-10); g.stroke(); g.restore(); }
+  inkPath(g,blob,1.7);
+  // drip tendrils + a rising bubble
+  for(const dx of [48-w*.6, 48+w*.55]){ g.fillStyle=goo; g.beginPath();
+    g.moveTo(dx-3,by-3); g.quadraticCurveTo(dx,by+6,dx+3,by-3); g.closePath(); g.fill(); ell(g,dx,by+6,2,2.4,goo); }
+  ell(g,48+lean+6,by-h*1.02,2.2,2.2,goo); inkPath(g,gg=>gg.ellipse(48+lean+6,by-h*1.02,2.2,2.2,0,0,7),.8);
+  // eyes (glow) + simple grin — gives the ooze a face
+  const ey=by-h*.55;
+  glowDot(g,42,ey,2,glow); glowDot(g,54,ey,2,glow);
+  ell(g,42,ey,1,1.2,"#0a0810"); ell(g,54,ey,1,1.2,"#0a0810");
+  blink(42,ey-.2,2.6,2.4,goo); blink(54,ey-.2,2.6,2.4,goo);
+  inkPath(g,gg=>{ gg.moveTo(43,ey+6); gg.quadraticCurveTo(48,ey+9,53,ey+6); },1.3,"rgba(10,8,14,.55)");
+  return "Bog Slime";
+}
+
+function cTroll(g){
+  const hide=pick(["#5a6e46","#6a6a52","#4e6656","#6e5a44"]), hideD=shade(hide,.58), wart=shade(hide,1.32);
+  const cloth=pick(["#4a3828","#3a3448","#463020"]);
+  ground(g,36);
+  // short thick legs
+  limb(g,[[42,70],[40,80],[43,85]],7.5,hideD); limb(g,[[55,70],[57,80],[54,85]],7.5,hideD);
+  for(const fx of [40,57]) for(let i=-1;i<2;i++) inkPath(g,gg=>{gg.moveTo(fx,85);gg.lineTo(fx+i*3,88);},1.4,"#cfc19a");
+  // long knuckle-dragging arms (behind torso) — massive, one fist forward
+  const swing=ri(0,1);
+  for(const s of [-1,1]){ const reach=(s<0?swing:1-swing);
+    limb(g,[[48+s*15,42],[48+s*27,58],[48+s*(21+reach*4),79]],9,hide);
+    ell(g,48+s*(21+reach*4),83,9,7,hideD);
+    inkPath(g,gg=>gg.ellipse(48+s*(21+reach*4),83,9,7,0,0,7),1.4);
+    for(let i=0;i<3;i++) inkPath(g,gg=>{gg.moveTo(48+s*(16+reach*4+i*3.4),85);gg.lineTo(48+s*(16+reach*4+i*3.4),88);},1);
+  }
+  // hulking torso + pot belly
+  ell(g,48,57,16,18,hide);
+  hatch(g,gg=>gg.ellipse(48,57,16,18,0,0,7),48,64,42,76);
+  inkPath(g,gg=>gg.ellipse(48,57,16,18,0,0,7),1.8);
+  g.globalAlpha=.5; ell(g,48,64,10,10,shade(hide,1.15)); g.globalAlpha=1;
+  // loincloth
+  g.fillStyle=cloth; g.beginPath(); g.moveTo(38,66); g.lineTo(58,66); g.lineTo(56,77); g.lineTo(51,71); g.lineTo(45,77); g.closePath(); g.fill();
+  inkPath(g,gg=>{gg.moveTo(38,66);gg.lineTo(58,66);},1.3);
+  // warty knobbly hide
+  for(let i=0;i<8;i++) ell(g,rf(36,60),rf(46,70),rf(1,2.2),rf(1,1.7),chance(.5)?wart:hideD);
+  // small sloped head sunk between the shoulders
+  ell(g,48,37,9.5,8.5,hide);
+  inkPath(g,gg=>gg.ellipse(48,37,9.5,8.5,0,0,7),1.6);
+  for(const s of [-1,1]){ ell(g,48+s*9.5,36,2.4,3.6,hideD,s*.3); inkPath(g,gg=>gg.ellipse(48+s*9.5,36,2.4,3.6,s*.3,0,7),1); }
+  inkPath(g,gg=>{gg.moveTo(39,34);gg.quadraticCurveTo(48,31,57,34);},2.2); // heavy brow
+  glowDot(g,44,37,1.4,pick(["#ffd166","#e0b063","#c98a3a"])); glowDot(g,52,37,1.4,pick(["#ffd166","#e0b063","#c98a3a"]));
+  blink(44,36.8,2,1.7,hide); blink(52,36.8,2,1.7,hide);
+  ell(g,48,40.5,2.6,2,hideD); // broad flat nose
+  inkPath(g,gg=>{gg.moveTo(46.5,39.5);gg.lineTo(47.5,41.5);gg.moveTo(49.5,39.5);gg.lineTo(48.5,41.5);},.8);
+  inkPath(g,gg=>{gg.moveTo(42,44);gg.quadraticCurveTo(48,46.5,54,44);},1.5); // mouth
+  for(const s of [-1,1]){ g.fillStyle="#e8e0cc"; g.beginPath(); // jutting lower tusks
+    g.moveTo(48+s*3,45); g.lineTo(48+s*4.5,37+rf(-1,1)); g.lineTo(48+s*6.4,45); g.closePath(); g.fill();
+    inkPath(g,gg=>{gg.moveTo(48+s*3,45);gg.lineTo(48+s*4.5,37);gg.lineTo(48+s*6.4,45);},1.1); }
+  if(chance(.7)) for(let i=0;i<5;i++) ell(g,rf(34,62),rf(48,70),rf(1.5,3),rf(1,2),"#4a6e3a"); // moss
+  if(chance(.5)){ const cx=68; limb(g,[[cx,86],[cx-4,52]],3.5,"#5a4a32",1); // crude club
+    ell(g,cx-5,49,6,7.5,"#4a3a26"); inkPath(g,gg=>gg.ellipse(cx-5,49,6,7.5,0,0,7),1.3);
+    for(let i=0;i<3;i++) ell(g,cx-7+i*2.4,46+i*2,1,1,"#8a8a92"); }
+  return "Mire Troll";
+}
+
 /* ---- hero full-body builders (96-space, standing y≈86) ---- */
 function hFighter(g){
   const armor="#8f9ec4", armorD="#5b6b96", cloth="#4c5c86";
@@ -547,7 +626,8 @@ function hRogue(g){
   return "Rogue";
 }
 const FIGURES={rat:cRat,goblin:cGoblin,kobold:cKobold,skeleton:cSkeleton,wight:cWight,dragon:cDragon,
-  spider:cSpider,lich:cLich,wyvern:cWyvern,golem:cGolem,fighter:hFighter,mage:hMage,cleric:hCleric,rogue:hRogue};
+  spider:cSpider,lich:cLich,wyvern:cWyvern,golem:cGolem,slime:cSlime,troll:cTroll,
+  fighter:hFighter,mage:hMage,cleric:hCleric,rogue:hRogue};
 function buildFigure(kind,seed){
   seedRng(seed); setParts(null); setBlinks(null);
   const c=document.createElement("canvas"); c.width=c.height=384;
@@ -559,5 +639,5 @@ function buildFigure(kind,seed){
 }
 
 export {
-  cSpider, cKobold, cGoblin, cSkeleton, cRat, cLich, cWight, cWyvern, cDragon, cGolem, hFighter, hMage, hCleric, hRogue, FIGURES, buildFigure
+  cSpider, cKobold, cGoblin, cSkeleton, cRat, cLich, cWight, cWyvern, cDragon, cGolem, cSlime, cTroll, hFighter, hMage, hCleric, hRogue, FIGURES, buildFigure
 };

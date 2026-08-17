@@ -311,7 +311,7 @@ function spawnFromToken(tok,d,idx){
   return makeEnemy(tok,{level:lvl, name:(d.roster&&d.roster[tok])||undefined});
 }
 /* Between boss kills the boss room fields a trash wave so it stays farmable (deep-level roster). */
-const BOSS_FARM_COMP=["wight","skeleton","kobold","kobold","goblin"];
+const BOSS_FARM_COMP=["troll","skeleton","kobold","goblin"];
 function spawnWave(){
   const d=activeDungeon(), idx=state.roomIdx, L=LAYOUTS[idx];
   // The boss only joins the wave when its timer is up; otherwise a trash pack keeps the room busy.

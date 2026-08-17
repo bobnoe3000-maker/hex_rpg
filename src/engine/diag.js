@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-18 · Non-boss enemies hit 20% softer (ENEMY_ATK_MULT 0.8) — party keeps ~10pp more HP per trash fight; bosses untouched";
+export const APP_BUILD = "2026-08-18 · Bestiary expanded +8: spider · slime · harpy · cutthroat · golem · lich · troll · wyvern — woven into every dungeon's rooms with themed names; two new figures (bog slime, mire troll)";
 
 const BUF = [];
 const MAX = 400;
