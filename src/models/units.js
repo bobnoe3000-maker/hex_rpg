@@ -56,6 +56,8 @@ export function makeHero(cls, opts = {}) {
     hp: stats.hp, maxhp: stats.hp, atk: stats.atk, def: stats.def, dodge: stats.dodge, crit: stats.crit, aspd: stats.aspd,
     pts: emptyPoints(),   // spent level-up stat points (only the main hero allocates these)
     skills: {},           // learned skills → rank (main hero; companions get a loadout in a later phase)
+    potion: null,         // equipped consumable brew {type,size,qty} — auto-quaffed in battle
+    pendRolls: 0, pendRoll: null,   // companion level-up roll queue (companions only)
     gear, alive: true, seed, figSeed: pSeed, portraitSeed: pSeed,
   };
 }

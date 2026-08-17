@@ -419,5 +419,28 @@ ok("different seed diverges", seq(123) !== seq(777));
   ok("2H swap accounts for the freed offhand's DEF", cT.stats.find(s=>s.stat==="def").diff === -10);
 }
 
+// ---- potions ----
+{
+  const { POTIONS, SIZES, potionEffect, potionCost, potionSell, potionEffectText, rollLootPotion, POTION_CAP }
+    = await import("../src/data/potions.js");
+  ok("seven brews, five sizes", POTIONS.length === 7 && SIZES.length === 5);
+  ok("stack cap is 99", POTION_CAP === 99);
+  ok("every brew has effect + cooldown + trigger", POTIONS.every(p => p.effect && p.cd > 0 && (p.trigger === "hurt" || p.trigger === "combat")));
+  // magnitude scales with size (Healing: tiny 12% → giant 70%)
+  ok("heal tiny ≈ 12% HP", Math.round(potionEffect("heal", "tiny").val * 100) === 12);
+  ok("heal giant ≈ 70% HP", Math.round(potionEffect("heal", "giant").val * 100) === 70);
+  ok("bigger size = bigger effect", potionEffect("might", "giant").val > potionEffect("might", "small").val);
+  ok("buff duration grows with size", potionEffect("might", "giant").dur > potionEffect("might", "tiny").dur);
+  // cost climbs steeply, sell < cost
+  ok("cost increases every size", SIZES.every((s, i) => i === 0 || potionCost("heal", s.id) > potionCost("heal", SIZES[i-1].id)));
+  ok("giant costs far more than tiny", potionCost("heal", "giant") >= potionCost("heal", "tiny") * 10);
+  ok("sell price is below buy price", potionSell("heal", "medium") < potionCost("heal", "medium"));
+  ok("effect text renders", /Restore 32% HP/.test(potionEffectText("heal", "medium")) && /\+.* Crit for/.test(potionEffectText("fortune", "large")));
+  // loot roll is always a valid brew+size, biased bigger with tier
+  const seed = mb(7);
+  ok("loot potion is valid", (()=>{ for (let i=0;i<50;i++){ const p=rollLootPotion(5, mb(i));
+    if (!POTIONS.some(x=>x.id===p.type) || !SIZES.some(s=>s.id===p.size) || p.qty!==1) return false; } return true; })());
+}
+
 console.log(fails ? `\n${fails} FAILED` : "\nall passed");
 process.exit(fails ? 1 : 0);

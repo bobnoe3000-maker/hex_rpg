@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-16 · bag items show upgrade/downgrade vs equipped (deltas)";
+export const APP_BUILD = "2026-08-17 · potion belt — brews, sizes, cooldown, Apothecary";
 
 const BUF = [];
 const MAX = 400;

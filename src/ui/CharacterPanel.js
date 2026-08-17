@@ -8,6 +8,8 @@ import { canEquip, equip, unequip, compareToEquipped } from "../systems/Equipmen
 import { STAT_STEP, ASSIGNABLE } from "../systems/Leveling.js";
 import { heroKit } from "../systems/Skills.js";
 import { SLOTS } from "../data/items/gearTypes.js";
+import { POTION_BY_ID, potionName, potionEffectText } from "../data/potions.js";
+import { flaskSvg } from "./potionChip.js";
 import { itemNameHtml as itemName } from "./itemView.js";
 import { iconImg } from "../engine/icons.js";
 import { gearIconImg } from "../engine/gearIcon.js";
@@ -276,7 +278,21 @@ export function openCharacter(hero, ctx) {
         <div><span class="k">Range</span><span class="v">${D.rng > 1 ? "Ranged" : "Melee"}</span></div>
       </div>
       ${attrSection()}`;
+    // Potion belt — the equipped consumable + the shared stash you can load from.
+    const potionBlock = () => {
+      const P = ctx.potion; if (!P) return "";
+      const eq = P.equipped(), stash = P.stash();
+      const slot = eq && eq.qty > 0
+        ? `<div class="cp-slot" style="cursor:default">${flaskSvg(POTION_BY_ID[eq.type].color, 24)}<span class="it"><b>${potionName(eq.type, eq.size)}</b> <span style="color:#9ad1ff">×${eq.qty}</span><br><small>${potionEffectText(eq.type, eq.size)}</small></span><button class="cp-btn off" data-punequip>✕</button></div>`
+        : `<div class="cp-slot" style="cursor:default"><span class="it cp-empty">— no potion equipped —</span></div>`;
+      const stackRow = (s, i) => `<div class="cp-item"><div class="cp-irow">${flaskSvg(POTION_BY_ID[s.type].color, 24)}<span class="it"><b>${potionName(s.type, s.size)}</b> <span style="color:#9ad1ff">×${s.qty}</span><br><small>${potionEffectText(s.type, s.size)} · ${POTION_BY_ID[s.type].cd}s cd</small></span><button class="cp-btn" data-pequip="${i}">Equip</button></div></div>`;
+      return `<div class="cp-sec"><span>Potion Belt</span><span class="hint">auto-quaffed in battle on a cooldown</span></div>
+        ${slot}
+        <div class="cp-sec"><span>Potions${stash.length ? "" : " — none"}</span></div>
+        ${stash.length ? stash.map(stackRow).join("") : `<div class="cp-none">Buy at the Apothecary, or find them as loot.</div>`}`;
+    };
     const equipBlock = `
+      ${potionBlock()}
       <div class="cp-sec"><span>Equipped</span><span class="hint">tap a slot to filter the bag</span></div>
       ${SLOTS.map(slotRow).join("")}
       <div class="cp-sec"><span>Bag${filterSlot ? ` — ${cap(filterSlot)}` : ""}${others > 0 && !filterSlot ? ` · ${others} for other heroes` : ""}</span>${filterSlot ? `<span class="cp-clear" data-clear="1">show all ✕</span>` : ""}</div>
@@ -419,6 +435,11 @@ export function openCharacter(hero, ctx) {
     overlay.querySelectorAll("[data-cmp]").forEach(b => b.onclick = () => {
       const it = ctx.inventory[+b.getAttribute("data-cmp")];
       if (it) { expandedCmp.has(it) ? expandedCmp.delete(it) : expandedCmp.add(it); render(); }
+    });
+    const pun = overlay.querySelector("[data-punequip]"); if (pun && ctx.potion) pun.onclick = () => { ctx.potion.unequip(); render(); };
+    overlay.querySelectorAll("[data-pequip]").forEach(b => b.onclick = () => {
+      const s = ctx.potion && ctx.potion.stash()[+b.getAttribute("data-pequip")];
+      if (s) { ctx.potion.equip(s); render(); }
     });
     // attribute point-buy: draft with +/−, Reset discards, Confirm commits via ctx.assign
     overlay.querySelectorAll("[data-inc]").forEach(b => b.onclick = () => {

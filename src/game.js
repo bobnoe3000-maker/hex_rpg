@@ -27,6 +27,9 @@ import { startOnboarding } from './ui/Onboarding.js';
 import { makeCompanion, makeEnemy } from './models/units.js';
 import { openDungeonSelect } from './ui/DungeonSelect.js';
 import { openCompanionRoll } from './ui/CompanionLevelUp.js';
+import { openApothecary } from './ui/Apothecary.js';
+import { POTION_BY_ID, POTION_CAP, potionEffect, potionCost, potionSell, rollLootPotion } from './data/potions.js';
+import { potionTileChip, ensurePotChipCss } from './ui/potionChip.js';
 import { readSlot, writeSlot, SAVE_VERSION } from './state/save.js';
 import { installDiag, diag, diagText, APP_BUILD } from './engine/diag.js';
 installDiag(); // start capturing console errors / uncaught exceptions immediately
@@ -61,7 +64,7 @@ logBar.onclick=()=>{ const i=LOG_STATES.indexOf(logWrap.dataset.s||"mid");
 setLogState("mid");
 /* phase: idle → fight ⇄ paused. inventory holds dropped loot; respawn/revive are timers. */
 const state={ roomIdx:0, scene:"town", phase:"idle", room:null, foes:[], t:0, speed:1,
-  inventory:[], gems:0, silver:0, shopStock:[], recruits:[], respawnAt:null, wipeAt:null,
+  inventory:[], potions:[], gems:0, silver:0, shopStock:[], recruits:[], respawnAt:null, wipeAt:null,
   dungeonId:"emberdeep", cleared:[],   // active dungeon + set of cleared-boss ids (persisted)
   bossAt:null, bossInWave:false,       // when the boss may next appear (runtime) + is it on the field now
   rally:null };      // {r,c} flag heroes regroup on when no foe is engaged
@@ -97,14 +100,14 @@ function refreshParty(){ renderParty(); if(state.scene==="town" && townRefresh) 
 let activeSlot=null;        // which save slot this run writes to (set by onboarding)
 function snapshotState(){
   return { v:SAVE_VERSION, party, silver:state.silver, gems:state.gems,
-    inventory:state.inventory, roomIdx:state.roomIdx,
+    inventory:state.inventory, potions:state.potions, roomIdx:state.roomIdx,
     dungeonId:state.dungeonId, cleared:state.cleared, savedAt:new Date().toISOString() };
 }
 function saveGame(){ if(activeSlot!==null) writeSlot(activeSlot, snapshotState()); }
 function loadGame(save){
-  party=(save.party||[]).map(h=>({alive:true, pts:emptyPoints(), skills:{}, ...h}));   // defaults for older saves
+  party=(save.party||[]).map(h=>({alive:true, pts:emptyPoints(), skills:{}, potion:null, ...h}));   // defaults for older saves
   state.silver=save.silver||0; state.gems=save.gems||0;
-  state.inventory=save.inventory||[]; state.roomIdx=save.roomIdx||0;
+  state.inventory=save.inventory||[]; state.potions=save.potions||[]; state.roomIdx=save.roomIdx||0;
   state.dungeonId=dungeonById(save.dungeonId).id;    // older saves default to the Emberdeep
   state.cleared=Array.isArray(save.cleared)?save.cleared.slice():[];
 }
@@ -205,6 +208,7 @@ function hudOrder(){
   return [...others.slice(0,mid), party[0], ...others.slice(mid)].filter(Boolean);
 }
 function renderParty(){
+  ensurePotChipCss();
   partyEl.innerHTML="";
   for(const h of hudOrder()){
     const D=derive(h), isMain=h===party[0];
@@ -229,7 +233,11 @@ function renderParty(){
       <div class="bar"><i style="width:${clamp(h.hp/D.maxhp*100,0,100)}%"></i></div>
       ${h.hp}/${D.maxhp}<div class="gear">${bag} equipped · tap for gear ›</div>`
         : `<span class="fallen">${iconImg("skull",11)} Fallen — restore at the Temple</span>`}`;
-    c.appendChild(picWrap); c.appendChild(info); partyEl.appendChild(c);
+    // portrait column: portrait on top, the equipped-potion chip below it
+    const col=document.createElement("div"); col.style.cssText="display:flex;flex-direction:column;align-items:center;flex:0 0 auto";
+    col.appendChild(picWrap);
+    if(h.alive){ const pc=document.createElement("div"); pc.innerHTML=potionTileChip(h.potion); col.appendChild(pc.firstElementChild); }
+    c.appendChild(col); c.appendChild(info); partyEl.appendChild(c);
   }
 }
 const ease=k=>k*k*(3-2*k);
@@ -348,7 +356,7 @@ function stepAway(u,tg){
 /* ---------- skill runtime: timed buffs / debuffs / cooldowns (all units share this) ---------- */
 function hasBuff(u,k){ return u.buffs && u.buffs.some(b=>b.k===k); }
 function addBuff(u,b){ (u.buffs||(u.buffs=[])).push(b); }
-function resetCombat(u){ u.buffs=[]; u.cd={}; u.mLast=0; }
+function resetCombat(u){ u.buffs=[]; u.cd={}; u.mLast=0; u.potCd=0; }
 function adjFoes(u){ return livingFoes(u.team).filter(f=>distU(f,u)<=1); }
 function foesInRange(u,rad){ return livingFoes(u.team).filter(f=>distU(f,u)<=rad); }
 function lowestHurtAlly(u,thr){ let best=null,bf=2;
@@ -371,9 +379,39 @@ function addMomentum(u,mo){
 }
 function tickBuffs(u){
   if(!u.buffs||!u.buffs.length) return;
-  for(const b of u.buffs){ if(b.k==="bleed" && u.alive && state.t>=b.nextTick){ b.nextTick+=0.5;
-    hurt(u, Math.max(1,Math.round(b.dps*0.5)), b.src); } }
+  for(const b of u.buffs){
+    if(b.k==="bleed" && u.alive && state.t>=b.nextTick){ b.nextTick+=0.5;
+      hurt(u, Math.max(1,Math.round(b.dps*0.5)), b.src); }
+    if(b.k==="regen" && u.alive && state.t>=b.nextTick){ b.nextTick+=0.5;   // potion heal-over-time
+      const mh=derive(u).maxhp; u.hp=Math.min(mh, u.hp+Math.max(1,Math.round(b.hps*0.5)));
+      if(u.team===0) renderParty(); } }
   u.buffs = u.buffs.filter(b=> b.until==null || state.t<b.until);
+}
+/* ---- potion belt: auto-quaff on cooldown when the trigger fits ---- */
+function tryQuaff(u){
+  const p=u.potion; if(!p||p.qty<=0) return;
+  if(state.t < (u.potCd||0)) return;                       // still on cooldown
+  const eff=potionEffect(p.type,p.size); if(!eff) return;
+  const mh=derive(u).maxhp, hf=u.hp/Math.max(1,mh);
+  const fire = eff.trigger==="hurt" ? hf<0.55 : livingFoes(u.team).length>0;   // heal/shield when hurt; buffs in a fight
+  if(!fire) return;
+  applyPotion(u,eff);
+  p.qty=Math.max(0,p.qty-1); u.potCd=state.t+eff.cd;
+  if(u.team===0) renderParty();                            // update the charge badge live
+}
+function applyPotion(u,eff){
+  const mh=derive(u).maxhp, c=eff.color;
+  if(eff.effect==="heal"){ const h=Math.max(1,Math.round(mh*eff.val)); u.hp=Math.min(mh,u.hp+h);
+    fxText(uxS(u),uyS(u)-40,"+"+h,c,true); }
+  else if(eff.effect==="regen"){ addBuff(u,{k:"regen",hps:mh*eff.val/Math.max(1,eff.dur),until:state.t+eff.dur,nextTick:state.t+0.5});
+    fxText(uxS(u),uyS(u)-40,"regen",c); }
+  else if(eff.effect==="shield"){ addBuff(u,{k:"shield",v:Math.max(1,Math.round(mh*eff.val)),until:state.t+eff.dur});
+    fxText(uxS(u),uyS(u)-40,"shield",c); }
+  else if(eff.effect==="mult"){ addBuff(u,{k:"pot",mult:true,stat:eff.stat,v:eff.val,until:state.t+eff.dur});
+    fxText(uxS(u),uyS(u)-40,eff.name.split(" ")[0],c); }
+  else if(eff.effect==="flat"){ addBuff(u,{k:"pot",flat:true,stat:eff.stat,v:eff.val,until:state.t+eff.dur});
+    fxText(uxS(u),uyS(u)-40,eff.name.split(" ")[0],c); }
+  fxRing(uxS(u),uyS(u)+6,c);
 }
 /* one basic attack, resolved by the deterministic CombatSim (+ this hero's skill modifiers) */
 function attack(att,def){
@@ -519,6 +557,10 @@ function hurt(u,dmg,src,opt){
       if(combatRng()<(u.boss?BAL.GEM_CHANCE_BOSS:BAL.GEM_CHANCE)){ state.gems++;
         log(`${iconImg("gem",14)} <b>${u.name}</b> drops a <span class="sys">Runic Gem</span> <span style="opacity:.6">(${state.gems})</span>`,"sys");
         fxText(uxS(u),uyS(u)-46,"gem","#9ad1ff"); }
+      if(u.boss||combatRng()<BAL.POTION_DROP_CHANCE){    // potions drop into the shared stash (size ~ tier)
+        const pd=rollLootPotion(d.power, combatRng); addPotion(pd.type,pd.size,pd.qty);
+        log(`${iconImg("chest",14)} <b>${u.name}</b> drops a <span class="sys">${POTION_BY_ID[pd.type].name}</span> <span style="opacity:.6">(${pd.size})</span>`,"sys");
+        fxText(uxS(u),uyS(u)-58,"potion",POTION_BY_ID[pd.type].color); saveGame(); }
       const sv=Math.max(1,Math.round(u.xp*(BAL.SILVER_MULT+combatRng()*BAL.SILVER_JITTER)));
       state.silver+=sv;
       if(combatRng()<0.5) fxText(uxS(u),uyS(u)-14,"+"+sv,"#d8c47a");
@@ -761,6 +803,12 @@ function openHero(h){
       silver: ()=>state.silver,
     } : null,
     refresh: refreshParty,   // scene-aware: updates the HUD and the visible Keep/Tavern portrait dots
+    potion: {                // the belt: equipped brew + shared stash + load/unload
+      equipped: ()=>h.potion,
+      stash: ()=>state.potions,
+      equip: stack=>equipPotion(h,stack),
+      unequip: ()=>unequipPotion(h),
+    },
     gems: ()=>state.gems,
     silver: ()=>state.silver,
     close: ()=>{},
@@ -795,7 +843,7 @@ function openTownScreen(){
   townRefresh=openTownScreen;
   openTown({ silver:()=>state.silver, gems:()=>state.gems, party, portrait:h=>heroPortrait(h),
     openHero, openShop:openShopScreen, openTavern:openTavernScreen, openTemple:openTempleScreen,
-    openForge:openForgeScreen, openDiag:openDiagScreen, openDungeons:openDungeonBoard,
+    openForge:openForgeScreen, openApothecary:openApothecaryScreen, openDiag:openDiagScreen, openDungeons:openDungeonBoard,
     tileFlag:heroTileFlag, activeDungeon:()=>activeDungeon() });
 }
 /* start a fresh delve of a chosen dungeon (resets to its first room) */
@@ -826,6 +874,46 @@ function openForgeScreen(){
   townRefresh=openForgeScreen;
   openForge({ gems:()=>state.gems, silver:()=>state.silver, gear:allGear, party:()=>party, portrait:h=>heroPortrait(h),
     preview:forgePreview, forge:tryForge, back:openTownScreen });
+}
+/* ---------- potions: shared stash + per-hero belt ---------- */
+function addPotion(type,size,n=1){
+  const st=state.potions.find(s=>s.type===type&&s.size===size);
+  if(st) st.qty=Math.min(POTION_CAP, st.qty+n);
+  else state.potions.push({type,size,qty:Math.min(POTION_CAP,n)});
+}
+function takePotion(type,size,n){   // pull up to n from the stash; returns how many came out
+  const i=state.potions.findIndex(s=>s.type===type&&s.size===size); if(i<0) return 0;
+  const st=state.potions[i], take=Math.min(st.qty,n); st.qty-=take; if(st.qty<=0) state.potions.splice(i,1); return take;
+}
+/* load a whole stash stack onto a hero's belt (merges same brew, swaps different, caps at 99). */
+function equipPotion(h,stack){
+  if(!stack) return false;
+  const take=takePotion(stack.type,stack.size,POTION_CAP); if(!take) return false;
+  const same=h.potion&&h.potion.qty>0&&h.potion.type===stack.type&&h.potion.size===stack.size;
+  if(same){ const room=POTION_CAP-h.potion.qty, add=Math.min(room,take); h.potion.qty+=add;
+    if(take-add>0) addPotion(stack.type,stack.size,take-add); }
+  else { if(h.potion&&h.potion.qty>0) addPotion(h.potion.type,h.potion.size,h.potion.qty);   // old belt → stash
+    const add=Math.min(POTION_CAP,take); h.potion={type:stack.type,size:stack.size,qty:add};
+    if(take-add>0) addPotion(stack.type,stack.size,take-add); }
+  refreshParty(); saveGame(); return true;
+}
+function unequipPotion(h){
+  if(!h.potion||h.potion.qty<=0){ h.potion=null; return false; }
+  addPotion(h.potion.type,h.potion.size,h.potion.qty); h.potion=null;
+  refreshParty(); saveGame(); return true;
+}
+function buyPotion(type,size){
+  const cost=potionCost(type,size); if(state.silver<cost) return false;
+  state.silver-=cost; addPotion(type,size,1); updateHud(); saveGame(); return true;
+}
+function sellPotion(type,size){
+  if(!takePotion(type,size,1)) return false;
+  state.silver+=potionSell(type,size); updateHud(); saveGame(); return true;
+}
+function openApothecaryScreen(){
+  townRefresh=openApothecaryScreen;
+  openApothecary({ silver:()=>state.silver, potions:()=>state.potions,
+    cost:potionCost, sell:potionSell, buy:buyPotion, sellOne:sellPotion, back:openTownScreen });
 }
 /* ---------- tavern: hire companions (scale to the main hero's level) ---------- */
 const mainLevel=()=>party[0]?party[0].level:1;
@@ -1064,8 +1152,9 @@ function loop(now){
       if(state.scene==="dungeon" && state.phase==="fight"){
         for(const u of liveUnits()){
           if(!u.alive)continue;   // a unit killed earlier this same tick shouldn't still act
-          tickBuffs(u);           // advance bleeds / expire timed buffs
+          tickBuffs(u);           // advance bleeds / regen / expire timed buffs
           if(!u.alive)continue;   // a bleed may have finished it off
+          tryQuaff(u);            // auto-quaff the equipped potion when it fits
           if(state.t>=u.next){ act(u); u.next=state.t+BAL.BASE_INTERVAL/derive(u).aspd+combatRng()*BAL.ASPD_JITTER; }
         }
         updateWaves();
@@ -1118,7 +1207,7 @@ function beginRun(){
 startOnboarding({
   onNewGame:(hero, slot)=>{
     activeSlot=slot;
-    party=[hero]; state.silver=BAL.STARTING_SILVER; state.gems=0; state.inventory=[]; state.roomIdx=0;
+    party=[hero]; state.silver=BAL.STARTING_SILVER; state.gems=0; state.inventory=[]; state.potions=[]; state.roomIdx=0;
     state.dungeonId="emberdeep"; state.cleared=[];   // fresh ladder
     log(`Welcome to <span class="sys">The Emberdeep</span>, <b>${hero.name}</b> the ${hero.cls}.`,"sys");
     log(`Recruit up to two pals at the Tavern, gear up, then <b>Descend</b>. Fallen pals can be restored at the Temple.`,"sys");
