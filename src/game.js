@@ -81,6 +81,7 @@ const liveUnits=()=>{ const a=[]; for(const h of party) if(h.alive) a.push(h);
    so the freeze can never get "stuck" if the overlay is dismissed by any path. */
 let uiFrozen=false;
 const panelShown=()=>overlay.classList.contains("show");
+let heroPanelOpen=false;    // a character sheet (or its level-up roll) owns the overlay — loot must wait, never override it
 let party=[];               // filled by onboarding: [main, ...companions]
 const PARTY_CAP=3;          // main + 2 companions ("two companions only"); Tavern replaces the fallen
 /* true when the MAIN hero has unspent level-up or skill points waiting — drives the "spend me" dot on
@@ -570,8 +571,9 @@ function hurt(u,dmg,src,opt){
       const d=activeDungeon();
       const dropChance=Math.min(BAL.DROP_CHANCE_MAX, BAL.DROP_CHANCE + BAL.DROP_CHANCE_PER_TIER*(d.power-1));
       if(u.boss||combatRng()<dropChance){
-        // Only ONE roll popup at a time: while one is open, normal drops are skipped to prevent stacking
-        // (the battle rolls on behind it). Boss drops always come through.
+        // Only ONE roll popup at a time: while a loot ROLL is open, normal drops are skipped to prevent
+        // stacking (the battle rolls on behind it). Boss drops always come through. Drops that land while
+        // the character window is open still queue — they wait and show once that window is closed.
         if(u.boss || !lootOpen){
           fxText(uxS(u),uyS(u)-30,"loot!","#ffd166");
           queueDrop({classes:partyClasses(), power:d.power, floor:d.dropFloor}, u.name);   // opens the slot-roll popup
@@ -801,6 +803,7 @@ function openHero(h){
   // resumes exactly where the fight left off. No separate flag to leak. A companion with pending
   // level-ups sees a "Roll" call-to-action inside their screen (the player initiates every roll).
   const isCompanion = h!==party[0];
+  heroPanelOpen=true;               // hold back any loot roll until this window is closed
   openCharacter(h, {
     inventory: state.inventory,
     portrait: heroPortrait(h),
@@ -830,16 +833,18 @@ function openHero(h){
     },
     gems: ()=>state.gems,
     silver: ()=>state.silver,
-    close: ()=>{},
+    close: ()=>{ heroPanelOpen=false; pumpLoot(); },   // window closed → show any loot that dropped while it was open
   });
 }
 /* Read-only look at a tavern recruit (a stranger you don't own yet): full stats, skills and the gear
    they'd bring — but no equipping/potion controls, so you can't strand bag gear on someone unhired. */
 function previewRecruit(h){
+  heroPanelOpen=true;
   openCharacter(h, {
     inventory: [], portrait: heroPortrait(h), isMain: false, preview: true, xp: null,   // no XP bar for a stranger
     pendRolls: null, openRoll: null, points: null, assign: null, skills: null,
-    refresh: ()=>{}, potion: null, gems: ()=>state.gems, silver: ()=>state.silver, close: ()=>{},
+    refresh: ()=>{}, potion: null, gems: ()=>state.gems, silver: ()=>state.silver,
+    close: ()=>{ heroPanelOpen=false; pumpLoot(); },
   });
 }
 /* ---------- loot roll: every gear drop opens a slot-roll popup (reroll for silver, or accept) ---------- */
@@ -850,8 +855,10 @@ const lootRerollCost=(power,n)=>Math.round((BAL.LOOT_REROLL_BASE + (power||1)*BA
    bursts of drops in one wave show one popup after another. */
 function queueDrop(opts, from){ lootQ.push({ roll: generateRoll(combatRng, opts), opts, from }); pumpLoot(); }
 function pumpLoot(){
-  if(lootOpen || !lootQ.length){
-    if(!lootQ.length && !lootOpen && panelShown()){ overlay.classList.remove("show"); overlay.innerHTML=""; }  // queue drained → resume the delve
+  if(lootOpen) return;                       // a roll is already up; its close will re-pump
+  if(heroPanelOpen) return;                  // a character window is open — wait, never draw over it (its close re-pumps)
+  if(!lootQ.length){
+    if(panelShown()){ overlay.classList.remove("show"); overlay.innerHTML=""; }   // queue drained → resume the delve
     return;
   }
   lootOpen=true;
