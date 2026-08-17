@@ -47,6 +47,9 @@ export const BAL = {
   DROP_CHANCE_PER_TIER: 0.02,   // + this to DROP_CHANCE per tier above 1 (capped below)
   DROP_CHANCE_MAX: 0.30,
   FIRST_CLEAR_GRADE_BUMP: 1,    // first boss kill guarantees a drop, floor lifted this many grades
+  // Loot Roll: rerolling a drop costs (BASE + tier*TIER) × GROWTH^n — rises per reroll within a drop
+  // (n resets each drop) and scales with the dungeon tier, so chasing epics burns silver.
+  LOOT_REROLL_BASE: 15, LOOT_REROLL_TIER: 8, LOOT_REROLL_GROWTH: 1.6,
   POTION_DROP_CHANCE: 0.05,     // chance a slain foe drops a potion (bosses always do); size scales with tier
 
   // silver (the shop/economy currency) — a little from every kill

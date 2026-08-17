@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-17 · Tavern recruits: full skills row + tap to preview (read-only sheet)";
+export const APP_BUILD = "2026-08-17 · Loot Roll: every gear drop is a 3-reel slot (reroll for silver, or accept)";
 
 const BUF = [];
 const MAX = 400;

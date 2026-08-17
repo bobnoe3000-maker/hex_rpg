@@ -85,3 +85,32 @@ export function generate(rng, opts = {}) {
   item.d = describeItem(item);
   return item;
 }
+
+/* Generate a drop AND the per-component breakdown the Loot Roll popup needs: the three landed
+   components (Prefix · Material · Type) with their power-scaled stat contribution, plus the pool of
+   alternatives each reel can spin through. Presentation data only — `item` is the clean item to keep. */
+export function generateRoll(rng, opts = {}) {
+  const item = generate(rng, opts);
+  const power = Math.max(1, opts.power || 1);
+  const powMult = 1 + BAL.LOOT_POWER_STEP * (power - 1);
+  const scale = (stat, val) => round1(stat === "aspd" ? val : val * powMult);
+  const disp = (c, kind) => ({
+    name: c.name || "",
+    stat: c.stat || null,
+    val: c.stat ? scale(c.stat, c.val) : 0,
+    proc: c.proc ? cap(c.proc.kind) : null,
+    draw: c.drawback ? { stat: c.drawback.stat, val: scale(c.drawback.stat, c.drawback.val) } : null,
+    twoH: kind === "type" ? !!c.twoH : false,
+    rng: kind === "type" ? (c.rng || 1) : null,
+  });
+  const prefix = PREFIXES.find(p => p.id === item.parts.prefix);
+  const material = MATERIALS.find(m => m.id === item.parts.material);
+  const type = GEAR_TYPES.find(g => g.id === item.parts.type);
+  const parts = { prefix: disp(prefix, "prefix"), material: disp(material, "material"), type: disp(type, "type") };
+  const pools = {
+    prefix: PREFIXES.map(p => disp(p, "prefix")),
+    material: MATERIALS.filter(m => m.mat === material.mat).map(m => disp(m, "material")),
+    type: GEAR_TYPES.filter(g => g.slot === type.slot).map(g => disp(g, "type")),
+  };
+  return { item, parts, pools, power };
+}

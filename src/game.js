@@ -13,7 +13,8 @@ import { CLASS_SKILLS, TIER_GATES, MAX_RANK } from './data/skills.js';
 import { BAL } from './data/balance.js';
 import { derive, mitigate } from './systems/StatEngine.js';
 import { resolveAttack } from './systems/CombatSim.js';
-import { generate, describeItem } from './systems/LootGenerator.js';
+import { generate, generateRoll, describeItem } from './systems/LootGenerator.js';
+import { openLootRoll } from './ui/LootRoll.js';
 import { upgrade as forgeUpgrade, canUpgrade, forgePreview, forgeCost } from './systems/ForgeSystem.js';
 import { priceOf, sellPriceOf } from './systems/Economy.js';
 import { openCharacter } from './ui/CharacterPanel.js';
@@ -571,11 +572,8 @@ function hurt(u,dmg,src,opt){
       const d=activeDungeon();
       const dropChance=Math.min(BAL.DROP_CHANCE_MAX, BAL.DROP_CHANCE + BAL.DROP_CHANCE_PER_TIER*(d.power-1));
       if(u.boss||combatRng()<dropChance){
-        const drop=generate(combatRng,{classes:partyClasses(), power:d.power, floor:d.dropFloor});
-        state.inventory.push(drop);
-        log(`${iconImg("chest",14)} <b>${u.name}</b> drops <span class="sys">${drop.n}</span> <span style="opacity:.6">→ bag (${state.inventory.length})</span>`);
-        fxText(uxS(u),uyS(u)-30,"+"+drop.n.split(" ").pop(),"#ffd166");
-        saveGame();          // persist fresh loot so a drop survives a reload mid-run
+        fxText(uxS(u),uyS(u)-30,"loot!","#ffd166");
+        queueDrop({classes:partyClasses(), power:d.power, floor:d.dropFloor}, u.name);   // opens the slot-roll popup
       }
       if(combatRng()<(u.boss?BAL.GEM_CHANCE_BOSS:BAL.GEM_CHANCE)){ state.gems++;
         log(`${iconImg("gem",14)} <b>${u.name}</b> drops a <span class="sys">Runic Gem</span> <span style="opacity:.6">(${state.gems})</span>`,"sys");
@@ -767,9 +765,8 @@ function onBossDown(){
     state.cleared.push(d.id);
     const floor=["plain","fine","rare","epic"];
     const bump=Math.min(floor.length-1, floor.indexOf(d.dropFloor)+BAL.FIRST_CLEAR_GRADE_BUMP);
-    const reward=generate(combatRng,{classes:partyClasses(), power:d.power, floor:floor[bump]});
-    state.inventory.push(reward);
-    log(`${iconImg("chest",14)} First clear! <b>${d.name}</b> yields <span class="sys">${reward.n}</span>.`,"heal");
+    log(`${iconImg("chest",14)} First clear! <b>${d.name}</b> yields a reward — roll it!`,"heal");
+    queueDrop({classes:partyClasses(), power:d.power, floor:floor[bump]}, `${d.name} · first clear`);
     const nx=nextDungeon(d);
     if(nx) log(`${iconImg("spark",14)} <span class="sys">${nx.name} is now open at the Dungeons board.</span>`,"sys");
   }
@@ -846,6 +843,33 @@ function previewRecruit(h){
     inventory: [], portrait: heroPortrait(h), isMain: false, preview: true, xp: null,   // no XP bar for a stranger
     pendRolls: null, openRoll: null, points: null, assign: null, skills: null,
     refresh: ()=>{}, potion: null, gems: ()=>state.gems, silver: ()=>state.silver, close: ()=>{},
+  });
+}
+/* ---------- loot roll: every gear drop opens a slot-roll popup (reroll for silver, or accept) ---------- */
+let lootQ=[];            // queued drops waiting to be rolled: {roll, opts, from}
+let lootOpen=false;      // a roll popup is currently showing (overlay frozen)
+const lootRerollCost=(power,n)=>Math.round((BAL.LOOT_REROLL_BASE + (power||1)*BAL.LOOT_REROLL_TIER) * Math.pow(BAL.LOOT_REROLL_GROWTH, n|0));
+/* Generate the drop NOW (advances combatRng at the moment of death, as loot always did) and queue it;
+   bursts of drops in one wave show one popup after another. */
+function queueDrop(opts, from){ lootQ.push({ roll: generateRoll(combatRng, opts), opts, from }); pumpLoot(); }
+function pumpLoot(){
+  if(lootOpen || !lootQ.length){
+    if(!lootQ.length && !lootOpen && panelShown()){ overlay.classList.remove("show"); overlay.innerHTML=""; }  // queue drained → resume the delve
+    return;
+  }
+  lootOpen=true;
+  const entry=lootQ.shift(), opts=entry.opts, from=entry.from, power=opts.power||1;
+  let roll=entry.roll, rerolls=0;
+  openLootRoll(roll, {
+    from,
+    silver:()=>state.silver,
+    rerollCost:()=>lootRerollCost(power, rerolls),
+    reroll:()=>{ const cost=lootRerollCost(power, rerolls); if(state.silver<cost) return null;
+      state.silver-=cost; rerolls++; roll=generateRoll(Math.random, opts); updateHud(); return roll; },  // rerolls are interactive → Math.random
+    accept:()=>{ state.inventory.push(roll.item);
+      log(`${iconImg("chest",14)} ${from?`<b>${from}</b> drops `:""}<span class="sys">${roll.item.n}</span> <span style="opacity:.6">→ bag (${state.inventory.length})</span>`);
+      saveGame(); },
+    close:()=>{ lootOpen=false; pumpLoot(); },   // next queued drop, or resume the delve
   });
 }
 /* ---------- scenes: town hub ⇄ dungeon ---------- */
