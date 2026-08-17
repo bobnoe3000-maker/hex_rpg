@@ -251,8 +251,8 @@ export function openCharacter(hero, ctx) {
       const dirty = ASSIGNABLE.some(k => draft[k] !== 0);
       const dval = k => k === "hp" ? D.maxhp : D[k];  // D already includes committed points
       const arow = k => {
-        const committed = (hero.pts && hero.pts[k]) || 0;
-        const canAdd = remaining > 0, canSub = committed + draft[k] > 0;
+        // − only pulls back points added in THIS uncommitted draft — committed stats can't be refunded
+        const canAdd = remaining > 0, canSub = draft[k] > 0;
         const preview = dval(k) + draft[k] * STAT_STEP[k];
         const pend = draft[k] !== 0 ? ` <span class="pend ${draft[k] < 0 ? "neg" : ""}">(${draft[k] > 0 ? "+" : ""}${draft[k] * STAT_STEP[k]})</span>` : "";
         return `<div class="cp-arow"><span class="k">${ATTR_LABEL[k]}</span>
@@ -450,8 +450,8 @@ export function openCharacter(hero, ctx) {
       if (ctx.points() - draftSum() > 0) { draft[k]++; render(); }
     });
     overlay.querySelectorAll("[data-dec]").forEach(b => b.onclick = () => {
-      const k = b.getAttribute("data-dec"); const committed = (hero.pts && hero.pts[k]) || 0;
-      if (committed + draft[k] > 0) { draft[k]--; render(); }
+      const k = b.getAttribute("data-dec");
+      if (draft[k] > 0) { draft[k]--; render(); }   // only remove points added this draft, never committed
     });
     // skill tree: sub-tab, draft +/-, then Confirm to commit; Reset (paid) is a two-tap
     overlay.querySelectorAll("[data-branch]").forEach(b => b.onclick = () => { skillBranch = b.getAttribute("data-branch"); skillResetArm = false; render(); });

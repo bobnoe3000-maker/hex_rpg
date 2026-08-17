@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-17 · potions moved to their own character-panel tab";
+export const APP_BUILD = "2026-08-17 · stat points are add-only (can't refund committed stats)";
 
 const BUF = [];
 const MAX = 400;

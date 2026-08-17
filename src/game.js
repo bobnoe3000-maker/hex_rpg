@@ -650,8 +650,9 @@ function openCompanionRollScreen(h){
    Validated against available points; grants any HP increase, clamps current HP on a refund. */
 function assignPoints(h, deltas){
   if(h!==party[0]) return false;                       // main hero only
+  // add-only: committed stat points are permanent — a delta can only INCREASE a stat, never refund it
   const next={...emptyPoints(), ...(h.pts||{})};
-  for(const k of ASSIGNABLE) next[k]=Math.max(0,(next[k]||0)+(deltas[k]||0));
+  for(const k of ASSIGNABLE) next[k]=(next[k]||0)+Math.max(0,deltas[k]||0);
   // reject an allocation that would overspend the earned pool
   let spent=0; for(const k of ASSIGNABLE) spent+=next[k];
   if(spent>earnedPoints(h.level)) return false;
@@ -659,7 +660,6 @@ function assignPoints(h, deltas){
   h.pts=next;
   const after=derive(h).maxhp;
   if(after>before) h.hp=Math.min(after,h.hp+(after-before));   // new HP is granted live
-  else h.hp=Math.min(h.hp,after);                              // refunded HP → clamp down
   renderParty(); updateHud(); saveGame();
   return true;
 }
