@@ -10,7 +10,9 @@ import { priceOf, sellPriceOf } from "../src/systems/Economy.js";
 import { xpToReach, xpForNext } from "../src/engine/combat.js";
 import { earnedPoints, pointsForLevel, unspentPoints, pointBonus, STAT_STEP } from "../src/systems/Leveling.js";
 import { earnedSkillPoints, unspentSkillPoints, branchInvested, tierUnlocked, combatMods,
-         skillFlat, skillMult, buffMult, activeSkills, allSkills, rollCompanionSkills, heroKit } from "../src/systems/Skills.js";
+         skillFlat, skillMult, buffMult, activeSkills, allSkills, rollCompanionSkills, heroKit,
+         fxNum, fxStep, starTier } from "../src/systems/Skills.js";
+import { MAX_POINTS, PTS_PER_STAR } from "../src/data/skills.js";
 import { scaleEnemy } from "../src/models/units.js";
 import { DUNGEONS, LAYOUTS, ROOM_COUNT, BOSS_ROOM, dungeonById, isUnlocked, nextDungeon, prevDungeon } from "../src/data/dungeons.js";
 import { BAL } from "../src/data/balance.js";
@@ -240,7 +242,7 @@ ok("different seed diverges", seq(123) !== seq(777));
     ok("every companion kit is 2 active + 3 passive, class-appropriate", bad === 0);
   }
   ok("companion kits are deterministic per seed", JSON.stringify(makeCompanion(77, 8).skills) === JSON.stringify(makeCompanion(77, 8).skills));
-  ok("companion skill rank scales with level", Math.max(...Object.values(makeCompanion(3, 1).skills)) === 1 && Math.max(...Object.values(makeCompanion(3, 13).skills)) === 5);
+  ok("companion skill points scale with level (whole stars)", Math.max(...Object.values(makeCompanion(3, 1).skills)) === 5 && Math.max(...Object.values(makeCompanion(3, 13).skills)) === 25);
   ok("rollCompanionSkills is class-appropriate", Object.keys(rollCompanionSkills("mage", 5, 6)).every(id => allSkills("mage").some(s => s.id === id)));
   ok("higher-level companion is the same identity, stronger", c3.cls === c1.cls && c3.name === c1.name && c3.level === 3 && c3.maxhp > c1.maxhp && c3.atk >= c1.atk);
   const h = makeHero("fighter", { statSeed: 1 }); const hp0 = h.maxhp;
@@ -293,17 +295,23 @@ ok("different seed diverges", seq(123) !== seq(777));
 
   // tier gating
   ok("tier 1 open, tier 3 gated at 0 invest", tierUnlocked(h,"fighter","off",1) && !tierUnlocked(h,"fighter","off",3));
-  h.level = 10; h.skills = { fury: 5, reckless: 1 };   // 6 invested in Onslaught
+  h.level = 10; h.skills = { fury: 5, reckless: 1 };   // 6 points invested in Onslaught
   ok("investing unlocks tier 3", branchInvested(h,"fighter","off") === 6 && tierUnlocked(h,"fighter","off",3));
 
-  // passive flat stats fold into derive (Battle Fury +15 ATK at r5)
+  // passive flat stats fold into derive (Battle Fury +15 ATK at 25 pts = five full stars)
   const base = makeHero("fighter", 1); const atk0 = derive(base).atk;
-  base.skills = { fury: 5 };
-  ok("Battle Fury r5 adds +15 ATK via derive", derive(base).atk === atk0 + 15);
+  base.skills = { fury: 25 };
+  ok("Battle Fury maxed adds +15 ATK via derive", derive(base).atk === atk0 + 15);
   ok("skillFlat reports the same", skillFlat(base).atk === 15);
+  // a partial star interpolates: 3 pts on Battle Fury = 60% of the way to the first anchor (+3) = +1.8
+  const part = makeHero("fighter", 1); part.skills = { fury: 3 };
+  ok("Battle Fury interpolates below the first star", Math.abs(skillFlat(part).atk - 1.8) < 1e-9);
+  // a full star reproduces the old per-rank anchor exactly (5 pts = old rank 1 = +3)
+  const star1 = makeHero("fighter", 1); star1.skills = { fury: 5 };
+  ok("one full star == old rank-1 value", skillFlat(star1).atk === 3);
 
   // Berserker (missing-HP mult) raises ATK when hurt
-  const b2 = makeHero("fighter", 1); b2.skills = { berserk: 5 }; const full = derive(b2).atk;
+  const b2 = makeHero("fighter", 1); b2.skills = { berserk: 25 }; const full = derive(b2).atk;
   b2.hp = Math.round(derive(b2).maxhp * 0.2);   // ~80% missing
   ok("Berserker scales ATK with missing HP", derive(b2).atk > full);
   ok("skillMult>1 when wounded", skillMult(b2,"atk",0.8) > 1);
@@ -314,17 +322,38 @@ ok("different seed diverges", seq(123) !== seq(777));
   ok("a defMult buff raises derived DEF ~1.5×", Math.abs(derive(g).def - d0*1.5) < 1.5 && buffMult(g,"def") === 1.5);
 
   // combatMods: Executioner adds damage only to low-HP targets; Crushing Blows ignores DEF on crit
-  const att = makeHero("fighter", 1); att.skills = { exec: 1, crush: 1, blood: 1 };
+  const att = makeHero("fighter", 1); att.skills = { exec: 5, crush: 5, blood: 5 };   // one full star each
   const lowDef = { hp: 5, maxhp: 100, cls:"rat", team:1 };
   const m1 = combatMods(att, lowDef, 0.1), m2 = combatMods(att, lowDef, 0.9);
   ok("Executioner fires under threshold, not over", m1.dmgMult > 1 && m2.dmgMult === 1);
-  ok("Crushing Blows + Bloodthirst reported", m1.critDefIgnore === 0.25 && m1.lifesteal === 0.08);
+  ok("Crushing Blows + Bloodthirst reported at star 1", Math.abs(m1.critDefIgnore - 0.25) < 1e-9 && Math.abs(m1.lifesteal - 0.08) < 1e-9);
 
   // active skills surface for casting (Guard/Sunder/etc), highest tier first
   att.skills = { guard: 1, unbreak: 1, cleave: 1 };
   const acts = activeSkills(att);
   ok("active skills list only actives, capstone first", acts[0].id === "unbreak" && acts.some(a=>a.id==="guard"));
   ok("passive-only heroes have no actives", activeSkills(makeHero("fighter",{})).length === 0);
+}
+
+// Five-star scaling: 25 points per skill, smooth interpolation + per-star steps for discrete params
+{
+  const anchor = [3, 6, 9, 12, 15];
+  ok("cap is 25 points = five stars", MAX_POINTS === 25 && PTS_PER_STAR === 5);
+  ok("fxNum(0) is 0, fxNum(25) is the top anchor", fxNum(anchor, 0) === 0 && fxNum(anchor, 25) === 15);
+  ok("every full star reproduces its old rank anchor",
+     [1,2,3,4,5].every(s => fxNum(anchor, s * 5) === anchor[s - 1]));
+  ok("fxNum interpolates linearly between anchors", Math.abs(fxNum(anchor, 7) - (3 + (6-3)*0.4)) < 1e-9 && Math.abs(fxNum(anchor, 3) - 1.8) < 1e-9);
+  ok("fxNum clamps above the cap", fxNum(anchor, 40) === 15);
+  ok("starTier maps points→rank (ceil, clamped)", starTier(1)===1 && starTier(5)===1 && starTier(6)===2 && starTier(25)===5 && starTier(99)===5);
+  ok("fxStep upgrades once per full star", fxStep([1,1,2,2,99], 1)===1 && fxStep([1,1,2,2,99], 12)===2 && fxStep([1,1,2,2,99], 25)===99);
+  // actives cast with the star tier, not the raw points — so their shape only shifts on a full star
+  const a = makeHero("fighter", 1); a.skills = { whirl: 13 };   // 13 pts = star tier 3
+  const act = activeSkills(a).find(x => x.id === "whirl");
+  ok("activeSkills exposes points and the star-tier rank", act.points === 13 && act.rank === 3);
+  // heroKit carries points + resolved stars
+  const kh = makeHero("fighter", 1); kh.skills = { fury: 17 };
+  const kit = heroKit(kh); const fk = kit.find(k => k.id === "fury");
+  ok("heroKit reports points and star tier", fk.points === 17 && fk.stars === 4);
 }
 
 // All four classes have a complete, well-formed tree
@@ -338,11 +367,11 @@ ok("different seed diverges", seq(123) !== seq(777));
     ok(cls+" every skill is active or passive with an fx", all.every(s=>(s.type==="active"||s.type==="passive") && s.fx));
   }
   // a mage's passives fold into derive; its actives surface for casting
-  const mage = makeHero("mage", 1); mage.skills = { kindling:5, firebolt:3 };
+  const mage = makeHero("mage", 1); mage.skills = { kindling:25, firebolt:15 };
   ok("Mage Kindling +15 ATK via derive", derive(mage).atk === derive(makeHero("mage",1)).atk + 15);
   ok("Mage Firebolt is a castable active", activeSkills(mage).some(a=>a.id==="firebolt"));
   // a cleric heal is an active; Grace is a flat-HP passive
-  const cleric = makeHero("cleric", 1); cleric.skills = { grace:5, heal:1 };
+  const cleric = makeHero("cleric", 1); cleric.skills = { grace:25, heal:5 };
   ok("Cleric Grace +75 HP", derive(cleric).maxhp === derive(makeHero("cleric",1)).maxhp + 75);
   ok("Cleric Heal is a castable active", activeSkills(cleric).some(a=>a.id==="heal"));
 }

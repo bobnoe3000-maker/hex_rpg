@@ -6,7 +6,8 @@
 import { derive } from "../systems/StatEngine.js";
 import { canEquip, equip, unequip, compareToEquipped } from "../systems/Equipment.js";
 import { STAT_STEP, ASSIGNABLE } from "../systems/Leveling.js";
-import { heroKit } from "../systems/Skills.js";
+import { heroKit, starTier } from "../systems/Skills.js";
+import { starsHtml, starLabel } from "./stars.js";
 import { SLOTS } from "../data/items/gearTypes.js";
 import { POTION_BY_ID, potionName, potionEffectText } from "../data/potions.js";
 import { flaskSvg } from "./potionChip.js";
@@ -150,10 +151,10 @@ function injectCss() {
   .cp-skill .stype.a{color:#2a0f08;background:#ff8a5a}.cp-skill .stype.p{color:#06121a;background:#79c7e6}
   .cp-skill .sd{font-size:11px;color:#9a8fb8;margin:3px 0 6px;line-height:1.35}
   .cp-skill .sr{display:flex;align-items:center;gap:7px}
-  .spips{display:flex;gap:3px;flex:1}
-  .spips i{flex:1;height:5px;border-radius:2px;background:#2a2338}
-  .cp-skill.off .spips i.f{background:#ff8a5a}.cp-skill.def .spips i.f{background:#79c7e6}
-  .cp-skill.off .spips i.d{background:rgba(255,138,90,.5)}.cp-skill.def .spips i.d{background:rgba(121,199,230,.5)}
+  .stars{display:inline-flex;gap:2px;align-items:center;vertical-align:middle}
+  .cp-skill .sr .stars{flex:1}
+  .cp-skill.off .stars{--sc:#ff8a5a}.cp-skill.def .stars{--sc:#79c7e6}
+  .cp-skill .skpts{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:9.5px;color:var(--gold);flex:0 0 auto}
   .cp-skill .pend{font-size:10px;color:var(--gold);font-weight:bold}
   .cp-respec{width:100%;font-family:inherit;font-weight:bold;font-size:12px;border:1px solid var(--line2);border-radius:8px;
     padding:9px;cursor:pointer;background:#241a2e;color:#c9a0ff;display:flex;align-items:center;justify-content:center;gap:6px}
@@ -168,8 +169,9 @@ function injectCss() {
   .cp-kit{display:flex;align-items:center;gap:8px;padding:6px 9px;border-radius:8px;background:#1c1630;border:1px solid var(--line);margin-bottom:5px}
   .cp-kit.off{border-left:2px solid #ff8a5a}.cp-kit.def{border-left:2px solid #79c7e6}
   .cp-kit .kn{flex:1;font-size:12.5px;font-weight:bold;color:var(--parchment)}
-  .cp-kit .kr{font-size:10px;color:var(--gold);letter-spacing:1px}
-  .cp-kit .kr .ko{color:#3a3450}
+  .cp-kit .stars{flex:0 0 auto}
+  .cp-kit.off .stars{--sc:#ff8a5a}.cp-kit.def .stars{--sc:#79c7e6}
+  .cp-kit .kr{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:9px;color:var(--gold);min-width:26px;text-align:right}
   `;
   document.head.appendChild(s);
 }
@@ -323,13 +325,14 @@ export function openCharacter(hero, ctx) {
           const committed = committedOf(s.id), r = rankOfId(s.id), un = unlockedNow(br, s.tier);
           const canAdd = un && r < sk.maxRank && avail > 0;
           const canDec = draftN(s.id) > 0;                    // only pending ranks can be pulled back
-          const txt = r > 0 ? s.text[r - 1] : s.text[0];
+          const txt = r > 0 ? s.text[starTier(r) - 1] : s.text[0];
           const pend = r - committed;
           return `<div class="cp-skill ${r > 0 ? "on" : ""} ${un ? "" : "lk"} ${br}">
             <div class="sh"><span class="sn">${s.name}${pend > 0 ? ` <span class="pend">+${pend}</span>` : ""}</span><span class="stype ${s.type[0]}">${s.type === "active" ? "Active" : "Passive"}</span></div>
             <div class="sd">${txt}</div>
             <div class="sr">
-              <span class="spips">${[0,1,2,3,4].map(i => `<i class="${i < committed ? "f" : i < r ? "d" : ""}"></i>`).join("")}</span>
+              ${starsHtml(r, 16)}
+              <span class="skpts">${r}/${sk.maxRank}</span>
               <button class="sbtn" data-sk-dec="${s.id}" ${canDec ? "" : "disabled"}>−</button>
               <button class="sbtn add" data-sk-inc="${s.id}" ${canAdd ? "" : "disabled"}>+</button>
             </div>${un ? "" : `<div class="slock">Locked · needs ${sk.gates[s.tier]} in ${b.name}</div>`}</div>`;
@@ -369,7 +372,7 @@ export function openCharacter(hero, ctx) {
       const row = k => `<div class="cp-kit ${k.br}">
         <span class="stype ${k.type[0]}">${k.type === "active" ? "Active" : "Passive"}</span>
         <span class="kn">${k.name}</span>
-        <span class="kr">${"★".repeat(k.rank)}<span class="ko">${"★".repeat(5 - k.rank)}</span></span></div>`;
+        ${starsHtml(k.points, 13)}<span class="kr">${starLabel(k.points)}</span></div>`;
       return `<div class="cp-sec"><span>Skills</span><span class="hint">${na} active · ${np} passive · auto-cast in battle</span></div>
         ${kit.map(row).join("")}`;
     };

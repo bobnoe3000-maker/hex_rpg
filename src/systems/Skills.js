@@ -5,8 +5,28 @@
    to decide casts. Nothing here imports StatEngine, so there's no cycle. */
 "use strict";
 
-import { CLASS_SKILLS, TIER_GATES, MAX_RANK } from "../data/skills.js";
+import { CLASS_SKILLS, TIER_GATES, MAX_RANK, MAX_POINTS, PTS_PER_STAR } from "../data/skills.js";
 import { mulberry32 } from "../core/rng.js";
+
+/* ---- five-star scaling -------------------------------------------------------------- */
+/* A skill now holds up to MAX_POINTS (25) lit tips = five full stars, but its `fx` arrays still
+   carry MAX_RANK (5) tuning anchors. Two ways to read a value at `pts` points invested:
+   • fxNum  — smooth, per-point interpolation of the 5 anchors across the 0→25 range (from 0).
+              Used for continuous passive magnitudes so every single point is felt.
+              fxNum(arr, R*PTS_PER_STAR) === arr[R-1], so star boundaries reproduce the old ranks.
+   • starTier/fxStep — the old integer rank (1..5), one per full star. Used for discrete counts
+              (cleave targets, bleed stacks, extra uses …) and, via starTier, to feed the
+              unchanged active-cast path so an ability's shape only shifts on a full star. */
+export const starTier = pts => Math.max(1, Math.min(MAX_RANK, Math.ceil((pts | 0) / PTS_PER_STAR)));
+export function fxNum(arr, pts) {
+  if (!arr || !arr.length) return 0;
+  const x = Math.max(0, pts | 0) / PTS_PER_STAR;      // 0 … 5
+  const i = Math.floor(x);
+  const lo = i === 0 ? 0 : (arr[Math.min(i - 1, arr.length - 1)] || 0);
+  const hi = arr[Math.min(i, arr.length - 1)] || 0;
+  return lo + (hi - lo) * (x - i);
+}
+export const fxStep = (arr, pts) => (arr ? (arr[starTier(pts) - 1] || 0) : 0);
 
 /* ---- tree lookups ---- */
 export function classTree(cls) { return CLASS_SKILLS[cls] || null; }
@@ -38,7 +58,7 @@ export function skillFlat(u) {
   const out = { atk: 0, def: 0, hp: 0, dodge: 0, crit: 0, aspd: 0 };
   if (u && u.skills && u.cls) for (const s of allSkills(u.cls)) {
     const r = rankOf(u, s.id); if (!r || !s.fx.flat) continue;
-    for (const k in s.fx.flat) out[k] += s.fx.flat[k][r - 1] || 0;
+    for (const k in s.fx.flat) out[k] += fxNum(s.fx.flat[k], r);
   }
   if (u && u.buffs) for (const b of u.buffs) if (b.flat) out[b.stat] = (out[b.stat] || 0) + b.v;
   return out;
@@ -48,7 +68,7 @@ export function skillMult(u, stat, missing) {
   let m = 1;
   if (u && u.skills && u.cls) for (const s of allSkills(u.cls)) {
     const r = rankOf(u, s.id); if (!r || !s.fx.mult || s.fx.mult.stat !== stat) continue;
-    m *= 1 + s.fx.mult.pct[r - 1] * Math.max(0, Math.min(1, missing));
+    m *= 1 + fxNum(s.fx.mult.pct, r) * Math.max(0, Math.min(1, missing));
   }
   return m;
 }
@@ -66,15 +86,15 @@ export function combatMods(att, def, defHpFrac) {
   const m = { dmgMult: 1, critDefIgnore: 0, critDmgReduce: 0, lifesteal: 0, cleaveTargets: 0, cleavePct: 0, bleed: null };
   if (att && att.skills && att.cls) for (const s of allSkills(att.cls)) {
     const r = rankOf(att, s.id); if (!r) continue; const fx = s.fx;
-    if (fx.exec && defHpFrac < fx.exec.thr) m.dmgMult *= 1 + fx.exec.pct[r - 1];
-    if (fx.critDefIgnore) m.critDefIgnore = Math.max(m.critDefIgnore, fx.critDefIgnore[r - 1]);
-    if (fx.lifesteal) m.lifesteal += fx.lifesteal[r - 1];
-    if (fx.cleave) { m.cleaveTargets = fx.cleave.tg[r - 1]; m.cleavePct = fx.cleave.pct[r - 1]; }
-    if (fx.rend) m.bleed = { pct: fx.rend.pct[r - 1], dur: fx.rend.dur, stacks: fx.rend.stacks[r - 1] };
+    if (fx.exec && defHpFrac < fx.exec.thr) m.dmgMult *= 1 + fxNum(fx.exec.pct, r);
+    if (fx.critDefIgnore) m.critDefIgnore = Math.max(m.critDefIgnore, fxNum(fx.critDefIgnore, r));
+    if (fx.lifesteal) m.lifesteal += fxNum(fx.lifesteal, r);
+    if (fx.cleave) { m.cleaveTargets = fxStep(fx.cleave.tg, r); m.cleavePct = fxNum(fx.cleave.pct, r); }
+    if (fx.rend) m.bleed = { pct: fxNum(fx.rend.pct, r), dur: fx.rend.dur, stacks: fxStep(fx.rend.stacks, r) };
   }
   if (def && def.skills && def.cls) for (const s of allSkills(def.cls)) {
     const r = rankOf(def, s.id); if (!r) continue; const fx = s.fx;
-    if (fx.critDmgReduce) m.critDmgReduce = Math.max(m.critDmgReduce, fx.critDmgReduce[r - 1]);
+    if (fx.critDmgReduce) m.critDmgReduce = Math.max(m.critDmgReduce, fxNum(fx.critDmgReduce, r));
   }
   return m;
 }
@@ -84,17 +104,17 @@ export function guardianFrac(u) { return passiveVal(u, "guardian"); }
 export function waveHealFrac(u) { return passiveVal(u, "waveheal"); }
 export function lastStand(u) {
   if (!u || !u.skills || !u.cls) return null;
-  for (const s of allSkills(u.cls)) { const r = rankOf(u, s.id); if (r && s.fx.lastst) return { heal: s.fx.lastst.heal[r - 1], uses: s.fx.lastst.uses[r - 1] }; }
+  for (const s of allSkills(u.cls)) { const r = rankOf(u, s.id); if (r && s.fx.lastst) return { heal: fxNum(s.fx.lastst.heal, r), uses: fxStep(s.fx.lastst.uses, r) }; }
   return null;
 }
 export function momentum(u) {
   if (!u || !u.skills || !u.cls) return null;
-  for (const s of allSkills(u.cls)) { const r = rankOf(u, s.id); if (r && s.fx.momentum) return { pct: s.fx.momentum.pct[r - 1], stacks: s.fx.momentum.stacks[r - 1], dur: s.fx.momentum.dur }; }
+  for (const s of allSkills(u.cls)) { const r = rankOf(u, s.id); if (r && s.fx.momentum) return { pct: fxNum(s.fx.momentum.pct, r), stacks: fxStep(s.fx.momentum.stacks, r), dur: s.fx.momentum.dur }; }
   return null;
 }
 function passiveVal(u, key) {
   let v = 0;
-  if (u && u.skills && u.cls) for (const s of allSkills(u.cls)) { const r = rankOf(u, s.id); if (r && Array.isArray(s.fx[key])) v = Math.max(v, s.fx[key][r - 1]); }
+  if (u && u.skills && u.cls) for (const s of allSkills(u.cls)) { const r = rankOf(u, s.id); if (r && Array.isArray(s.fx[key])) v = Math.max(v, fxNum(s.fx[key], r)); }
   return v;
 }
 
@@ -111,9 +131,10 @@ export function rollCompanionSkills(cls, seed, level) {
   const r = mulberry32((seed >>> 0) || 1);
   const draw = (arr, n) => { const a = arr.slice(), out = [];
     for (let i = 0; i < n && a.length; i++) out.push(a.splice((r() * a.length) | 0, 1)[0]); return out; };
-  const rank = Math.max(1, Math.min(MAX_RANK, 1 + Math.floor((level - 1) / 3)));
+  // Companions start a kit at a whole number of stars scaled by level (1 star per 3 levels).
+  const points = Math.min(MAX_POINTS, Math.max(1, 1 + Math.floor((level - 1) / 3)) * PTS_PER_STAR);
   const skills = {};
-  for (const s of [...draw(actives, 2), ...draw(passives, 3)]) skills[s.id] = rank;
+  for (const s of [...draw(actives, 2), ...draw(passives, 3)]) skills[s.id] = points;
   return skills;
 }
 /* resolved skill list for display (name / type / rank / branch), e.g. a companion's kit */
@@ -121,7 +142,7 @@ export function heroKit(hero) {
   if (!hero || !hero.skills || !hero.cls) return [];
   const out = [];
   for (const s of allSkills(hero.cls)) { const r = hero.skills[s.id];
-    if (r) out.push({ id: s.id, name: s.name, type: s.type, rank: r, br: s.br }); }
+    if (r) out.push({ id: s.id, name: s.name, type: s.type, points: r, stars: starTier(r), br: s.br }); }
   return out;
 }
 
@@ -133,7 +154,7 @@ export function activeSkills(u) {
   const out = [];
   for (const s of allSkills(u.cls)) {
     const r = rankOf(u, s.id); if (!r || !s.fx.active) continue;
-    out.push({ id: s.id, name: s.name, tier: s.tier, rank: r, a: s.fx.active });
+    out.push({ id: s.id, name: s.name, tier: s.tier, rank: starTier(r), points: r, a: s.fx.active });
   }
   return out.sort((x, y) => y.tier - x.tier);
 }

@@ -9,6 +9,7 @@
 import { ensureTownCss } from "./TownScreen.js";
 import { derive } from "../systems/StatEngine.js";
 import { heroKit } from "../systems/Skills.js";
+import { starLabel } from "./stars.js";
 import { iconImg } from "../engine/icons.js";
 
 let tvCssDone = false;
@@ -47,6 +48,7 @@ function ensureTavernCss() {
   .tv-sk{font-family:ui-monospace,monospace;font-size:9px;letter-spacing:.02em;padding:2px 6px;border-radius:5px;line-height:1.4}
   .tv-sk.a{color:#2a0f08;background:#ff9a5c}
   .tv-sk.p{color:#06121a;background:#9ad1ff}
+  .tv-sk .tv-sst{opacity:.7;font-weight:bold}
   .tv-chips{display:flex;gap:5px;margin-top:4px;flex-wrap:wrap}
   .tv-chip{font-family:ui-monospace,monospace;font-size:8.5px;letter-spacing:.03em;padding:2px 6px;border-radius:5px;
     background:#241b38;color:#b9add6;border:1px solid #332a4a}
@@ -104,7 +106,7 @@ export function openTavern(ctx) {
         <div class="tv-act">${actions}</div></div>`;
     };
     // every skill the hero carries, as wrapping active/passive chips (so a recruit's whole kit is readable)
-    const skillChips = h => heroKit(h).map(k => `<span class="tv-sk ${k.type[0]}" title="${k.type} · rank ${k.rank}">${k.name}</span>`).join("");
+    const skillChips = h => heroKit(h).map(k => `<span class="tv-sk ${k.type[0]}" title="${k.type} · ${starLabel(k.points)}">${k.name} <span class="tv-sst">${starLabel(k.points)}</span></span>`).join("");
 
     // ---- party ----
     const partyCards = party.map((h, i) => {

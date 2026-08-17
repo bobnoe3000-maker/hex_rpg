@@ -9,7 +9,7 @@ import { DUNGEONS, LAYOUTS, ROOM_COUNT, BOSS_ROOM, dungeonById, isUnlocked, next
 import { unspentPoints, earnedPoints, pointsForLevel, ASSIGNABLE, emptyPoints } from './systems/Leveling.js';
 import { combatMods, activeSkills, unspentSkillPoints, earnedSkillPoints, spentSkillPoints, branchInvested, tierUnlocked, rankOf, allSkills,
          reflectFrac, guardianFrac, waveHealFrac, lastStand, momentum, heroKit } from './systems/Skills.js';
-import { CLASS_SKILLS, TIER_GATES, MAX_RANK } from './data/skills.js';
+import { CLASS_SKILLS, TIER_GATES, MAX_POINTS, PTS_PER_STAR } from './data/skills.js';
 import { BAL } from './data/balance.js';
 import { derive, mitigate } from './systems/StatEngine.js';
 import { resolveAttack } from './systems/CombatSim.js';
@@ -635,7 +635,7 @@ function companionRollData(h){
   for(const k of ASSIGNABLE){ const x=Math.random(); stats[k]= x<0.34?0 : x<0.80?1:2; }
   if(ASSIGNABLE.every(k=>!stats[k])) stats[ASSIGNABLE[(Math.random()*ASSIGNABLE.length)|0]]=1+Math.round(Math.random());
   // skill: the reel holds the kit + 2 blank slots, so ~2/7 of rolls grant no skill this level.
-  const pool=heroKit(h).filter(s=>(h.skills[s.id]||0)<MAX_RANK);
+  const pool=heroKit(h).filter(s=>(h.skills[s.id]||0)<MAX_POINTS);
   const SKILL_MISS=2/7;                       // fixed ~29% "no upgrade" chance, independent of kit size
   const skillId=(pool.length && Math.random()>=SKILL_MISS) ? pool[(Math.random()*pool.length)|0].id : null;
   return { stats, skillId };
@@ -649,7 +649,7 @@ function applyCompanionRoll(h){
   const next={...emptyPoints(), ...(h.pts||{})};
   for(const k of ASSIGNABLE) next[k]=(next[k]||0)+(roll.stats[k]||0);
   h.pts=next;
-  if(roll.skillId) h.skills[roll.skillId]=Math.min(MAX_RANK,(h.skills[roll.skillId]||0)+1);
+  if(roll.skillId) h.skills[roll.skillId]=Math.min(MAX_POINTS,(h.skills[roll.skillId]||0)+1);
   const after=derive(h).maxhp;
   if(after>before) h.hp=Math.min(after, h.hp+(after-before));
   h.pendRolls=Math.max(0,(h.pendRolls||0)-1);
@@ -829,7 +829,7 @@ function openHero(h){
       ranks: ()=>h.skills||{},                 // committed ranks
       points: ()=>unspentSkillPoints(h),       // unspent (committed) pool
       invested: br=>branchInvested(h,h.cls,br),
-      gates: TIER_GATES, maxRank: MAX_RANK,
+      gates: TIER_GATES, maxRank: MAX_POINTS, ptsPerStar: PTS_PER_STAR,
       commit: draft=>learnSkills(h,draft),     // apply a drafted allocation (saves)
       resetCost: ()=>respecCost(h),
       reset: ()=>resetSkills(h),

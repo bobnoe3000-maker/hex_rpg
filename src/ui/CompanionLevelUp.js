@@ -5,7 +5,8 @@
 "use strict";
 
 import { STAT_STEP, ASSIGNABLE } from "../systems/Leveling.js";
-import { MAX_RANK } from "../data/skills.js";
+import { MAX_POINTS } from "../data/skills.js";
+import { starsHtml, starLabel } from "./stars.js";
 import { iconImg } from "../engine/icons.js";
 
 const STAT_LABEL = { hp: "HP", atk: "ATK", def: "DEF", dodge: "Dodge", crit: "Crit" };
@@ -61,10 +62,10 @@ function injectCss() {
   .clv-scell.miss .sn{color:#5b5473;font-style:italic;font-weight:normal;font-size:13px}
   .clv-skill.locked{border-color:var(--gold);box-shadow:0 0 0 1px rgba(224,176,99,.25)}
   .clv-skill.pop{animation:clvpop .3s ease}
-  .clv-pips{display:flex;gap:3px}
-  .clv-pips i{width:8px;height:8px;border-radius:2px;background:#2a2338}
-  .clv-pips i.f{background:var(--gold)}.clv-pips i.n{background:#8fd39a;box-shadow:0 0 6px #8fd39a}
-  .clv-sup{font-family:ui-monospace,monospace;font-size:10px;color:#8fd39a;white-space:nowrap;min-width:58px;text-align:right}
+  .clv-scell .sn{flex:1}
+  .clv-scell .stars{display:inline-flex;align-items:center;--sc:var(--gold);flex:0 0 auto;gap:2px}
+  .clv-scell .star{display:block}
+  .clv-sup{font-family:ui-monospace,monospace;font-size:10px;color:#8fd39a;white-space:nowrap;min-width:70px;text-align:right}
   .clv-ctrl{display:flex;gap:8px}
   .clv-ctrl button{font-family:Georgia,serif;font-weight:bold;border:0;border-radius:11px;cursor:pointer;letter-spacing:.05em}
   .clv-roll{flex:1;padding:14px;font-size:16px;text-transform:uppercase;letter-spacing:.1em;color:#241606;
@@ -86,7 +87,7 @@ function injectCss() {
 const easeOut = x => 1 - Math.pow(1 - x, 3);
 const POINTS = [0, 1, 2];
 
-/* ctx = { portrait, kit:()=>[{id,name,type,rank}], silver:()=>n, getRoll:()=>({stats,skillId}),
+/* ctx = { portrait, kit:()=>[{id,name,type,points,stars}], silver:()=>n, getRoll:()=>({stats,skillId}),
            levelFor:()=>n, rerollCost:()=>n, reroll:()=>bool, confirm:()=>remaining, close:()=>void } */
 export function openCompanionRoll(hero, ctx) {
   injectCss();
@@ -135,7 +136,7 @@ export function openCompanionRoll(hero, ctx) {
     : `<div class="clv-scell miss"><span class="sn">— no upgrade —</span></div>`;
   // reel cycle = the companion's skills + 2 blank slots (a roll can land on a blank → no skill this level)
   const reelList = () => ctx.kit().concat([null, null]);
-  const hasEligible = () => ctx.kit().some(k => k.rank < MAX_RANK);   // any skill left to raise? (else "maxed")
+  const hasEligible = () => ctx.kit().some(k => k.points < MAX_POINTS);   // any skill left to raise? (else "maxed")
 
   function idle() {
     for (const k of ASSIGNABLE) { const st = stripOf(k); st.style.transform = "translateY(0)"; st.innerHTML = cellHtml(1); effOf(k).textContent = ""; boxOf(k).className = "clv-reel"; }
@@ -159,9 +160,9 @@ export function openCompanionRoll(hero, ctx) {
     const s = roll.skillId ? kit.find(x => x.id === roll.skillId) : null;
     sstrip().innerHTML = scellHtml(s); sstrip().style.transform = "translateY(0)";
     if (s) {
-      const before = s.rank, after = Math.min(5, before + 1), cell = sstrip().firstElementChild;
-      if (cell) cell.insertAdjacentHTML("beforeend", `<span class="clv-pips">${[0,1,2,3,4].map(n => `<i class="${n < before ? "f" : n === before ? "n" : ""}"></i>`).join("")}</span>`);
-      supEl().innerHTML = `${"★".repeat(before)}<span style="color:#3a3450">${"★".repeat(5 - before)}</span> → <b>${after}★</b>`;
+      const before = s.points, after = Math.min(MAX_POINTS, before + 1), cell = sstrip().firstElementChild;
+      if (cell) cell.insertAdjacentHTML("beforeend", starsHtml(after, 13));
+      supEl().innerHTML = `${starLabel(before)} → <b>${starLabel(after)}</b>`;
     } else supEl().textContent = hasEligible() ? "no upgrade" : "maxed";
     skillBox().className = "clv-skill locked";
     phase = "rolled"; hintRoll(roll); controls();
@@ -210,11 +211,11 @@ export function openCompanionRoll(hero, ctx) {
       skillBox().classList.add("locked", "pop");
       const roll = a.roll, s = roll.skillId ? a.kit.find(x => x.id === roll.skillId) : null;
       if (s) {
-        const before = s.rank, after = Math.min(5, before + 1);
+        const before = s.points, after = Math.min(MAX_POINTS, before + 1);
         const cell = a.strip.children[a.endIdx];
-        if (cell && !cell.querySelector(".clv-pips"))
-          cell.insertAdjacentHTML("beforeend", `<span class="clv-pips">${[0,1,2,3,4].map(n => `<i class="${n < before ? "f" : n === before ? "n" : ""}"></i>`).join("")}</span>`);
-        supEl().innerHTML = `${"★".repeat(before)}<span style="color:#3a3450">${"★".repeat(5 - before)}</span> → <b>${after}★</b>`;
+        if (cell && !cell.querySelector(".stars"))
+          cell.insertAdjacentHTML("beforeend", starsHtml(after, 13));
+        supEl().innerHTML = `${starLabel(before)} → <b>${starLabel(after)}</b>`;
       } else supEl().textContent = hasEligible() ? "no upgrade" : "maxed";
       setTimeout(() => skillBox().classList.remove("pop"), 320);
     }

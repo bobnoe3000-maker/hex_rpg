@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-17 · Dungeon: tappable room minimap + nav bar; boss timer no longer resets on room hop";
+export const APP_BUILD = "2026-08-17 · Five-star skills: each upgrade is 1 of 25 points (5 lit tips × 5 stars); bonuses interpolate smoothly, actives step per full star";
 
 const BUF = [];
 const MAX = 400;

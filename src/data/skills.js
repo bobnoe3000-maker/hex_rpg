@@ -6,7 +6,9 @@
 "use strict";
 
 export const TIER_GATES = [0, 0, 2, 6, 12, 20];   // index = tier (1..5): points-in-branch to unlock
-export const MAX_RANK = 5;
+export const MAX_RANK = 5;         // number of tuning anchors per skill (fx arrays are length 5)
+export const PTS_PER_STAR = 5;     // each star holds 5 lit tips (points)
+export const MAX_POINTS = MAX_RANK * PTS_PER_STAR;   // 25 — five full stars is the hard cap per skill
 export const BRANCHES = { off: "Offensive", def: "Defensive" };
 
 /* fx keys the engine understands (all arrays are per-rank, index 0 = rank 1):
