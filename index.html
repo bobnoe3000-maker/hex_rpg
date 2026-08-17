@@ -67,6 +67,12 @@
   .dmrow svg{width:17px;height:17px;color:#f0c877;flex:0 0 auto}
   .dmrow.wide{grid-column:1/-1}
   .dmrow.danger{color:#ffc0b0;border-color:#5a2a2a;background:#2a1622}.dmrow.danger svg{color:#e5766a}
+  /* toggle rows (e.g. Auto-level): an On/Off pill pushed to the right, green when active */
+  .dmrow .dm-tag{margin-left:auto;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+    padding:2px 8px;border-radius:999px;background:#120d1c;border:1px solid var(--line2);color:#8a8099}
+  .dmrow.on{border-color:#3a6a48;background:#182a1f}
+  .dmrow.on .dm-tag{color:#8fd39a;border-color:#3a6a48;background:#12241a}
+  .dmrow.on svg{color:#8fd39a}
 
   /* --- dungeon stage: flexes to fill remaining space --- */
   #stage{position:relative;flex:1 1 auto;min-height:0;background:var(--panel);border:1px solid var(--line);border-radius:10px;

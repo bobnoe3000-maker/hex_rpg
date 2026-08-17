@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-18 · Keep nav: killed the dark-gold bracket under each tab (global button drop-shadow was bleeding into the nav tabs)";
+export const APP_BUILD = "2026-08-18 · Auto-level companions: menu toggle (both menus) resolves companion level-ups with a free roll — no popup, no silver; turning it on clears the backlog";
 
 const BUF = [];
 const MAX = 400;

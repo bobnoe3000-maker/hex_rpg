@@ -6,7 +6,7 @@ import { fxUpdateDraw, fxClear, fxText, fxSlash, fxBolt, fxDissolve, fxRing, fxB
 import { GCOLS, GROWS, buildGameRoom, cx0g, cy0g, isBlocked } from './engine/dungeon.js';
 import { xpToReach } from './engine/combat.js';
 import { DUNGEONS, LAYOUTS, ROOM_COUNT, BOSS_ROOM, dungeonById, isUnlocked, nextDungeon } from './data/dungeons.js';
-import { unspentPoints, earnedPoints, pointsForLevel, ASSIGNABLE, emptyPoints } from './systems/Leveling.js';
+import { unspentPoints, earnedPoints, pointsForLevel, ASSIGNABLE, emptyPoints, STAT_STEP } from './systems/Leveling.js';
 import { combatMods, activeSkills, unspentSkillPoints, earnedSkillPoints, spentSkillPoints, branchInvested, tierUnlocked, rankOf, allSkills,
          reflectFrac, guardianFrac, waveHealFrac, lastStand, momentum, heroKit } from './systems/Skills.js';
 import { CLASS_SKILLS, TIER_GATES, MAX_POINTS, PTS_PER_STAR } from './data/skills.js';
@@ -65,6 +65,7 @@ const state={ roomIdx:0, scene:"town", phase:"idle", room:null, foes:[], t:0, sp
   inventory:[], potions:[], gems:0, silver:0, shopStock:[], recruits:[], bench:[], respawnAt:null, wipeAt:null,
   dungeonId:"emberdeep", cleared:[], roomMax:0,   // active dungeon + set of cleared-boss ids (persisted) + furthest room reached this delve
   bossAt:null, bossInWave:false,       // when the boss may next appear (runtime) + is it on the field now
+  autoLevel:false,   // when true, companion level-ups resolve their own free roll (no popup, no silver)
   rally:null };      // {r,c} flag heroes regroup on when no foe is engaged
 /* the dungeon the party is currently delving (falls back to the Emberdeep) */
 const activeDungeon=()=>dungeonById(state.dungeonId);
@@ -100,7 +101,8 @@ let activeSlot=null;        // which save slot this run writes to (set by onboar
 function snapshotState(){
   return { v:SAVE_VERSION, party, bench:state.bench, silver:state.silver, gems:state.gems,
     inventory:state.inventory, potions:state.potions, roomIdx:state.roomIdx,
-    dungeonId:state.dungeonId, cleared:state.cleared, roomMax:state.roomMax, savedAt:new Date().toISOString() };
+    dungeonId:state.dungeonId, cleared:state.cleared, roomMax:state.roomMax, autoLevel:state.autoLevel,
+    savedAt:new Date().toISOString() };
 }
 function saveGame(){ if(activeSlot!==null) writeSlot(activeSlot, snapshotState()); }
 function loadGame(save){
@@ -111,6 +113,7 @@ function loadGame(save){
   state.dungeonId=dungeonById(save.dungeonId).id;    // older saves default to the Emberdeep
   state.cleared=Array.isArray(save.cleared)?save.cleared.slice():[];
   state.roomMax=Math.max(save.roomMax||0, state.roomIdx||0);   // reached rooms are jumpable on the minimap
+  state.autoLevel=!!save.autoLevel;                            // per-save preference (off for older saves)
 }
 const partyClasses=()=>party.length?[...new Set(party.map(h=>h.cls))]:["fighter","mage","cleric","rogue"];
 let combatRng=Math.random;  // reseeded deterministically when a fight starts / area changes
@@ -617,7 +620,12 @@ function awardXP(xp){
         log(`${iconImg("spark",14)} <b>${h.name}</b> reaches <span class="sys">level ${h.level}</span>! <span class="heal">+${pts} stat point${pts>1?"s":""}</span> to spend.`,"heal");
       } else {
         h.pendRolls=(h.pendRolls||0)+1;   // stats/skill are rolled later, not applied now
-        log(`${iconImg("spark",14)} <b>${h.name}</b> reaches <span class="sys">level ${h.level}</span>! <span class="heal">Level-up roll ready.</span>`,"heal");
+        if(state.autoLevel){              // ...unless auto-level is on: resolve it now with a free roll
+          const roll=resolveCompanionLevel(h);
+          log(`${iconImg("spark",14)} <b>${h.name}</b> reaches <span class="sys">level ${h.level}</span>! <span class="heal">${rollSummary(roll,h)}</span>`,"heal");
+        } else {
+          log(`${iconImg("spark",14)} <b>${h.name}</b> reaches <span class="sys">level ${h.level}</span>! <span class="heal">Level-up roll ready.</span>`,"heal");
+        }
       }
       fxRing(uxS(h),uyS(h)+6,"#7ee787"); fxText(uxS(h),uyS(h)-44,"LEVEL UP!","#7ee787",true);
     } }
@@ -654,6 +662,36 @@ function applyCompanionRoll(h){
   h.pendRoll=null; h.rerollN=0;
   refreshParty(); updateHud(); saveGame();   // update HUD + the Keep/Tavern tiles (and their roll-dots)
   return h.pendRolls;
+}
+/* ---- auto-level: a companion resolves its own free roll (no popup, no silver) ---- */
+const STAT_LABEL = { hp:"HP", atk:"ATK", def:"DEF", dodge:"Dodge", crit:"Crit" };
+/* compact one-line readout of what a rolled level granted, for the combat log */
+function rollSummary(roll, h){
+  const parts=ASSIGNABLE.filter(k=>roll.stats[k]).map(k=>`+${roll.stats[k]*STAT_STEP[k]} ${STAT_LABEL[k]||k}`);
+  if(roll.skillId){ const s=allSkills(h.cls).find(x=>x.id===roll.skillId); if(s) parts.push(`${s.name} ⭑`); }
+  return parts.length ? parts.join(" · ") : "no gains";
+}
+/* resolve ONE queued level with a free first draw and apply it immediately; returns the roll shown */
+function resolveCompanionLevel(h){
+  if(!h.pendRoll) h.pendRoll=companionRollData(h);
+  const roll=h.pendRoll;
+  applyCompanionRoll(h);   // folds points/skill, grants HP, decrements pendRolls, clears pendRoll+rerollN, saves
+  return roll;
+}
+/* drain EVERY companion's pending rolls at once (used when auto-level is switched on) */
+function sweepAutoLevel(){
+  let any=false;
+  for(const h of party){ if(h===party[0]) continue;
+    while((h.pendRolls||0)>0){ const roll=resolveCompanionLevel(h); any=true;
+      log(`${iconImg("spark",14)} <b>${h.name}</b> auto-levels → <span class="heal">${rollSummary(roll,h)}</span>`,"heal"); } }
+  if(any) refreshParty();
+}
+/* menu toggle: flip auto-level; turning it on clears any backlog of pending rolls right away */
+function toggleAutoLevel(){
+  state.autoLevel=!state.autoLevel;
+  if(state.autoLevel) sweepAutoLevel();
+  saveGame();
+  return state.autoLevel;
 }
 function openCompanionRollScreen(h){
   openCompanionRoll(h, {
@@ -909,7 +947,8 @@ function openTownScreen(){
   openTown({ silver:()=>state.silver, gems:()=>state.gems, party, portrait:h=>heroPortrait(h),
     openHero, openParty:openPartyScreen, openShop:openShopScreen, openTavern:openTavernScreen, openTemple:openTempleScreen,
     openForge:openForgeScreen, openDiag:openDiagScreen, openDungeons:openDungeonBoard,
-    exitToLogin:saveExitToLogin, tileFlag:heroTileFlag, activeDungeon:()=>activeDungeon() });
+    exitToLogin:saveExitToLogin, autoLevel:{ on:()=>state.autoLevel, toggle:()=>toggleAutoLevel() },
+    tileFlag:heroTileFlag, activeDungeon:()=>activeDungeon() });
 }
 /* Party roster (reached from the Keep's Party tab) — tap a pal to open their character screen */
 function openPartyScreen(){
@@ -1133,6 +1172,7 @@ const MENU_ICONS={
   speed:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 18a7 7 0 1 1 14 0"/><path d="M12 13l3.6-3.6"/></svg>`,
   diag:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v2.5M12 18.5V21M4.2 7.5l2.2 1.3M17.6 15.2l2.2 1.3M19.8 7.5l-2.2 1.3M6.4 15.2l-2.2 1.3"/></svg>`,
   log:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l3 3v15H6z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>`,
+  level:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 13l6-6 6 6M6 18l6-6 6 6"/></svg>`,
 };
 function openDMenu(){
   closeDLog();
@@ -1145,6 +1185,7 @@ function openDMenu(){
       <div class="dmrow" data-mact="world">${MENU_ICONS.world}<span>World map</span></div>
       <div class="dmrow" data-mact="arena">${MENU_ICONS.arena}<span>Arena</span></div>
       <div class="dmrow" data-mact="speed">${MENU_ICONS.speed}<span>Speed ${state.speed}×</span></div>
+      <div class="dmrow wide ${state.autoLevel?"on":""}" data-mact="autolvl">${MENU_ICONS.level}<span>Auto-level companions</span><span class="dm-tag">${state.autoLevel?"On":"Off"}</span></div>
       <div class="dmrow wide" data-mact="log">${MENU_ICONS.log}<span>Combat log</span></div>
       <div class="dmrow wide" data-mact="diag">${MENU_ICONS.diag}<span>Diagnostics &amp; log export</span></div>
     </div></div>`;
@@ -1155,6 +1196,7 @@ function openDMenu(){
 function closeDMenu(){ dmenuEl.classList.remove("show"); }
 function menuAct(a){
   if(a==="speed"){ state.speed=state.speed===1?2:1; renderDungeonHeader(); openDMenu(); return; }   // stay open; reflect new speed
+  if(a==="autolvl"){ toggleAutoLevel(); openDMenu(); return; }   // stay open; reflect On/Off + apply any backlog
   if(a==="log") return openDLog();   // openDLog swaps the menu sheet for the log pop-up
   closeDMenu();
   if(state.scene!=="dungeon") return;

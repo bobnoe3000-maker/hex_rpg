@@ -174,6 +174,7 @@ const SHEET_ICON = {
   diag:     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v2.5M12 18.5V21M4.2 7.5l2.2 1.3M17.6 15.2l2.2 1.3M19.8 7.5l-2.2 1.3M6.4 15.2l-2.2 1.3"/></svg>`,
   settings: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/><circle cx="18" cy="18" r="2.2"/></svg>`,
   exit:     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-3M10 16l-4-4 4-4M6 12h9"/></svg>`,
+  level:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 13l6-6 6 6M6 18l6-6 6 6"/></svg>`,
 };
 
 /* order the party tiles so the main hero (index 0) sits in the centre: [comp, MAIN, comp].
@@ -190,6 +191,7 @@ export function openTown(ctx) {
   ensureTownCss();
   const el = document.getElementById("town");
   const hasFlag = ctx.tileFlag && ctx.party.some(h => h.alive && ctx.tileFlag(h)); // badge the Party tab
+  const alOn = !!(ctx.autoLevel && ctx.autoLevel.on());                            // auto-level companions toggle state
   const order = partyDisplayOrder(ctx.party);
 
   const spot = s => `<button class="kh-spot ${s.soon ? "soon" : ""}" data-svc="${s.svc}"
@@ -228,6 +230,7 @@ export function openTown(ctx) {
       <div class="dsheet">
         <div class="dsh"><span class="t">Menu</span><span class="x" data-menuclose>✕</span></div>
         <div class="dmgrid">
+          <div class="dmrow wide ${alOn ? "on" : ""}" data-autolvl>${SHEET_ICON.level}<span>Auto-level companions</span><span class="dm-tag">${alOn ? "On" : "Off"}</span></div>
           <div class="dmrow wide" data-diag>${SHEET_ICON.diag}<span>Diagnostics &amp; log export</span></div>
           <div class="dmrow wide" style="opacity:.45;cursor:default">${SHEET_ICON.settings}<span>Settings — coming soon</span></div>
           <div class="dmrow wide danger" data-exit>${SHEET_ICON.exit}<span>Save &amp; exit to login</span></div>
@@ -271,6 +274,12 @@ export function openTown(ctx) {
   if (ctx.openDiag) dg.onclick = () => { closeMenu(); ctx.openDiag(); }; else dg.style.display = "none";
   const exitBtn = pop.querySelector("[data-exit]");
   if (ctx.exitToLogin) exitBtn.onclick = () => { closeMenu(); ctx.exitToLogin(); }; else exitBtn.style.display = "none";
+  const alRow = pop.querySelector("[data-autolvl]");
+  if (ctx.autoLevel && alRow) alRow.onclick = () => {           // toggle in place — sheet stays open, pill flips
+    const on = ctx.autoLevel.toggle();
+    alRow.classList.toggle("on", on);
+    alRow.querySelector(".dm-tag").textContent = on ? "On" : "Off";
+  }; else if (alRow) alRow.style.display = "none";
 
   const nav = {
     keep:   () => {},                                   // already home
