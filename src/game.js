@@ -368,10 +368,43 @@ function stepOpts(u){
     .filter(p=>!isBlocked(state.room,p.r,p.c)&&!occupied(p.r,p.c,u));
 }
 function moveTo(u,p){ u.rr=u.r; u.cc=u.c; u.r=p.r; u.c=p.c; u.moveT=0; } // remember prev cell for the slide
+const DIRS=[[1,0],[-1,0],[0,1],[0,-1]];
+/* BFS distance field FROM (tr,tc) over walkable floor — WALLS block, UNITS don't (they move, so a
+   unit just holds a tick when the downhill cell is momentarily occupied). Cheap on this 8×11 grid.
+   Flat array indexed r*GCOLS+c; -1 = unreachable / off-grid. */
+function distField(tr,tc){
+  const dist=new Int16Array(GROWS*GCOLS).fill(-1);
+  if(isBlocked(state.room,tr,tc)) return dist;         // target on a wall/off-grid → all -1 (caller falls back)
+  const q=[[tr,tc]]; dist[tr*GCOLS+tc]=0;
+  for(let i=0;i<q.length;i++){ const r=q[i][0], c=q[i][1], d=dist[r*GCOLS+c];
+    for(const [dr,dc] of DIRS){ const nr=r+dr, nc=c+dc;
+      if(isBlocked(state.room,nr,nc)) continue;        // wall or off-grid
+      const idx=nr*GCOLS+nc; if(dist[idx]!==-1) continue;
+      dist[idx]=d+1; q.push([nr,nc]); } }
+  return dist;
+}
+/* Chase: follow the BFS field DOWNHILL toward the target, so units route around walls instead of
+   wedging against them. If the one nearer cell is momentarily occupied by an ally the unit HOLDS
+   (no jitter) — the queue clears as units advance. Falls back to greedy Manhattan only when the
+   target is walled off in a separate pocket (rare), so units still try in the open. */
 function stepToward(u,tg){
-  const opts=stepOpts(u); if(!opts.length)return;
+  const opts=stepOpts(u); if(!opts.length) return;      // fully boxed in for this action
+  const df=distField(tg.r,tg.c);
+  const here=df[u.r*GCOLS+u.c];
+  if(here>0){
+    // Prefer the free neighbour with the lowest field value (strictly downhill routes around walls).
+    // Never step to a farther cell; when the downhill cell is blocked by a stationary ally, a lateral
+    // (same-distance) slip is allowed to get past it — but stepping back onto the cell we just left is
+    // penalised so two units never jitter A↔B forever.
+    let best=null,bd=Infinity;
+    for(const p of opts){ const d=df[p.r*GCOLS+p.c]; if(d<0 || d>here) continue;   // unreachable or no progress
+      const score=d + ((p.r===u.rr && p.c===u.cc) ? 0.5 : 0);
+      if(score<bd){ bd=score; best=p; } }
+    if(best) moveTo(u,best);                            // else hold — every option is blocked or uphill this tick
+    return;
+  }
   opts.sort((a,b)=>(Math.abs(a.r-tg.r)+Math.abs(a.c-tg.c))-(Math.abs(b.r-tg.r)+Math.abs(b.c-tg.c)));
-  moveTo(u,opts[0]);
+  moveTo(u,opts[0]);                                    // target unreachable over floor → legacy greedy
 }
 /* kite: step to the neighbour that most increases distance from tg. Returns false if no cell is
    actually farther than where the unit stands (cornered) so the caller can fall back to attacking. */
