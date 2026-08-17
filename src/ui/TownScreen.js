@@ -4,9 +4,7 @@
    generalises this in a later pass. */
 "use strict";
 
-import { derive } from "../systems/StatEngine.js";
 import { iconImg } from "../engine/icons.js";
-import { potionTileChip, ensurePotChipCss } from "./potionChip.js";
 
 let cssDone = false;
 export function ensureTownCss() {
@@ -70,57 +68,158 @@ export function ensureTownCss() {
   .shop-btn[disabled]{opacity:.4;pointer-events:none}
   .shop-btn:active{transform:translateY(1px)}
   .shop-none{opacity:.55;font-style:italic;font-size:11.5px;padding:3px 2px}
+
+  /* ======= illustrated Keep (home hub) ======= */
+  .keephome{position:fixed;inset:0;z-index:1;overflow:hidden;background:#0b0912;
+    font-family:Georgia,"Times New Roman",serif;color:var(--parchment);
+    -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+  /* the artwork, sized to its own aspect and centred so hotspot %s stay locked to the buildings */
+  .kh-art{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    height:100%;width:auto;aspect-ratio:768/1375;max-width:100%;
+    background:#0b0912 url('assets/home_ui.png') center/cover no-repeat}
+  .kh-vig{position:absolute;inset:0;pointer-events:none;z-index:2;
+    background:linear-gradient(#0b091266 0%,transparent 15%,transparent 66%,#0b0912cc 100%)}
+  /* building hotspots — a glowing dot + a small standing name plate, both always visible for touch */
+  .kh-spot{position:absolute;transform:translate(-50%,-50%);background:none;border:0;padding:0;cursor:pointer;z-index:5;
+    display:flex;flex-direction:column;align-items:center;gap:3px}
+  .kh-spot .ring{position:absolute;left:50%;top:0;width:34px;height:34px;transform:translate(-50%,-50%);border-radius:50%;
+    border:2px solid var(--sc,#ffd08a);opacity:0;animation:khpulse 2.8s ease-in-out infinite}
+  @keyframes khpulse{0%{transform:translate(-50%,-50%) scale(.6);opacity:0}45%{opacity:.5}100%{transform:translate(-50%,-50%) scale(1.15);opacity:0}}
+  .kh-spot .dot{width:11px;height:11px;border-radius:50%;
+    background:radial-gradient(circle at 40% 35%,#fff3d2,var(--sc,#ffb457));box-shadow:0 0 10px 2px var(--sc,#ffb457)}
+  .kh-spot .lbl{font-size:10px;letter-spacing:.4px;color:#2c2114;
+    background:linear-gradient(#efe2c4,#d6c194);border:1px solid #b49a63;border-radius:3px;padding:1px 7px;
+    box-shadow:0 2px 5px #0009;white-space:nowrap}
+  .kh-spot.soon .lbl{color:#5a5064;background:linear-gradient(#cfc6d8,#b3a9c2);border-color:#8d84a0}
+  .kh-spot:active{transform:translate(-50%,-50%) scale(.9)}
+  /* top chrome */
+  .kh-top{position:absolute;left:0;right:0;top:0;z-index:6;display:flex;align-items:flex-start;justify-content:space-between;
+    padding:calc(env(safe-area-inset-top) + 10px) 11px 0}
+  .kh-party{display:flex}
+  .kh-av{position:relative;width:38px;height:38px;margin-left:-8px;padding:0;border:1px solid #6e5a2a;border-radius:9px;
+    background:#1a1228;box-shadow:0 3px 8px #0009;cursor:pointer;overflow:visible}
+  .kh-av:first-child{margin-left:0}
+  .kh-av:active{transform:translateY(1px)}
+  .kh-av canvas{width:100%;height:100%;border-radius:8px;display:block}
+  .kh-av.dead{border-color:#5a2a2a}
+  .kh-av.dead canvas{filter:grayscale(1) brightness(.62)}
+  .kh-av .kh-crown{position:absolute;left:50%;top:-9px;transform:translateX(-50%);line-height:0}
+  .kh-av .kh-skull{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+  .kh-dot{position:absolute;top:-4px;right:-4px;width:11px;height:11px;border-radius:50%;
+    background:#e0b063;border:2px solid #1a1228;box-shadow:0 0 6px #e0b063;z-index:3}
+  .kh-dot.roll{background:#8fd39a;box-shadow:0 0 6px #8fd39a}
+  .kh-tr{display:flex;flex-direction:column;align-items:flex-end;gap:7px}
+  .kh-cur{display:flex;gap:9px;font-size:12px;color:#f0d38a;font-variant-numeric:tabular-nums;
+    background:#120d1ccc;border:1px solid var(--line);border-radius:9px;padding:4px 9px;box-shadow:0 2px 6px #0008}
+  .kh-cur .g{color:#9ad1ff}
+  .kh-menu-btn{width:32px;height:32px;border-radius:9px;border:1px solid #6e4a2a;cursor:pointer;font-size:15px;line-height:1;
+    background:linear-gradient(#4a3527,#2e2016);color:#f0d9b0;box-shadow:0 3px 8px #0009}
+  .kh-menu-btn:active{transform:translateY(1px)}
+  .kh-menu{position:absolute;top:calc(env(safe-area-inset-top) + 48px);right:11px;z-index:9;min-width:210px;
+    background:#170f26;border:1px solid var(--line);border-radius:11px;padding:6px;box-shadow:0 12px 30px -8px #000}
+  .kh-menu[hidden]{display:none}
+  .kh-menu button{display:flex;align-items:center;gap:9px;width:100%;text-align:left;font-family:inherit;font-size:12.5px;
+    color:var(--parchment);background:none;border:0;border-radius:7px;padding:9px 10px;cursor:pointer}
+  .kh-menu button:active{background:#241b38}
+  .kh-menu button[disabled]{opacity:.4;pointer-events:none}
+  /* bottom chrome */
+  .kh-bottom{position:absolute;left:0;right:0;bottom:0;z-index:6;display:flex;align-items:flex-end;justify-content:space-between;
+    padding:0 12px calc(env(safe-area-inset-bottom) + 14px)}
+  .kh-arena{font-family:inherit;font-size:12px;color:#2c2114;cursor:pointer;transform:rotate(-2deg);
+    background:linear-gradient(#efe2c4,#d0b985);border:1px solid #b49a63;border-radius:5px;padding:6px 11px;box-shadow:0 4px 10px #000a;
+    display:flex;align-items:center;gap:6px}
+  .kh-arena:active{transform:rotate(-2deg) translateY(1px)}
+  .kh-depart{font-family:inherit;font-weight:bold;letter-spacing:.09em;text-transform:uppercase;font-size:14px;color:#241606;cursor:pointer;
+    background:linear-gradient(#e8bf78,#b47f34);border:1px solid #f0c877;border-radius:12px;padding:11px 18px;
+    box-shadow:0 5px 0 #6e4a14,0 12px 22px -8px #000;display:flex;flex-direction:column;align-items:center;gap:1px;line-height:1.1}
+  .kh-depart small{font-weight:normal;letter-spacing:.02em;text-transform:none;font-size:10px;opacity:.85}
+  .kh-depart:active{transform:translateY(3px);box-shadow:0 2px 0 #6e4a14}
+  .kh-toast{position:absolute;left:50%;top:calc(env(safe-area-inset-top) + 52px);transform:translateX(-50%);z-index:20;
+    background:#120d1cee;border:1px solid var(--gold);color:var(--gold);font-size:12px;padding:7px 13px;border-radius:9px;
+    opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap;box-shadow:0 6px 18px #000;max-width:88%;text-align:center}
+  .kh-toast.on{opacity:1}
   `;
   document.head.appendChild(s);
 }
 
-/* ctx = { silver, gems, party, portrait:(cls)=>canvas, openHero, openShop, enterDungeon } */
+/* The Keep is the illustrated town (assets/home_ui.png). Buildings are tappable hotspots wired to the
+   existing services; the meta-nav lives in the corners so it never covers the art:
+     · top-left  — party portraits (tap a pal → their character screen; a dot flags points/rolls)
+     · top-right — wallet + a ⚙ menu (Diagnostics, future settings)
+     · bottom    — Arena banner (coming soon) · gold Depart button → the Dungeons board (World Map)
+   Hotspot %s are calibrated to the Iron-Vault artwork and match the reviewed mockup.
+   ctx = { silver, gems, party, portrait, tileFlag, activeDungeon,
+           openHero, openShop, openTavern, openTemple, openForge, openDiag, openDungeons, enterDungeon } */
+const SPOTS = [
+  { svc: "temple", label: "Temple", x: 54, y: 15, sc: "#ffd08a" },
+  { svc: "forge",  label: "Forge",  x: 62, y: 33, sc: "#ff9a3c" },
+  { svc: "bank",   label: "Bank",   x: 60, y: 47, sc: "#9ad1ff", soon: true },
+  { svc: "tavern", label: "Tavern", x: 19, y: 80, sc: "#ffcf7a" },
+  { svc: "shop",   label: "Shop",   x: 85, y: 78, sc: "#ffcf7a" },
+];
 export function openTown(ctx) {
-  ensureTownCss(); ensurePotChipCss();
+  ensureTownCss();
   const el = document.getElementById("town");
-  const card = (h, i) => {
-    const mh = derive(h).maxhp;
-    const skull = h.alive ? "" : `<div class="tw-skull">${iconImg("skull",20)}</div>`;
-    const foot = h.alive
-      ? `<div class="bar"><i style="width:${Math.max(0, Math.min(100, h.hp / mh * 100))}%"></i></div>`
-      : `<span class="fallen">${iconImg("skull",10)} fallen</span>`;
+  const active = ctx.activeDungeon ? ctx.activeDungeon() : null;
+
+  const spot = s => `<button class="kh-spot ${s.soon ? "soon" : ""}" data-svc="${s.svc}"
+      style="left:${s.x}%;top:${s.y}%;--sc:${s.sc}"><span class="ring"></span><span class="dot"></span>
+      <span class="lbl">${s.label}${s.soon ? " · soon" : ""}</span></button>`;
+  const av = (h, i) => {
     const flag = h.alive && ctx.tileFlag && ctx.tileFlag(h);
-    const dot = flag ? `<span class="tw-dot ${flag}" title="${flag === "roll" ? "Level-up roll ready" : "Points to spend"}"></span>` : "";
-    const pot = h.alive ? potionTileChip(h.potion) : "";
-    return `<div class="tw-card ${h.alive ? "" : "dead"}" data-hero="${i}">
-      <div class="tw-portwrap"><canvas width="96" height="96"></canvas>${skull}${dot}</div>${pot}
-      <b>${i === 0 ? iconImg("crown", 11) + " " : ""}${h.name}</b><span class="cls">${h.cls}</span><span class="lv">Lv ${h.level}</span>
-      ${foot}</div>`;
+    const dot = flag ? `<span class="kh-dot ${flag === "roll" ? "roll" : ""}"></span>` : "";
+    const crown = i === 0 ? `<span class="kh-crown">${iconImg("crown", 11)}</span>` : "";
+    const skull = h.alive ? "" : `<span class="kh-skull">${iconImg("skull", 14)}</span>`;
+    return `<button class="kh-av ${h.alive ? "" : "dead"}" data-hero="${i}" title="${h.name} · Lv ${h.level}">
+      <canvas width="96" height="96"></canvas>${crown}${skull}${dot}</button>`;
   };
-  el.innerHTML = `<div class="tw-wrap">
-    <div class="tw-head">
-      <h1>The Keep</h1>
-      <p>Emberdeep hold — your pals rest between delves</p>
-      <div class="tw-cur"><span>${iconImg("coin",14)} ${ctx.silver()}</span><span class="g">${iconImg("gem",14)} ${ctx.gems()}</span></div>
+
+  el.innerHTML = `<div class="keephome">
+    <div class="kh-art">${SPOTS.map(spot).join("")}</div>
+    <div class="kh-vig"></div>
+    <div class="kh-top">
+      <div class="kh-party">${ctx.party.map(av).join("")}</div>
+      <div class="kh-tr">
+        <div class="kh-cur"><span>${iconImg("coin",13)} ${ctx.silver()}</span><span class="g">${iconImg("gem",13)} ${ctx.gems()}</span></div>
+        <button class="kh-menu-btn" data-menu title="Menu">⚙</button>
+      </div>
     </div>
-    <div class="tw-sec">Services</div>
-    <div class="tw-svc">
-      <button class="tw-btn" data-tavern><span class="ic">${iconImg("tankard",20)}</span><span>Tavern<small>Recruit or replace a companion (party of 3)</small></span></button>
-      <button class="tw-btn" data-temple><span class="ic">${iconImg("temple",20)}</span><span>Temple<small>Restore fallen companions (fee scales with level)</small></span></button>
-      <button class="tw-btn" data-shop><span class="ic">${iconImg("pouch",20)}</span><span>Shop<small>Buy &amp; sell gear · trade silver for runic gems</small></span></button>
-      <button class="tw-btn" data-forge><span class="ic">${iconImg("anvil",20)}</span><span>Forge<small>Spend runic gems to upgrade gear (+1, +2 …)</small></span></button>
-      <button class="tw-btn" disabled><span class="ic">${iconImg("vault",20)}</span><span>Bank<small>Coming soon — a death-safe vault</small></span></button>
+    <div class="kh-menu" data-menupop hidden>
+      <button data-diag>${iconImg("spark",16)} Diagnostics &amp; log export</button>
+      <button disabled>${iconImg("hammer",16)} Settings — coming soon</button>
     </div>
-    <div class="tw-sec">Party — tap to manage gear</div>
-    <div class="tw-party">${ctx.party.map(card).join("")}</div>
-    <button class="tw-btn primary" data-enter>${iconImg("sword",16)} Dungeons${ctx.activeDungeon ? ` — ${ctx.activeDungeon().name}` : ""}</button>
-    <div class="tw-foot"><span data-diag>Diagnostics &amp; log export ›</span></div>
+    <div class="kh-bottom">
+      <button class="kh-arena" data-arena>${iconImg("star",14)} Arena</button>
+      <button class="kh-depart" data-depart><span>${iconImg("sword",14)} Depart</span>${active ? `<small>${active.name}</small>` : ""}</button>
+    </div>
+    <div class="kh-toast" data-toast></div>
   </div>`;
 
   ctx.party.forEach((h, i) => {
-    const cv = el.querySelectorAll(".tw-card canvas")[i];
+    const cv = el.querySelectorAll(".kh-av canvas")[i];
     cv.getContext("2d").drawImage(ctx.portrait(h), 0, 0, 96, 96);
   });
-  el.querySelectorAll("[data-hero]").forEach(c => c.onclick = () => ctx.openHero(ctx.party[+c.getAttribute("data-hero")]));
-  el.querySelector("[data-tavern]").onclick = () => ctx.openTavern();
-  el.querySelector("[data-temple]").onclick = () => ctx.openTemple();
-  el.querySelector("[data-shop]").onclick = () => ctx.openShop();
-  const fg = el.querySelector("[data-forge]"); if (fg && ctx.openForge) fg.onclick = () => ctx.openForge();
-  el.querySelector("[data-enter]").onclick = () => (ctx.openDungeons ? ctx.openDungeons() : ctx.enterDungeon());
-  const dg = el.querySelector("[data-diag]"); if (dg && ctx.openDiag) dg.onclick = () => ctx.openDiag();
+
+  const toastEl = el.querySelector("[data-toast]");
+  const toast = msg => { toastEl.textContent = msg; toastEl.classList.add("on");
+    clearTimeout(toast._h); toast._h = setTimeout(() => toastEl.classList.remove("on"), 1700); };
+
+  const svc = { temple: ctx.openTemple, forge: ctx.openForge, tavern: ctx.openTavern, shop: ctx.openShop };
+  el.querySelectorAll(".kh-spot").forEach(b => b.onclick = () => {
+    const k = b.getAttribute("data-svc");
+    if (k === "bank") return toast("The Iron Vault is sealed — a death-safe bank is coming soon");
+    if (svc[k]) svc[k]();
+  });
+  el.querySelectorAll("[data-hero]").forEach(b => b.onclick = () => ctx.openHero(ctx.party[+b.getAttribute("data-hero")]));
+
+  const pop = el.querySelector("[data-menupop]");
+  el.querySelector("[data-menu]").onclick = e => { e.stopPropagation(); pop.hidden = !pop.hidden; };
+  const dg = pop.querySelector("[data-diag]");
+  if (ctx.openDiag) dg.onclick = () => { pop.hidden = true; ctx.openDiag(); }; else dg.disabled = true;
+  el.querySelector(".keephome").addEventListener("click", e => {
+    if (!pop.hidden && !pop.contains(e.target) && !e.target.closest("[data-menu]")) pop.hidden = true;
+  });
+
+  el.querySelector("[data-arena]").onclick = () => toast("The Arena is being raised — PvP challenges open soon");
+  el.querySelector("[data-depart]").onclick = () => (ctx.openDungeons ? ctx.openDungeons() : ctx.enterDungeon && ctx.enterDungeon());
 }

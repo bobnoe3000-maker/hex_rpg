@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-17 · on-tile potion box: recharge ring, timer, quaff flare";
+export const APP_BUILD = "2026-08-17 · illustrated Keep home: tappable buildings + corner nav";
 
 const BUF = [];
 const MAX = 400;
