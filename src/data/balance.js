@@ -28,7 +28,7 @@ export const BAL = {
   RESPAWN_DELAY: 1.6,     // seconds after a wave clears before the next spawns
   REVIVE_DELAY: 2.2,      // seconds after a wipe before the party revives
   BOSS_RESPAWN: 600,      // seconds the dungeon boss stays down before it returns (trash farms in between)
-  DROP_CHANCE: 0.06,      // chance a normal enemy drops an item on death (bosses always drop)
+  DROP_CHANCE: 0.015,     // chance a normal enemy drops an item on death (bosses always drop) — kept low so the Loot Roll popup stays occasional
   // (per-component drop weights live in data/items/*; rarer components fall less often)
 
   // tiered dungeons: enemy stats scale to a room's level as base*(1 + rate*(level-1)). Roughly linear
@@ -44,8 +44,8 @@ export const BAL = {
   // and drop/gem rates rise a little each tier. A dungeon's dropFloor sets the worst rarity it rolls.
   // The 0.75 step is what keeps party gear pacing enemy scaling through the deep tiers.
   LOOT_POWER_STEP: 0.75,
-  DROP_CHANCE_PER_TIER: 0.02,   // + this to DROP_CHANCE per tier above 1 (capped below)
-  DROP_CHANCE_MAX: 0.30,
+  DROP_CHANCE_PER_TIER: 0.005,  // + this to DROP_CHANCE per tier above 1 (capped below)
+  DROP_CHANCE_MAX: 0.075,
   FIRST_CLEAR_GRADE_BUMP: 1,    // first boss kill guarantees a drop, floor lifted this many grades
   // Loot Roll: rerolling a drop costs (BASE + tier*TIER) × GROWTH^n — rises per reroll within a drop
   // (n resets each drop) and scales with the dungeon tier, so chasing epics burns silver.

@@ -67,6 +67,21 @@ function injectCss() {
   .lr-accept:disabled{opacity:.5;cursor:default;transform:none;box-shadow:0 4px 0 #6e4a14}
   .lr-hint{text-align:center;font-family:ui-monospace,monospace;font-size:10px;color:#6d6390;margin-top:11px;min-height:12px}
   .lr-hint b{color:#9a8fb8}
+  /* 10s auto-accept countdown */
+  .lr-auto{margin-top:9px;display:flex;flex-direction:column;gap:4px;align-items:center}
+  .lr-auto .t{font-family:ui-monospace,monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:#6d6390}
+  .lr-auto .bar{width:100%;height:3px;border-radius:2px;background:#241b38;overflow:hidden}
+  .lr-auto .bar i{display:block;height:100%;width:100%;background:linear-gradient(90deg,#e0b063,#f0c877);transition:width 1s linear}
+  /* "Loot Drop!" splash */
+  .lr-splash{position:relative;display:flex;flex-direction:column;align-items:center;gap:6px;--gc:#e8e8e8}
+  .lr-burst{position:absolute;top:50%;left:50%;width:220px;height:220px;margin:-110px 0 0 -110px;border-radius:50%;pointer-events:none;
+    background:radial-gradient(circle,color-mix(in srgb,var(--gc) 45%,transparent),transparent 62%);animation:lrburst .9s ease-out forwards}
+  .lr-splash .t{font-family:Georgia,serif;font-weight:bold;font-size:34px;letter-spacing:.04em;text-transform:uppercase;color:var(--gc);
+    text-shadow:0 0 18px color-mix(in srgb,var(--gc) 60%,transparent),0 3px 8px #000;animation:lrpulse .85s ease}
+  .lr-splash .s{font-family:ui-monospace,monospace;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#b9add6}
+  @keyframes lrburst{0%{transform:scale(.4);opacity:.9}100%{transform:scale(1.7);opacity:0}}
+  @keyframes lrpulse{0%{transform:scale(.7);opacity:0}42%{transform:scale(1.08);opacity:1}100%{transform:scale(1)}}
+  @media (prefers-reduced-motion:reduce){.lr-burst,.lr-splash .t{animation:none}}
   `;
   document.head.appendChild(s);
 }
@@ -76,7 +91,7 @@ export function openLootRoll(roll, ctx) {
   injectCss();
   const overlay = document.getElementById("overlay");
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  let spinning = false;
+  let spinning = false, autoTimer = null, autoLeft = 10;
 
   const statText = c => {
     if (!c.stat) return "";
@@ -91,6 +106,26 @@ export function openLootRoll(roll, ctx) {
   const el = sel => overlay.querySelector(sel);
   const stripOf = k => overlay.querySelector(`[data-reel="${k}"] .lr-strip`);
   const reelOf = k => overlay.querySelector(`[data-reel="${k}"]`);
+
+  // "Loot Drop!" splash, then reveal the reels
+  function splash() {
+    const g = GRADE_COLOR[roll.item.grade] || "#e8e8e8";
+    overlay.innerHTML = `<div class="lr-splash" style="--gc:${g}"><div class="lr-burst"></div>
+      <div class="t">Loot Drop!</div><div class="s">${cap(roll.item.slot)}${ctx.from ? ` · ${ctx.from}` : ""}</div></div>`;
+    setTimeout(() => { if (overlay.classList.contains("show")) shell(); }, reduce ? 150 : 900);
+  }
+
+  // ---- 10s auto-accept: no input → keep the delve moving ----
+  function stopAuto() { if (autoTimer) { clearInterval(autoTimer); autoTimer = null; } }
+  function paintAuto() {
+    const bar = el("[data-auto]"), t = el("[data-autot]");
+    if (bar) bar.style.width = Math.max(0, autoLeft) / 10 * 100 + "%";
+    if (t) t.textContent = `Auto-accept in ${Math.max(0, autoLeft)}s`;
+  }
+  function startAuto() {
+    stopAuto(); autoLeft = 10; paintAuto();
+    autoTimer = setInterval(() => { autoLeft--; paintAuto(); if (autoLeft <= 0) { stopAuto(); doAccept(); } }, 1000);
+  }
 
   function shell() {
     overlay.innerHTML = `<div class="lr" style="--gc:${GRADE_COLOR[roll.item.grade] || "#e8e8e8"}">
@@ -108,6 +143,7 @@ export function openLootRoll(roll, ctx) {
         <button class="lr-accept" data-accept>Accept → Bag</button>
       </div>
       <div class="lr-hint" data-hint>Reroll the drop for silver, or accept it into your bag.</div>
+      <div class="lr-auto"><span class="t" data-autot>Auto-accept in 10s</span><div class="bar"><i data-auto></i></div></div>
     </div>`;
     el("[data-reroll]").onclick = doReroll;
     el("[data-accept]").onclick = doAccept;
@@ -163,7 +199,7 @@ export function openLootRoll(roll, ctx) {
         else done = false;
       }
       if (!done) requestAnimationFrame(frame);
-      else { spinning = false; el("[data-accept]").disabled = false; paint(); }
+      else { spinning = false; el("[data-accept]").disabled = false; paint(); startAuto(); }  // 10s decision window begins once it settles
     })(start);
   }
 
@@ -172,15 +208,17 @@ export function openLootRoll(roll, ctx) {
     const nr = ctx.reroll();
     if (!nr) { el("[data-hint]").innerHTML = `<b>Not enough silver</b> to reroll.`; return; }
     roll = nr;
+    stopAuto();                                    // fresh spin → the countdown restarts on settle
     el("[data-hint]").textContent = "Rolling…";
     spin(false);
   }
   function doAccept() {
     if (spinning) return;
+    stopAuto();
     ctx.accept();
     ctx.close();
   }
 
   overlay.classList.add("show");
-  shell();
+  splash();
 }

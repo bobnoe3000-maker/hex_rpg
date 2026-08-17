@@ -572,8 +572,12 @@ function hurt(u,dmg,src,opt){
       const d=activeDungeon();
       const dropChance=Math.min(BAL.DROP_CHANCE_MAX, BAL.DROP_CHANCE + BAL.DROP_CHANCE_PER_TIER*(d.power-1));
       if(u.boss||combatRng()<dropChance){
-        fxText(uxS(u),uyS(u)-30,"loot!","#ffd166");
-        queueDrop({classes:partyClasses(), power:d.power, floor:d.dropFloor}, u.name);   // opens the slot-roll popup
+        // Only ONE roll popup at a time: while one is open, normal drops are skipped to prevent stacking
+        // (the battle rolls on behind it). Boss drops always come through.
+        if(u.boss || !lootOpen){
+          fxText(uxS(u),uyS(u)-30,"loot!","#ffd166");
+          queueDrop({classes:partyClasses(), power:d.power, floor:d.dropFloor}, u.name);   // opens the slot-roll popup
+        }
       }
       if(combatRng()<(u.boss?BAL.GEM_CHANCE_BOSS:BAL.GEM_CHANCE)){ state.gems++;
         log(`${iconImg("gem",14)} <b>${u.name}</b> drops a <span class="sys">Runic Gem</span> <span style="opacity:.6">(${state.gems})</span>`,"sys");
@@ -1219,9 +1223,10 @@ function loop(now){
   // A per-frame exception must never break the animation-frame chain (that's a hard freeze).
   // Catch, log once, and keep requesting frames so the game recovers on the next tick.
   try{
-    // A panel open over the dungeon freezes time completely: no combat, no animation, no FX advance.
-    // Derived from the overlay's real visibility so it can never stick frozen.
-    const frozen=panelShown(); uiFrozen=frozen;
+    // The battle keeps running behind overlays now (the Loot Roll popup and the character view sit on a
+    // see-through scrim) — an idle-battler never pauses just because a window is open. Only the manual
+    // Pause button (state.phase) stops the fight.
+    const frozen=false; uiFrozen=false;
     if(!frozen){
       state.t+=dt;
       if(state.scene==="dungeon" && state.phase==="fight"){
