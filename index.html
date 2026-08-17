@@ -33,17 +33,14 @@
   #app{width:min(500px,100vw);height:100dvh;display:flex;flex-direction:column;
     padding:calc(env(safe-area-inset-top) + 4px) 8px calc(env(safe-area-inset-bottom) + 6px)}
 
-  /* --- floating combat-log button + pop-up overlay --- */
-  #dlogfab{position:absolute;z-index:5;right:12px;bottom:12px;width:42px;height:42px;border-radius:50%;
+  /* --- floating menu button (opens the game-menu sheet; combat log is an item inside it) --- */
+  #dmenufab{position:absolute;z-index:5;right:12px;bottom:12px;width:44px;height:44px;border-radius:50%;
     display:none;align-items:center;justify-content:center;padding:0;flex:0 0 auto;
     background:linear-gradient(#241b38,#150f24);border:1px solid #4a3d68;color:var(--parchment);
     box-shadow:0 5px 16px -6px #000, inset 0 1px 0 #ffffff12}
-  #dlogfab.show{display:flex}
-  #dlogfab:active{transform:translateY(1px)}
-  #dlogfab svg{width:20px;height:20px}
-  #dlogfab .badge{position:absolute;top:-4px;right:-4px;min-width:16px;height:16px;border-radius:8px;
-    background:#c0553f;color:#fff;font-family:monospace;font-size:9px;font-weight:bold;align-items:center;justify-content:center;padding:0 3px;display:none}
-  #dlogfab.alert .badge{display:flex}
+  #dmenufab.show{display:flex}
+  #dmenufab:active{transform:translateY(1px)}
+  #dmenufab svg{width:22px;height:22px}
 
   /* shared bottom-sheet overlays (combat log + game menu) */
   #dlogov,#dmenu{position:absolute;inset:0;z-index:7;display:none;flex-direction:column;justify-content:flex-end;align-items:center}
@@ -107,10 +104,6 @@
     border:1px solid var(--line);border-radius:10px;background:linear-gradient(#1b1330,#150f24)}
   #dhead.show{display:flex}
   .dh-r1{display:flex;align-items:center;gap:8px}
-  .dh-menu{width:30px;height:30px;flex:0 0 auto;border-radius:8px;padding:0;display:grid;place-items:center;box-shadow:none;
-    background:#241b38;border:1px solid var(--line);color:var(--parchment)}
-  .dh-menu:active{transform:translateY(1px);box-shadow:none}
-  .dh-menu svg{width:16px;height:16px}
   .dh-title{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .dh-title b{font-size:12px;color:#f0c877} .dh-title span{font-size:9.5px;color:#b9add6;font-style:italic}
   .dh-cur{font-family:monospace;font-size:10px;color:#d8c47a;letter-spacing:.5px;flex:0 0 auto;display:flex;align-items:center;gap:3px}
@@ -127,8 +120,6 @@
     background:radial-gradient(circle at 40% 35%,#241b38,#0d0a16);display:grid;place-items:center;font-family:monospace;font-size:7px;font-weight:bold;color:var(--nc,#6d6390)}
   .dh-node.done{--nc:#8fd39a;--seg:#2f5a3e} .dh-node.done+.dh-node::before{--seg:#2f5a3e}
   .dh-node.cur .dot{--nc:#f0c877;color:#f0c877;box-shadow:0 0 0 2px rgba(240,200,119,.18)}
-  .dh-node.cur .ring{position:absolute;inset:-3px;border-radius:50%;border:1.5px solid #f0c877;animation:dhpulse 1.8s ease-out infinite;z-index:0}
-  @keyframes dhpulse{0%{transform:scale(.8);opacity:.7}100%{transform:scale(1.5);opacity:0}}
   .dh-node.next .dot{border-style:dashed;--nc:#c9a04a}
   .dh-node.boss .dot{border-color:#c0553f} .dh-node.boss.cur .dot{border-color:#f0c877}
   .dh-node.lock{cursor:default} .dh-node.lock .dot{opacity:.5}
@@ -138,7 +129,6 @@
     background:#120d1cee;border:1px solid var(--gold);color:var(--gold);font-family:monospace;font-size:11px;padding:7px 13px;
     border-radius:9px;opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap;box-shadow:0 6px 18px #000;max-width:88vw;text-align:center}
   #dtoast.on{opacity:1}
-  @media (prefers-reduced-motion:reduce){.dh-node.cur .ring{animation:none}}
 
   #overlay{position:absolute;inset:0;background:rgba(8,5,14,.6);display:none;flex-direction:column;
     align-items:center;justify-content:center;gap:12px;padding:20px;z-index:5;backdrop-filter:blur(1.5px)}
@@ -159,9 +149,8 @@
   <div id="dhead"></div>
   <div id="stage">
     <canvas id="cv" width="752" height="1128"></canvas>
-    <button id="dlogfab" aria-label="Combat log">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l3 3v15H6z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>
-      <span class="badge">0</span>
+    <button id="dmenufab" aria-label="Menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
     </button>
   </div>
   <div id="party"></div>

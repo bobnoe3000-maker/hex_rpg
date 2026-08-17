@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-17 · Dungeon view V1: slim header (menu · title · currency / minimap · speed · boss), floating combat-log button, nav folded into ☰ menu, Pause removed (delve auto-runs)";
+export const APP_BUILD = "2026-08-17 · Dungeon view: floating ☰ opens the game menu (Combat log now an item inside it); header title flush-left; current-room minimap pulse removed";
 
 const BUF = [];
 const MAX = 400;

@@ -53,14 +53,12 @@ const logEl=document.getElementById("log"), partyEl=document.getElementById("par
       overlay=document.getElementById("overlay"),
       dheadEl=document.getElementById("dhead"),
       dtoastEl=document.getElementById("dtoast"), townEl=document.getElementById("town"),
-      dlogfab=document.getElementById("dlogfab"), dlogov=document.getElementById("dlogov"),
+      dmenufab=document.getElementById("dmenufab"), dlogov=document.getElementById("dlogov"),
       dmenuEl=document.getElementById("dmenu");
-/* combat log now lives in a pop-up opened from a floating button; new lines flag the button while closed */
-let logUnread=0;
-function openDLog(){ closeDMenu(); dlogov.classList.add("show"); logUnread=0; dlogfab.classList.remove("alert");
-  logEl.scrollTop=logEl.scrollHeight; }
+/* combat log is a pop-up opened from the game menu (which itself opens from the floating ☰ button) */
+function openDLog(){ closeDMenu(); dlogov.classList.add("show"); logEl.scrollTop=logEl.scrollHeight; }
 function closeDLog(){ dlogov.classList.remove("show"); }
-dlogfab.onclick=openDLog;
+dmenufab.onclick=()=>openDMenu();
 dlogov.querySelectorAll("[data-dclose]").forEach(x=>x.onclick=closeDLog);
 /* phase: idle → fight ⇄ paused. inventory holds dropped loot; respawn/revive are timers. */
 const state={ roomIdx:0, scene:"town", phase:"idle", room:null, foes:[], t:0, speed:1,
@@ -200,10 +198,7 @@ function tileOf(u){
 }
 function log(msg,cls){ const p=document.createElement("div"); if(cls)p.className=cls; p.innerHTML=msg;
   logEl.appendChild(p); while(logEl.children.length>40)logEl.removeChild(logEl.firstChild);
-  logEl.scrollTop=logEl.scrollHeight;
-  // while the log pop-up is closed, flag the floating button with an unread count
-  if(!dlogov.classList.contains("show")){ logUnread=Math.min(99,logUnread+1);
-    const b=dlogfab.querySelector(".badge"); if(b) b.textContent=logUnread; dlogfab.classList.add("alert"); } }
+  logEl.scrollTop=logEl.scrollHeight; }
 /* display order for the party HUD: the MAIN hero sits in the middle, companions flank it
    (mirrors the combat formation) */
 function hudOrder(){
@@ -889,7 +884,7 @@ function enterTown(fromWipe=false){
   if(fromWipe){ state.phase="idle"; loadRoom(); }
   renderParty();
   dheadEl.classList.remove("show");   // hide the dungeon header + delve controls while at the Keep
-  dlogfab.classList.remove("show"); closeDLog(); closeDMenu();
+  dmenufab.classList.remove("show"); closeDLog(); closeDMenu();
   openTownScreen();
   saveGame();          // persist the run whenever you're back at the Keep (loot, revives, etc.)
   diag("scene", `keep${fromWipe?" · wipe":""} · party ${party.filter(h=>h.alive).length}/${party.length}`);
@@ -1087,8 +1082,8 @@ function goToRoom(idx){
 }
 /* the slim dungeon header: [☰ menu] title · currency  /  tappable minimap · speed · boss timer */
 function renderDungeonHeader(){
-  if(state.scene!=="dungeon" || !state.room){ dheadEl.classList.remove("show"); dlogfab.classList.remove("show"); return; }
-  dheadEl.classList.add("show"); dlogfab.classList.add("show");
+  if(state.scene!=="dungeon" || !state.room){ dheadEl.classList.remove("show"); dmenufab.classList.remove("show"); return; }
+  dheadEl.classList.add("show"); dmenufab.classList.add("show");
   const d=activeDungeon(), idx=state.roomIdx, max=state.roomMax||0, reach=Math.min(BOSS_ROOM,max+1);
   const roomName = idx===BOSS_ROOM ? d.boss.name : LAYOUTS[idx].roomName;
   let nodes="";
@@ -1096,7 +1091,7 @@ function renderDungeonHeader(){
     const boss=i===BOSS_ROOM, cur=i===idx, done=i<=max&&!cur, next=i===max+1;
     const cls = cur?"cur": done?"done": next?"next":"lock";
     const glyph = boss?"☠": done?"✓":(i+1);
-    nodes+=`<button class="dh-node ${cls} ${boss?"boss":""}" ${i<=reach?`data-room="${i}"`:""}>${cur?'<span class="ring"></span>':''}<span class="dot">${glyph}</span></button>`;
+    nodes+=`<button class="dh-node ${cls} ${boss?"boss":""}" ${i<=reach?`data-room="${i}"`:""}><span class="dot">${glyph}</span></button>`;
   }
   let bossPill="";
   if(idx===BOSS_ROOM){
@@ -1104,13 +1099,10 @@ function renderDungeonHeader(){
     const txt=onCd?`BOSS ${Math.floor(rem/60)}:${String(Math.floor(rem%60)).padStart(2,"0")}`:"BOSS ✦ READY";
     bossPill=`<span class="dh-boss ${onCd?"":"ready"}" data-boss>${txt}</span>`;
   }
-  const menuIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>`;
   dheadEl.innerHTML=`<div class="dh-r1">
-      <button class="dh-menu" data-menu aria-label="Menu">${menuIcon}</button>
       <div class="dh-title"><b>${d.name}</b> <span>· ${roomName}</span></div>
       <span class="dh-cur"></span></div>
     <div class="dh-r2"><div class="dh-mini">${nodes}</div><span class="dh-spd" data-spd>${state.speed}×</span>${bossPill}</div>`;
-  dheadEl.querySelector("[data-menu]").onclick=openDMenu;
   dheadEl.querySelectorAll("[data-room]").forEach(b=>b.onclick=()=>goToRoom(+b.getAttribute("data-room")));
   dheadEl.querySelector("[data-spd]").onclick=()=>{ state.speed=state.speed===1?2:1; renderDungeonHeader(); };
   updateHud();
@@ -1133,6 +1125,7 @@ const MENU_ICONS={
   arena:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4l9.5 9.5M4 8.5L8.5 4M15.5 15.5L20 20M15 19l4-4M19 4l-9.5 9.5M20 8.5L15.5 4M8.5 15.5L4 20M9 19l-4-4"/></svg>`,
   speed:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 18a7 7 0 1 1 14 0"/><path d="M12 13l3.6-3.6"/></svg>`,
   diag:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v2.5M12 18.5V21M4.2 7.5l2.2 1.3M17.6 15.2l2.2 1.3M19.8 7.5l-2.2 1.3M6.4 15.2l-2.2 1.3"/></svg>`,
+  log:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l3 3v15H6z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>`,
 };
 function openDMenu(){
   closeDLog();
@@ -1145,6 +1138,7 @@ function openDMenu(){
       <div class="dmrow" data-mact="world">${MENU_ICONS.world}<span>World map</span></div>
       <div class="dmrow" data-mact="arena">${MENU_ICONS.arena}<span>Arena</span></div>
       <div class="dmrow" data-mact="speed">${MENU_ICONS.speed}<span>Speed ${state.speed}×</span></div>
+      <div class="dmrow wide" data-mact="log">${MENU_ICONS.log}<span>Combat log</span></div>
       <div class="dmrow wide" data-mact="diag">${MENU_ICONS.diag}<span>Diagnostics &amp; log export</span></div>
     </div></div>`;
   dmenuEl.querySelectorAll("[data-dclose]").forEach(x=>x.onclick=closeDMenu);
@@ -1154,6 +1148,7 @@ function openDMenu(){
 function closeDMenu(){ dmenuEl.classList.remove("show"); }
 function menuAct(a){
   if(a==="speed"){ state.speed=state.speed===1?2:1; renderDungeonHeader(); openDMenu(); return; }   // stay open; reflect new speed
+  if(a==="log") return openDLog();   // openDLog swaps the menu sheet for the log pop-up
   closeDMenu();
   if(state.scene!=="dungeon") return;
   if(a==="keep") return enterTown();
