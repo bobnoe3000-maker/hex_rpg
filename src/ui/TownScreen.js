@@ -118,16 +118,13 @@ export function ensureTownCss() {
   .kh-pi .fallen{font-size:9.5px;color:#c98a8a;font-style:italic;margin-top:2px}
   /* ===== bottom navigation bar (Center-Depart; CTA sits inside the bar) ===== */
   .kh-nav{flex:0 0 auto;height:calc(62px + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);
-    display:flex;align-items:stretch;position:relative;background:linear-gradient(#150f24,#0d0a16);border-top:1px solid #4a3d68}
-  .kh-nav::before{content:"";position:absolute;left:0;right:0;top:-1px;height:1px;
-    background:linear-gradient(90deg,transparent,#e0b06355,transparent)}
+    display:flex;align-items:stretch;position:relative;background:linear-gradient(#150f24,#0d0a16);border-top:1px solid #2e2540}
   .kh-tab{flex:1;background:none;border:0;cursor:pointer;color:#6f6486;position:relative;padding-top:4px;
     display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
     font-family:inherit;font-size:10px;letter-spacing:.02em}
   .kh-tab svg{opacity:.9}
   .kh-tab:active{transform:translateY(1px)}
   .kh-tab.on{color:#f0c877}
-  .kh-tab.on::after{content:"";position:absolute;top:0;width:26px;height:2.5px;border-radius:2px;background:#f0c877;box-shadow:0 0 8px #f0c877}
   .kh-tab .badge{position:absolute;top:6px;left:calc(50% + 9px);width:8px;height:8px;border-radius:50%;
     background:#8fd39a;border:2px solid #100b1c;box-shadow:0 0 6px #8fd39a}
   /* center Depart CTA — vertically centred within the bar (no longer overlaps the tiles) */
@@ -137,14 +134,9 @@ export function ensureTownCss() {
     box-shadow:0 6px 16px -6px #000,inset 0 2px 3px #fff3;display:flex;flex-direction:column;align-items:center;justify-content:center}
   .kh-cta button span{font-family:inherit;font-weight:bold;font-size:8.5px;letter-spacing:.06em;text-transform:uppercase;margin-top:-2px}
   .kh-cta button:active{transform:translateY(1px)}
-  /* pop-up menu (anchored above the bar) */
-  .kh-menu{position:absolute;right:8px;bottom:calc(66px + env(safe-area-inset-bottom));z-index:9;min-width:212px;
-    background:#170f26;border:1px solid var(--line);border-radius:11px;padding:6px;box-shadow:0 12px 30px -8px #000}
-  .kh-menu[hidden]{display:none}
-  .kh-menu button{display:flex;align-items:center;gap:9px;width:100%;text-align:left;font-family:inherit;font-size:12.5px;
-    color:var(--parchment);background:none;border:0;border-radius:7px;padding:9px 10px;cursor:pointer}
-  .kh-menu button:active{background:#241b38}
-  .kh-menu button[disabled]{opacity:.4;pointer-events:none}
+  /* game menu — a bottom sheet matching the dungeon screen (reuses the global .dsheet/.dmgrid/.dmrow) */
+  .kh-menuwrap{position:fixed;inset:0;z-index:15;display:flex;flex-direction:column;justify-content:flex-end;align-items:center}
+  .kh-menuwrap[hidden]{display:none}
   .kh-toast{position:absolute;left:50%;top:calc(env(safe-area-inset-top) + 16px);transform:translateX(-50%);z-index:20;
     background:#120d1cee;border:1px solid var(--gold);color:var(--gold);font-size:12px;padding:7px 13px;border-radius:9px;
     opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap;box-shadow:0 6px 18px #000;max-width:88%;text-align:center}
@@ -177,6 +169,12 @@ const NAV_ICON = {
   depart: `<path d="M12 3v13M8 12l4 4 4-4M6 20h12"/>`,
 };
 const navSvg = (k, sz = 22) => `<svg viewBox="0 0 24 24" width="${sz}" height="${sz}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${NAV_ICON[k]}</svg>`;
+/* icons for the Menu bottom-sheet rows (match the dungeon menu's stroke style) */
+const SHEET_ICON = {
+  diag:     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v2.5M12 18.5V21M4.2 7.5l2.2 1.3M17.6 15.2l2.2 1.3M19.8 7.5l-2.2 1.3M6.4 15.2l-2.2 1.3"/></svg>`,
+  settings: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/><circle cx="18" cy="18" r="2.2"/></svg>`,
+  exit:     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-3M10 16l-4-4 4-4M6 12h9"/></svg>`,
+};
 
 /* order the party tiles so the main hero (index 0) sits in the centre: [comp, MAIN, comp].
    Returns original party indices in display order (works for a party of 1, 2 or 3). */
@@ -225,9 +223,16 @@ export function openTown(ctx) {
       <button class="kh-tab" data-nav="party">${navSvg("party")}Party${hasFlag ? `<span class="badge"></span>` : ""}</button>
       <button class="kh-tab" data-nav="menu">${navSvg("menu")}Menu</button>
     </nav>
-    <div class="kh-menu" data-menupop hidden>
-      <button data-diag>${iconImg("spark",16)} Diagnostics &amp; log export</button>
-      <button disabled>${iconImg("hammer",16)} Settings — coming soon</button>
+    <div class="kh-menuwrap" data-menupop hidden>
+      <div class="dscrim" data-menuclose></div>
+      <div class="dsheet">
+        <div class="dsh"><span class="t">Menu</span><span class="x" data-menuclose>✕</span></div>
+        <div class="dmgrid">
+          <div class="dmrow wide" data-diag>${SHEET_ICON.diag}<span>Diagnostics &amp; log export</span></div>
+          <div class="dmrow wide" style="opacity:.45;cursor:default">${SHEET_ICON.settings}<span>Settings — coming soon</span></div>
+          <div class="dmrow wide danger" data-exit>${SHEET_ICON.exit}<span>Save &amp; exit to login</span></div>
+        </div>
+      </div>
     </div>
     <div class="kh-toast" data-toast></div>
   </div>`;
@@ -260,8 +265,12 @@ export function openTown(ctx) {
   });
   el.querySelectorAll("[data-hero]").forEach(b => b.onclick = () => { closeMenu(); ctx.openHero(ctx.party[+b.getAttribute("data-hero")]); });
 
+  // menu sheet: close (scrim / ✕), diagnostics, and save & exit to login
+  pop.querySelectorAll("[data-menuclose]").forEach(x => x.onclick = closeMenu);
   const dg = pop.querySelector("[data-diag]");
-  if (ctx.openDiag) dg.onclick = () => { closeMenu(); ctx.openDiag(); }; else dg.disabled = true;
+  if (ctx.openDiag) dg.onclick = () => { closeMenu(); ctx.openDiag(); }; else dg.style.display = "none";
+  const exitBtn = pop.querySelector("[data-exit]");
+  if (ctx.exitToLogin) exitBtn.onclick = () => { closeMenu(); ctx.exitToLogin(); }; else exitBtn.style.display = "none";
 
   const nav = {
     keep:   () => {},                                   // already home
@@ -275,10 +284,6 @@ export function openTown(ctx) {
     if (k !== "menu") closeMenu();
     e.stopPropagation();
     nav[k] && nav[k]();
-  });
-  // tap anywhere else closes the menu
-  el.querySelector(".keephome").addEventListener("click", e => {
-    if (!pop.hidden && !pop.contains(e.target) && !e.target.closest("[data-nav='menu']")) closeMenu();
   });
 }
 

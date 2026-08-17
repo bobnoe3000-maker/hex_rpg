@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-17 · Loot rolls wait behind an open character window instead of drawing over it — the queued drop pops once you close the sheet";
+export const APP_BUILD = "2026-08-17 · Keep nav: dropped the gold active-tab glow + top line (no more gold arcs); Menu is now a dungeon-style bottom sheet with Save & exit to login";
 
 const BUF = [];
 const MAX = 400;

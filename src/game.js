@@ -909,7 +909,7 @@ function openTownScreen(){
   openTown({ silver:()=>state.silver, gems:()=>state.gems, party, portrait:h=>heroPortrait(h),
     openHero, openParty:openPartyScreen, openShop:openShopScreen, openTavern:openTavernScreen, openTemple:openTempleScreen,
     openForge:openForgeScreen, openDiag:openDiagScreen, openDungeons:openDungeonBoard,
-    tileFlag:heroTileFlag, activeDungeon:()=>activeDungeon() });
+    exitToLogin:saveExitToLogin, tileFlag:heroTileFlag, activeDungeon:()=>activeDungeon() });
 }
 /* Party roster (reached from the Keep's Party tab) — tap a pal to open their character screen */
 function openPartyScreen(){
@@ -1319,13 +1319,24 @@ function buildDiagnostics(){
   ].join("\n");
 }
 /* boot: splash → login → pick a save slot → (new) create a hero, or (continue) load the slot */
+let loopStarted=false;
 function beginRun(){
   loadRoom(); renderParty(); updateHud();
   saveGame();           // persist the freshly created/loaded state
   enterTown();          // open the hub, not straight into a fight
-  requestAnimationFrame(loop);
+  if(!loopStarted){ loopStarted=true; requestAnimationFrame(loop); }   // one RAF loop for the session — re-entry never stacks another
 }
-startOnboarding({
+/* Save the run and drop back to the login / save-slot screen (the loop keeps ticking under the flow). */
+function saveExitToLogin(){
+  saveGame();
+  overlay.classList.remove("show"); overlay.innerHTML="";   // dismiss any open panel / loot roll
+  heroPanelOpen=false; lootQ=[]; lootOpen=false;
+  townEl.classList.remove("show");
+  dheadEl.classList.remove("show"); dmenufab.classList.remove("show"); closeDLog(); closeDMenu();
+  state.scene="town";                                       // park the loop (no dungeon ticking) behind the flow
+  startOnboarding(ONBOARD_CB);
+}
+const ONBOARD_CB = {
   onNewGame:(hero, slot)=>{
     activeSlot=slot;
     party=[hero]; state.silver=BAL.STARTING_SILVER; state.gems=0; state.inventory=[]; state.potions=[]; state.roomIdx=0;
@@ -1340,4 +1351,5 @@ startOnboarding({
     log(`Welcome back to <span class="sys">The Emberdeep</span>${m?`, <b>${m.name}</b>`:""}.`,"sys");
     beginRun();
   },
-});
+};
+startOnboarding(ONBOARD_CB);
