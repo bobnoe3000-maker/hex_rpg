@@ -29,6 +29,7 @@ import { startOnboarding } from './ui/Onboarding.js';
 import { makeCompanion, makeEnemy } from './models/units.js';
 import { openDungeonSelect } from './ui/DungeonSelect.js';
 import { openCompanionRoll } from './ui/CompanionLevelUp.js';
+import { FLOOR, floorReachable, floorNeighbors, renderFloorMap, floorProgress } from './ui/FloorMap.js';
 import { POTION_BY_ID, POTION_CAP, STD_SIZE, potionEffect, potionCost, potionSell, rollLootPotion } from './data/potions.js';
 import { potionTileChip, ensurePotChipCss, setPotRing, flashPotBox } from './ui/potionChip.js';
 import { readSlot, writeSlot, SAVE_VERSION } from './state/save.js';
@@ -55,7 +56,8 @@ const logEl=document.getElementById("log"), partyEl=document.getElementById("par
       dheadEl=document.getElementById("dhead"),
       dtoastEl=document.getElementById("dtoast"), townEl=document.getElementById("town"),
       dmenufab=document.getElementById("dmenufab"), dlogov=document.getElementById("dlogov"),
-      dmenuEl=document.getElementById("dmenu");
+      dmenuEl=document.getElementById("dmenu"),
+      floormapEl=document.getElementById("floormap"), floormapfullEl=document.getElementById("floormapfull");
 /* combat log is a pop-up opened from the game menu (which itself opens from the floating ☰ button) */
 function openDLog(){ closeDMenu(); dlogov.classList.add("show"); logEl.scrollTop=logEl.scrollHeight; }
 function closeDLog(){ dlogov.classList.remove("show"); }
@@ -67,6 +69,7 @@ const state={ roomIdx:0, scene:"town", phase:"idle", room:null, foes:[], t:0, sp
   dungeonId:"emberdeep", cleared:[], roomMax:0,   // active dungeon + set of cleared-boss ids (persisted) + furthest room reached this delve
   bossAt:null, bossInWave:false,       // when the boss may next appear (runtime) + is it on the field now
   autoLevel:false,   // when true, companion level-ups resolve their own free roll (no popup, no silver)
+  fogbound:false, floor:null,   // opt-in Fogbound Floor traversal (dungeon 1 only): {cur, visited:[]}
   rally:null };      // {r,c} flag heroes regroup on when no foe is engaged
 /* the dungeon the party is currently delving (falls back to the Emberdeep) */
 const activeDungeon=()=>dungeonById(state.dungeonId);
@@ -103,6 +106,7 @@ function snapshotState(){
   return { v:SAVE_VERSION, party, bench:state.bench, silver:state.silver, gems:state.gems,
     inventory:state.inventory, potions:state.potions, roomIdx:state.roomIdx,
     dungeonId:state.dungeonId, cleared:state.cleared, roomMax:state.roomMax, autoLevel:state.autoLevel,
+    fogbound:state.fogbound, floor:state.floor,
     savedAt:new Date().toISOString() };
 }
 function saveGame(){ if(activeSlot!==null) writeSlot(activeSlot, snapshotState()); }
@@ -125,6 +129,7 @@ function loadGame(save){
   state.cleared=Array.isArray(save.cleared)?save.cleared.slice():[];
   state.roomMax=Math.max(save.roomMax||0, state.roomIdx||0);   // reached rooms are jumpable on the minimap
   state.autoLevel=!!save.autoLevel;                            // per-save preference (off for older saves)
+  state.fogbound=!!save.fogbound; state.floor=save.floor||null;   // Fogbound Floor opt-in + progress (dungeon 1)
 }
 const partyClasses=()=>party.length?[...new Set(party.map(h=>h.cls))]:["fighter","mage","cleric","rogue"];
 let combatRng=Math.random;  // reseeded deterministically when a fight starts / area changes
@@ -342,6 +347,8 @@ function spawnWave(){
     state.foes.push(f); figOf(f); });
 }
 function roomTitle(d,idx){
+  if(fogboundActive() && state.floor){ const n=FLOOR.nodes[state.floor.cur];
+    return `${d.name} — ${n.kind==="boss"?d.boss.name:n.name}`; }
   return idx===BOSS_ROOM ? `${d.name} — ${d.boss.name}` : `${d.name} — ${LAYOUTS[idx].roomName}`;
 }
 function loadRoom(){
@@ -974,7 +981,7 @@ function enterTown(fromWipe=false){
   if(fromWipe){ state.phase="idle"; loadRoom(); }
   renderParty();
   dheadEl.classList.remove("show");   // hide the dungeon header + delve controls while at the Keep
-  dmenufab.classList.remove("show"); closeDLog(); closeDMenu();
+  dmenufab.classList.remove("show"); floormapEl.classList.remove("show"); closeFloorFull(); closeDLog(); closeDMenu();
   openTownScreen();
   saveGame();          // persist the run whenever you're back at the Keep (loot, revives, etc.)
   diag("scene", `keep${fromWipe?" · wipe":""} · party ${party.filter(h=>h.alive).length}/${party.length}`);
@@ -1004,6 +1011,7 @@ function openPartyScreen(){
 function startDungeon(id){
   state.dungeonId=dungeonById(id).id; state.roomIdx=0; state.roomMax=0; state.phase="idle";
   state.bossAt=null; state.bossInWave=false;      // boss is ready the first time you reach its room
+  if(fogboundActive()) initFloor(); else state.floor=null;   // Fogbound Floor starts at its entrance
   loadRoom(); saveGame(); enterDungeon();
 }
 function openDungeonBoard(){
@@ -1171,18 +1179,80 @@ function goToRoom(idx){
   state.phase = wasFighting ? "fight" : "idle";
   renderParty(); renderDungeonHeader(); saveGame();
 }
+
+/* ---------- Fogbound Floor (opt-in alternate traversal, The Shaded Foothills only) ---------- */
+const fogboundActive = () => state.fogbound && state.dungeonId==="emberdeep";
+const floorNode = () => state.floor && FLOOR.nodes[state.floor.cur];
+/* begin a fresh floor at its entrance (also sets roomIdx to the entrance's layout for loadRoom) */
+function initFloor(){
+  state.floor={ cur:FLOOR.start, visited:[FLOOR.start] };
+  state.roomIdx=FLOOR.nodes[FLOOR.start].layout;
+}
+/* travel to a floor node — reachable = any visited node (backtrack) or a sensed frontier node */
+function goToFloorNode(id){
+  if(!fogboundActive() || !state.floor) return;
+  const n=FLOOR.nodes[id]; if(!n || id===state.floor.cur) return;
+  if(!floorReachable(state.floor.visited).has(id)) return;      // must be adjacent to something seen
+  const firstVisit=!state.floor.visited.includes(id);
+  state.floor.cur=id; if(firstVisit) state.floor.visited.push(id);
+  state.roomIdx=n.layout;
+  loadRoom(); seedBattle();
+  state.phase="fight";   // the delve auto-runs — travelling never parks it at "Press Fight"
+  if(firstVisit && n.kind==="treasure"){ state.gems++;          // side-rooms pay a small toll for the detour
+    log(`${iconImg("gem",14)} <b>${n.name}</b> — a hidden cache yields a <span class="sys">Runic Gem</span>.`,"sys"); }
+  closeFloorFull(); renderParty(); renderDungeonHeader(); saveGame();
+}
+/* the corner glance-map (tap to expand) */
+function renderFloorMapUI(){
+  if(!fogboundActive() || !state.floor || state.scene!=="dungeon"){ floormapEl.classList.remove("show"); return; }
+  floormapEl.classList.add("show");
+  floormapEl.innerHTML=`<div class="fm-h"><b>Floor</b><span class="c">${floorProgress(state.floor.visited)}</span></div>${renderFloorMap(state.floor,{expanded:false})}`;
+  floormapEl.onclick=openFloorFull;
+}
+function openFloorFull(){
+  if(!fogboundActive() || !state.floor) return;
+  floormapfullEl.innerHTML=`<div class="fmf">
+      <div class="fmf-h"><div><b>The Shaded Foothills</b><br><span class="sub">${floorProgress(state.floor.visited)} rooms explored</span></div><span class="x" data-fclose>✕</span></div>
+      <div class="fmf-map">${renderFloorMap(state.floor,{expanded:true})}</div>
+      <div class="fmf-lg"><span><i style="background:#f0c877"></i>here</span><span><i style="background:#3f5030"></i>cleared</span><span><i style="background:#7a5a1e"></i>treasure</span><span><i style="background:#5a2420"></i>boss</span><span><i style="background:#2a2440;border:1px dashed #8a7fae"></i>unentered</span></div>
+      <div class="fmf-hint">Tap a lit or ringed room to travel there</div></div>`;
+  floormapfullEl.classList.add("show");
+  floormapfullEl.querySelectorAll("[data-fclose]").forEach(x=>x.onclick=closeFloorFull);
+  floormapfullEl.onclick=e=>{ if(e.target===floormapfullEl) closeFloorFull(); };
+  floormapfullEl.querySelectorAll("[data-fnode]").forEach(g=>g.onclick=()=>goToFloorNode(g.getAttribute("data-fnode")));
+}
+function closeFloorFull(){ floormapfullEl.classList.remove("show"); }
+/* flip between Classic (linear rooms) and Fogbound Floor traversal — restarts the delve at the start
+   so the two can be A/B playtested. Only meaningful in The Shaded Foothills (guarded by the menu row). */
+function toggleFogbound(){
+  state.fogbound=!state.fogbound;
+  if(fogboundActive()) initFloor(); else { state.floor=null; state.roomIdx=0; state.roomMax=0; }
+  state.bossAt=null; state.bossInWave=false;
+  loadRoom(); seedBattle(); state.phase="fight";   // restart the delve running, not parked (loadRoom places the party)
+  closeFloorFull(); renderParty(); renderDungeonHeader(); saveGame();
+  dtoast(state.fogbound?"Fogbound Floor — explore the map to descend":"Classic traversal restored");
+}
+
 /* the slim dungeon header: [☰ menu] title · currency  /  tappable minimap · speed · boss timer */
 function renderDungeonHeader(){
-  if(state.scene!=="dungeon" || !state.room){ dheadEl.classList.remove("show"); dmenufab.classList.remove("show"); return; }
+  if(state.scene!=="dungeon" || !state.room){ dheadEl.classList.remove("show"); dmenufab.classList.remove("show"); floormapEl.classList.remove("show"); closeFloorFull(); return; }
   dheadEl.classList.add("show"); dmenufab.classList.add("show");
   const d=activeDungeon(), idx=state.roomIdx, max=state.roomMax||0, reach=Math.min(BOSS_ROOM,max+1);
-  const roomName = idx===BOSS_ROOM ? d.boss.name : LAYOUTS[idx].roomName;
-  let nodes="";
-  for(let i=0;i<ROOM_COUNT;i++){
-    const boss=i===BOSS_ROOM, cur=i===idx, done=i<=max&&!cur, next=i===max+1;
-    const cls = cur?"cur": done?"done": next?"next":"lock";
-    const glyph = boss?"☠": done?"✓":(i+1);
-    nodes+=`<button class="dh-node ${cls} ${boss?"boss":""}" ${i<=reach?`data-room="${i}"`:""}><span class="dot">${glyph}</span></button>`;
+  const fog=fogboundActive()&&state.floor;
+  const roomName = fog ? (FLOOR.nodes[state.floor.cur].kind==="boss"?d.boss.name:FLOOR.nodes[state.floor.cur].name)
+                       : (idx===BOSS_ROOM ? d.boss.name : LAYOUTS[idx].roomName);
+  let mini;
+  if(fog){ const mapicon=`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14"/></svg>`;
+    mini=`<button class="dh-fmap" data-openmap>${mapicon} Floor · ${floorProgress(state.floor.visited)}</button>`; }
+  else {
+    let nodes="";
+    for(let i=0;i<ROOM_COUNT;i++){
+      const boss=i===BOSS_ROOM, cur=i===idx, done=i<=max&&!cur, next=i===max+1;
+      const cls = cur?"cur": done?"done": next?"next":"lock";
+      const glyph = boss?"☠": done?"✓":(i+1);
+      nodes+=`<button class="dh-node ${cls} ${boss?"boss":""}" ${i<=reach?`data-room="${i}"`:""}><span class="dot">${glyph}</span></button>`;
+    }
+    mini=`<div class="dh-mini">${nodes}</div>`;
   }
   let bossPill="";
   if(idx===BOSS_ROOM){
@@ -1193,10 +1263,12 @@ function renderDungeonHeader(){
   dheadEl.innerHTML=`<div class="dh-r1">
       <div class="dh-title"><b>${d.name}</b> <span>· ${roomName}</span></div>
       <span class="dh-cur"></span></div>
-    <div class="dh-r2"><div class="dh-mini">${nodes}</div><span class="dh-spd" data-spd>${state.speed}×</span>${bossPill}</div>`;
+    <div class="dh-r2">${mini}<span class="dh-spd" data-spd>${state.speed}×</span>${bossPill}</div>`;
   dheadEl.querySelectorAll("[data-room]").forEach(b=>b.onclick=()=>goToRoom(+b.getAttribute("data-room")));
+  const om=dheadEl.querySelector("[data-openmap]"); if(om) om.onclick=openFloorFull;
   dheadEl.querySelector("[data-spd]").onclick=()=>{ state.speed=state.speed===1?2:1; renderDungeonHeader(); };
   updateHud();
+  renderFloorMapUI();
 }
 /* live boss-timer text (cheap; only touches the DOM when the displayed value changes) */
 function tickDungeonHeader(){
@@ -1218,6 +1290,7 @@ const MENU_ICONS={
   diag:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v2.5M12 18.5V21M4.2 7.5l2.2 1.3M17.6 15.2l2.2 1.3M19.8 7.5l-2.2 1.3M6.4 15.2l-2.2 1.3"/></svg>`,
   log:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l3 3v15H6z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>`,
   level:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 13l6-6 6 6M6 18l6-6 6 6"/></svg>`,
+  fog:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14"/></svg>`,
 };
 function openDMenu(){
   closeDLog();
@@ -1231,6 +1304,7 @@ function openDMenu(){
       <div class="dmrow" data-mact="arena">${MENU_ICONS.arena}<span>Arena</span></div>
       <div class="dmrow" data-mact="speed">${MENU_ICONS.speed}<span>Speed ${state.speed}×</span></div>
       <div class="dmrow wide ${state.autoLevel?"on":""}" data-mact="autolvl">${MENU_ICONS.level}<span>Auto-level companions</span><span class="dm-tag">${state.autoLevel?"On":"Off"}</span></div>
+      ${state.dungeonId==="emberdeep"?`<div class="dmrow wide ${state.fogbound?"on":""}" data-mact="fogbound">${MENU_ICONS.fog}<span>Traversal · Fogbound Floor <small style="opacity:.6">(playtest)</small></span><span class="dm-tag">${state.fogbound?"On":"Off"}</span></div>`:""}
       <div class="dmrow wide" data-mact="log">${MENU_ICONS.log}<span>Combat log</span></div>
       <div class="dmrow wide" data-mact="diag">${MENU_ICONS.diag}<span>Diagnostics &amp; log export</span></div>
     </div></div>`;
@@ -1242,6 +1316,7 @@ function closeDMenu(){ dmenuEl.classList.remove("show"); }
 function menuAct(a){
   if(a==="speed"){ state.speed=state.speed===1?2:1; renderDungeonHeader(); openDMenu(); return; }   // stay open; reflect new speed
   if(a==="autolvl"){ toggleAutoLevel(); openDMenu(); return; }   // stay open; reflect On/Off + apply any backlog
+  if(a==="fogbound"){ toggleFogbound(); openDMenu(); return; }   // switch traversal mode; restarts the floor
   if(a==="log") return openDLog();   // openDLog swaps the menu sheet for the log pop-up
   closeDMenu();
   if(state.scene!=="dungeon") return;

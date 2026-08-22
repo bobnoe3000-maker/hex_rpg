@@ -40,6 +40,33 @@
     box-shadow:0 5px 16px -6px #000, inset 0 1px 0 #ffffff12}
   #dmenufab.show{display:flex}
   #dmenufab:active{transform:translateY(1px)}
+  /* Fogbound Floor: corner fog-of-war map (dungeon 1 opt-in) + tap-to-expand full map */
+  #floormap{position:absolute;z-index:5;right:11px;top:11px;width:104px;height:150px;padding:5px 5px 3px;display:none;
+    flex-direction:column;background:rgba(10,8,18,.82);border:1px solid #4a3d68;border-radius:10px;cursor:pointer;
+    box-shadow:0 4px 16px -6px #000;backdrop-filter:blur(2px)}
+  #floormap.show{display:flex}
+  #floormap:active{transform:translateY(1px)}
+  #floormap .fm-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:3px;padding:0 1px}
+  #floormap .fm-h b{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:7.5px;letter-spacing:.14em;text-transform:uppercase;color:#8a7fae;font-weight:400}
+  #floormap .fm-h .c{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:8px;color:var(--gold)}
+  #floormap svg{flex:1;width:100%;min-height:0}
+  #floormapfull{position:absolute;inset:0;z-index:14;display:none;align-items:center;justify-content:center;padding:18px;
+    background:rgba(6,4,10,.72);backdrop-filter:blur(2px)}
+  #floormapfull.show{display:flex}
+  .fmf{width:100%;max-width:340px;max-height:calc(100dvh - 40px);display:flex;flex-direction:column;
+    background:linear-gradient(#221833,#160f26);border:1px solid #4a3d68;border-radius:14px;box-shadow:0 14px 44px #000;overflow:hidden}
+  .fmf-h{display:flex;align-items:center;justify-content:space-between;padding:12px 15px;border-bottom:1px solid var(--line)}
+  .fmf-h b{font-family:Georgia,serif;font-size:15px;color:#fff}
+  .fmf-h .sub{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10px;color:var(--gold)}
+  .fmf-h .x{font-size:16px;color:#8a7fae;cursor:pointer;padding:2px 4px}
+  .fmf-map{padding:8px 10px}
+  .fmf-map svg{width:100%;height:min(58vh,440px);display:block}
+  .fnode{cursor:pointer}
+  .fnode:active{opacity:.7}
+  .fmf-hint{padding:0 15px 13px;text-align:center;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:9.5px;color:#6f6486;letter-spacing:.04em}
+  .fmf-lg{display:flex;flex-wrap:wrap;gap:8px 12px;justify-content:center;padding:2px 15px 12px}
+  .fmf-lg span{display:flex;align-items:center;gap:5px;font-size:10px;color:#8a7fae}
+  .fmf-lg i{width:11px;height:11px;border-radius:3px;display:inline-block}
   #dmenufab svg{width:22px;height:22px}
 
   /* shared bottom-sheet overlays (combat log + game menu) */
@@ -160,10 +187,12 @@
   <div id="dhead"></div>
   <div id="stage">
     <canvas id="cv" width="752" height="1128"></canvas>
+    <button id="floormap" aria-label="Open floor map"></button>
     <button id="dmenufab" aria-label="Menu">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
     </button>
   </div>
+  <div id="floormapfull"></div>
   <div id="party"></div>
   <div id="dtoast"></div>
   <div id="dlogov"><div class="dscrim" data-dclose></div>
