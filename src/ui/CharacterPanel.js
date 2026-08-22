@@ -664,10 +664,11 @@ export function openCharacter(hero, ctx) {
     overlay.querySelectorAll("[data-sk-dec]").forEach(b => b.onclick = () => {
       const id = b.getAttribute("data-sk-dec"); if (skillDraft[id] > 0) { skillDraft[id]--; if (!skillDraft[id]) delete skillDraft[id]; } render();
     });
-    const skCommit = overlay.querySelector("[data-sk-commit]"); if (skCommit) skCommit.onclick = () => {
+    // Confirm/Discard appear in BOTH the grid footer and the open modal — wire every instance.
+    overlay.querySelectorAll("[data-sk-commit]").forEach(b => b.onclick = () => {
       if (ctx.skills && ctx.skills.commit({ ...skillDraft })) { for (const k in skillDraft) delete skillDraft[k]; skillOpen = null; ctx.refresh && ctx.refresh(); render(["good", "Skills learned."]); }
-    };
-    const skDiscard = overlay.querySelector("[data-sk-discard]"); if (skDiscard) skDiscard.onclick = () => { for (const k in skillDraft) delete skillDraft[k]; render(); };
+    });
+    overlay.querySelectorAll("[data-sk-discard]").forEach(b => b.onclick = () => { for (const k in skillDraft) delete skillDraft[k]; render(); });
     const skReset = overlay.querySelector("[data-sk-reset]"); if (skReset) skReset.onclick = () => {
       if (!skillResetArm) { skillResetArm = true; render(); return; }        // first tap arms
       skillResetArm = false;
