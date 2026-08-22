@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-22c · Character panel: both point-spend footers now hold a fixed size — the Stats Reset/Confirm row and the skill modal's undo + Discard/Confirm bar are reserved (dimmed until active), so allocating a stat point or learning a skill rank no longer resizes the window. Dungeon 2's roaming floor is the 2D Drowned Warren — sub-rooms branch east/west as well as up, the camera pans on both axes, with torch fog + fog-of-war minimap and a boss-clear re-form";
+export const APP_BUILD = "2026-08-22d · Party now fights in formation — tanks (melee fighters) hold the front and interpose for the squishies, ranged casters and support/healers keep a standoff behind the tank line, and everyone obeys a leash so the party moves as one group instead of scattering to separate foes. Character-panel point-spend footers hold a fixed size; dungeon 2 is the 2D Drowned Warren roaming floor";
 
 const BUF = [];
 const MAX = 400;

@@ -309,6 +309,13 @@ function placeHeroes(){
     while((isBlocked(state.room,h.r,h.c)||occupied(h.r,h.c,h))&&guard++<cells.length+2){
       const f=cells[(guard*7+i*13)%(cells.length||1)]; if(f){ h.r=f[0]; h.c=f[1]; } else break;
     }
+  });
+  // Start in formation: pull casters/support one rank back off the entry line (foes spawn toward the
+  // interior — lower rows — so a higher row is "behind"). Only when that cell is clear floor.
+  party.forEach(h=>{ if(!h.alive || roleOf(h)!=="back") return;
+    const br=h.r+1; if(!isBlocked(state.room,br,h.c) && !occupied(br,h.c,h)){ h.r=br; }
+  });
+  party.forEach((h,i)=>{ if(!h.alive) return;
     h.rr=h.r; h.cc=h.c; h.moveT=1; h.next=state.t+0.5+0.2*i; resetCombat(h); figOf(h);
   });
 }
@@ -893,6 +900,120 @@ function resetSkills(h){
   return true;
 }
 const AGGRO_R=6;   // roaming foes wake when a hero comes within this many tiles (so rooms activate as you arrive)
+
+/* ---------- party formation: fight as a unit — tanks hold the front, casters/support stay behind ----------
+   A hero's combat "lane" is derived from its class/range:
+     front — tanky melee (fighter): leads, presses forward, interposes for the squishies
+     back  — ranged (mage) or support (cleric): keeps a standoff and never advances past the tank line
+     mid   — other melee (rogue): flanks and engages, but obeys the party leash so it never runs off alone. */
+function roleOf(u){
+  if(u.team!==0) return "foe";
+  if(derive(u).rng>1) return "back";          // ranged casters hang back
+  if(u.cls==="cleric") return "back";         // healer/support stays protected
+  if(u.cls==="fighter") return "front";       // tank holds the line
+  return "mid";                               // rogue & other melee — flank but stay with the group
+}
+/* Recomputed once per fight frame (before any unit acts): party centroid (leash anchor), enemy
+   centroid (which way "forward" is), and the front-line reference distance = how far the lead tank
+   stands from the enemy. Back-line units keep at least that far, so they sit behind the tank. */
+let form=null;
+function computeFormation(){
+  const heroes=liveHeroes();
+  if(!heroes.length){ form=null; return; }
+  let ar=0,ac=0; for(const h of heroes){ ar+=h.r; ac+=h.c; } ar/=heroes.length; ac/=heroes.length;
+  const anchor={ r:Math.round(ar), c:Math.round(ac) };
+  // only AWAKE foes define the front line — sleeping roaming packs elsewhere on the 2D floor must not
+  // skew which way "forward" is for the local skirmish.
+  const foes=liveFoes().filter(f=> !f.roam || f.aggro); let enemyC=null;
+  if(foes.length){ let fr=0,fc=0; for(const f of foes){ fr+=f.r; fc+=f.c; } enemyC={ r:fr/foes.length, c:fc/foes.length }; }
+  let frontDist=Infinity;
+  if(enemyC){
+    // the most-forward living tank sets the line; fall back to the party centroid if no tank is up
+    let tank=null,bd=Infinity;
+    for(const h of heroes){ if(roleOf(h)!=="front") continue;
+      const d=Math.abs(h.r-enemyC.r)+Math.abs(h.c-enemyC.c); if(d<bd){ bd=d; tank=h; } }
+    frontDist = tank ? bd : Math.abs(anchor.r-enemyC.r)+Math.abs(anchor.c-enemyC.c);
+  }
+  form={ anchor, enemyC, frontDist };
+}
+/* A cell is "ahead of the line" when it sits closer to the enemy than the lead tank — back-liners
+   refuse to step onto such cells, so they never outrun their protection. */
+function aheadOfLine(r,c){
+  if(!form || !form.enemyC) return false;
+  return (Math.abs(r-form.enemyC.r)+Math.abs(c-form.enemyC.c)) < form.frontDist;
+}
+/* Which foe most threatens the back line — the tank targets it to body-block for the squishies. */
+function foeThreateningBack(u){
+  const backs=liveHeroes().filter(h=>roleOf(h)==="back");
+  if(!backs.length) return null;
+  let best=null,bd=Infinity;
+  for(const f of liveFoes()){
+    let m=99; for(const b of backs){ const d=distU(f,b); if(d<m) m=d; }
+    const score=m + distU(u,f)*0.25;          // tie-break toward foes this tank can reach sooner
+    if(score<bd){ bd=score; best=f; }
+  }
+  return best;
+}
+/* Back-liner: step to the neighbour that most increases distance from the foe while staying behind
+   the tank line and drifting back toward the party. False if no such retreat cell exists (cornered). */
+function stepSafeBack(u,tg){
+  const opts=stepOpts(u); if(!opts.length) return false;
+  const cur=distU(u,tg), exposed=aheadOfLine(u.r,u.c);
+  let best=null,bs=-Infinity;
+  for(const p of opts){
+    if(aheadOfLine(p.r,p.c)) continue;                              // never retreat into a forward cell
+    const df=Math.abs(p.r-tg.r)+Math.abs(p.c-tg.c);                 // farther from the foe is better
+    const da=Math.abs(p.r-form.anchor.r)+Math.abs(p.c-form.anchor.c); // closer to the party is better
+    const s=df*2-da;
+    if(s>bs){ bs=s; best=p; }
+  }
+  if(!best) return false;
+  const bf=Math.abs(best.r-tg.r)+Math.abs(best.c-tg.c);
+  if(bf>=cur || exposed){ moveTo(u,best); return true; }            // take it if safer, or if just getting behind the line
+  return false;
+}
+/* Back-liner: close the gap toward a foe only while staying behind the tank; hold if every forward
+   step would cross the line. */
+function stepForwardBehindLine(u,tg){
+  const opts=stepOpts(u); if(!opts.length) return;
+  const df=distField(tg.r,tg.c), W=gC(), here=df[u.r*W+u.c];
+  let best=null,bd=Infinity;
+  for(const p of opts){
+    if(aheadOfLine(p.r,p.c)) continue;
+    const d=df[p.r*W+p.c]; if(d<0) continue;
+    if(d<bd){ bd=d; best=p; }
+  }
+  if(best && (here<0 || bd<=here)) moveTo(u,best);                  // else hold — advancing would break formation
+}
+function backlineAct(u,tg){
+  const R=derive(u).rng, d=distU(u,tg);
+  // Ranged floats at its full attack range (clearly behind the tank); melee support keeps a small bubble.
+  const standoff=R>1 ? R : BAL.BACK_STANDOFF;
+  // Retreat when a foe is inside our standoff, or we've drifted ahead of the tank line
+  if(d<standoff || aheadOfLine(u.r,u.c)){
+    if(stepSafeBack(u,tg)) return;                                  // reposition behind the line…
+    if(d<=R) attack(u,tg);                                          // …or fight if cornered
+    return;
+  }
+  if(R>1){                                                          // ranged: in range and behind the line → shoot
+    if(d<=R){ attack(u,tg); return; }
+    stepForwardBehindLine(u,tg); return;                            // out of range → creep up, never past the tank
+  }
+  // melee support (cleric): don't charge — swing only if a foe is adjacent, else tuck in near the party
+  if(d<=1){ attack(u,tg); return; }
+  if(distU(u,form.anchor)>1) stepToward(u,form.anchor);
+}
+function frontAct(u,tgNearest){
+  const tg=foeThreateningBack(u)||tgNearest;                        // interpose for the squishies
+  const R=derive(u).rng, d=distU(u,tg);
+  if(d<=R) attack(u,tg); else stepToward(u,tg);                     // tanks always press forward (they define the line)
+}
+function midAct(u,tg){
+  if(distU(u,form.anchor)>BAL.LEASH && distU(u,tg)>1){ stepToward(u,form.anchor); return; }  // strayed too far → regroup
+  const R=derive(u).rng, d=distU(u,tg);
+  if(d<=R) attack(u,tg); else stepToward(u,tg);
+}
+
 function act(u){
   if(!u.alive)return;
   if(hasBuff(u,"stun")) return;               // stunned → skip this action entirely
@@ -904,6 +1025,13 @@ function act(u){
   const tg=nearest(u);
   if(tg){
     if(tryCast(u,tg)) return;                  // spend the action on a ready skill when one fits
+    // heroes fight in formation; foes (and heroes with no formation ctx) use the plain chase/kite
+    if(u.team===0 && form){
+      const role=roleOf(u);
+      if(role==="back"){ backlineAct(u,tg); return; }
+      if(role==="front"){ frontAct(u,tg); return; }
+      midAct(u,tg); return;                     // rogue / other melee
+    }
     const R=derive(u).rng, d=distU(u,tg);
     if(R>1){                                  // ranged: kite
       if(d<=BAL.KITE_MIN){ if(!stepAway(u,tg)) attack(u,tg); return; }  // foe too close → back off (or fight if cornered)
@@ -1592,6 +1720,7 @@ function loop(now){
     if(!frozen){
       state.t+=dt;
       if(state.scene==="dungeon" && state.phase==="fight"){
+        computeFormation();      // party centroid + tank front line, so heroes act in formation this tick
         for(const u of liveUnits()){
           if(!u.alive)continue;   // a unit killed earlier this same tick shouldn't still act
           tickBuffs(u);           // advance bleeds / regen / expire timed buffs

@@ -11,6 +11,10 @@ export const BAL = {
   // keeping the classic attack/retreat dance. Melee units ignore this.
   KITE_MIN: 1,
 
+  // formation AI: the party fights as a unit — tanks hold the front, casters/support stay behind.
+  LEASH: 4,          // a hero this many tiles from the party centroid regroups instead of chasing
+  BACK_STANDOFF: 2,  // back-line units (ranged/support) keep at least this far from the nearest foe
+
   // damage
   CRIT_MULT: 1.5,        // critical hits deal x this
 
