@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-22 · The Misty Wetlands (dungeon 2) roaming floor is now a 2D Drowned Warren — sub-rooms branch east/west as well as up, and the camera pans on both axes to follow the party through the larger-than-screen level. Torch fog + fog-of-war minimap, rooms wake as you approach, the floor re-forms after the boss falls";
+export const APP_BUILD = "2026-08-22b · Character panel: the Reset/Confirm row is now always reserved (dimmed until you allocate a point), so adding a stat point no longer resizes the panel. Dungeon 2's roaming floor is the 2D Drowned Warren — sub-rooms branch east/west as well as up, the camera pans on both axes, with torch fog + fog-of-war minimap and a boss-clear re-form";
 
 const BUF = [];
 const MAX = 400;

@@ -175,7 +175,8 @@ function injectCss() {
   .cp-pts-act button{flex:1;font-family:inherit;font-weight:bold;font-size:12px;border:0;border-radius:7px;padding:8px;cursor:pointer}
   .cp-confirm{background:linear-gradient(#e0b063,#a8722a);color:#241606;box-shadow:0 2px 0 #6e4a14}
   .cp-reset{background:#2c2342;color:var(--parchment);box-shadow:0 2px 0 #100b1c}
-  .cp-pts-act button:active{transform:translateY(1px)}
+  .cp-pts-act button:active:not(:disabled){transform:translateY(1px)}
+  .cp-pts-act button:disabled{opacity:.35;cursor:default;box-shadow:none;filter:grayscale(.5)}
   .skhint{font-size:10.5px;color:#6f6486;margin-top:5px}
   .cp-subtabs{display:flex;gap:8px;margin-bottom:11px}
   .cp-subtab{flex:1;font-family:inherit;font-size:9.5px;letter-spacing:1px;text-transform:uppercase;
@@ -398,9 +399,9 @@ export function openCharacter(hero, ctx) {
         <div class="cp-pts">
           <div class="cp-pts-h"><span>Points to spend</span><span class="av ${remaining ? "" : "none"}">${remaining}</span></div>
           ${ASSIGNABLE.map(arow).join("")}
-          ${dirty ? `<div class="cp-pts-act">
-            <button class="cp-reset" data-preset>Reset</button>
-            <button class="cp-confirm" data-pconfirm>Confirm</button></div>` : ""}
+          <div class="cp-pts-act">
+            <button class="cp-reset" data-preset ${dirty ? "" : "disabled"}>Reset</button>
+            <button class="cp-confirm" data-pconfirm ${dirty ? "" : "disabled"}>Confirm</button></div>
         </div>`;
     };
 
