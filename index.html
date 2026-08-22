@@ -115,10 +115,15 @@
   .card .skull{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
   .card b{font-size:10.5px;color:var(--gold)} .card .lvl{color:#9ad1ff}
   .card .cls{color:#9a8fb8;text-transform:capitalize;font-style:italic}
+  /* fixed-row info so the HP bar + gear line anchor at the same Y on every card regardless of wrapping */
+  .card .info{flex:1;min-width:0;display:flex;flex-direction:column}
+  .card .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .card .st{opacity:.7;font-variant-numeric:tabular-nums;min-height:26px}   /* reserve 2 lines so a wrapped "· DEF" never pushes the bar down */
+  .card .hp{white-space:nowrap;font-variant-numeric:tabular-nums}
   .card .fallen{color:#c98a8a;font-style:italic;display:inline-flex;align-items:center;gap:3px;margin-top:3px}
   .bar{height:5px;background:var(--hpbg);border-radius:3px;overflow:hidden;margin:2px 0}
   .bar i{display:block;height:100%;background:linear-gradient(#ff7a70,var(--hp));transition:width .25s}
-  .card .gear{opacity:.8;font-style:italic}
+  .card .gear{opacity:.8;font-style:italic;min-height:26px}                  /* reserve 2 lines for the gear hint (last row) */
   /* gear hint: an upgrade or empty-slot fit is waiting in the bag */
   .card .gear-up{display:inline-block;margin-left:5px;font-style:normal;font-size:8px;line-height:1;
     color:#8fd39a;vertical-align:1px;filter:drop-shadow(0 0 4px #8fd39a);animation:gearpulse 1.8s ease-in-out infinite}

@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-22j · Potion belt: the stash's Equip button is now 'Equip All' (loads the whole stack), with an extra '×10' button that equips just ten at a time (shown on stacks over 10). Loot Roll hides the item name until the reels settle; Misty Wetlands mini-bosses on a ~10-min timer with tiered gear odds (elite 25% / mini 50% / boss 100%); manual level selector; class-scaled stat points";
+export const APP_BUILD = "2026-08-22k · Party cards: fixed-height stat and gear rows so the HP bar, HP number, and gear line align across all tiles and heights stay constant, even when stats/gear wrap or the upgrade ▲ shows. Potion belt Equip All + ×10; Loot Roll hides the name until the reels settle; Misty Wetlands 3-level descent with mini-boss timers + tiered gear odds; manual level selector; class-scaled stat points";
 
 const BUF = [];
 const MAX = 400;

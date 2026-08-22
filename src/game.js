@@ -254,12 +254,13 @@ function renderParty(){
         +`background:${col};border:2px solid #181128;box-shadow:0 0 6px ${col};z-index:3`; picWrap.appendChild(d); }
     const bag=Object.values(h.gear).filter(Boolean).length;
     const gearHint = h.alive && hasGearHint(h, state.inventory);   // bag holds an upgrade or an empty-slot fit
-    const info=document.createElement("div");
-    info.innerHTML=`${isMain?iconImg("crown",12)+" ":""}<b>${h.name}</b> <span class="lvl">Lv${h.level}</span> <span class="cls">${h.cls}</span><br>
-      ${h.alive ? `<span style="opacity:.7">ATK ${D.atk} · DEF ${D.def}</span>
+    const info=document.createElement("div"); info.className="info";
+    info.innerHTML=`<div class="nm">${isMain?iconImg("crown",12)+" ":""}<b>${h.name}</b> <span class="lvl">Lv${h.level}</span> <span class="cls">${h.cls}</span></div>
+      ${h.alive ? `<div class="st">ATK ${D.atk} · DEF ${D.def}</div>
       <div class="bar"><i style="width:${clamp(h.hp/D.maxhp*100,0,100)}%"></i></div>
-      ${h.hp}/${D.maxhp}<div class="gear">${bag} equipped · tap for gear ›${gearHint?`<span class="gear-up" title="An upgrade or new gear is waiting in the bag">▲</span>`:""}</div>`
-        : `<span class="fallen">${iconImg("skull",11)} Fallen — restore at the Temple</span>`}`;
+      <div class="hp">${h.hp}/${D.maxhp}</div>
+      <div class="gear">${bag} equipped · tap for gear ›${gearHint?`<span class="gear-up" title="An upgrade or new gear is waiting in the bag">▲</span>`:""}</div>`
+        : `<div class="fallen">${iconImg("skull",11)} Fallen — restore at the Temple</div>`}`;
     // portrait column: portrait on top, the equipped-potion box below it
     const col=document.createElement("div"); col.style.cssText="display:flex;flex-direction:column;align-items:center;flex:0 0 auto";
     col.appendChild(picWrap);
