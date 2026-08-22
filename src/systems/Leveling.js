@@ -7,8 +7,18 @@
 
 import { BAL } from "../data/balance.js";
 
-export const STAT_STEP = BAL.POINTS.STEP;                 // { hp, atk, def, dodge, crit } per point
+export const STAT_STEP = BAL.POINTS.STEP;                 // { hp, atk, def, dodge, crit } per point — class-neutral base
 export const ASSIGNABLE = Object.keys(STAT_STEP);         // the stats points can be spent on
+const CLASS_STEP = BAL.POINTS.CLASS_STEP || {};           // per-class affinity added on top of STEP
+
+/* How much ONE point raises `key` for this class — the base STEP plus any class affinity.
+   Accepts a class string or a hero object; falls back to the class-neutral step. */
+export function stepFor(clsOrHero, key) {
+  const cls = clsOrHero && typeof clsOrHero === "object" ? clsOrHero.cls : clsOrHero;
+  const base = STAT_STEP[key] || 0;
+  const bonus = (cls && CLASS_STEP[cls] && CLASS_STEP[cls][key]) || 0;
+  return base + bonus;
+}
 
 /* points granted for reaching a single level */
 export function pointsForLevel(level) {
@@ -36,9 +46,10 @@ export function unspentPoints(hero) {
   return Math.max(0, earnedPoints(hero.level || 1) - spentPoints(hero));
 }
 
-/* the stat bonus a hero's committed points add to one stat (fed into StatEngine.derive) */
+/* the stat bonus a hero's committed points add to one stat (fed into StatEngine.derive).
+   Scaled by the hero's class affinity, so the same allocation is worth more on a class's key stats. */
 export function pointBonus(hero, key) {
-  return hero && hero.pts && STAT_STEP[key] ? (hero.pts[key] || 0) * STAT_STEP[key] : 0;
+  return hero && hero.pts && STAT_STEP[key] ? (hero.pts[key] || 0) * stepFor(hero, key) : 0;
 }
 
 /* a fresh, empty allocation block for a new hero */

@@ -5,7 +5,7 @@
 
 import { derive } from "../systems/StatEngine.js";
 import { canEquip, equip, unequip, compareToEquipped } from "../systems/Equipment.js";
-import { STAT_STEP, ASSIGNABLE } from "../systems/Leveling.js";
+import { STAT_STEP, ASSIGNABLE, stepFor } from "../systems/Leveling.js";
 import { heroKit, starTier, skillDef } from "../systems/Skills.js";
 import { starsHtml, starLabel } from "./stars.js";
 import { SLOTS } from "../data/items/gearTypes.js";
@@ -391,10 +391,11 @@ export function openCharacter(hero, ctx) {
       const arow = k => {
         // − only pulls back points added in THIS uncommitted draft — committed stats can't be refunded
         const canAdd = remaining > 0, canSub = draft[k] > 0;
-        const preview = dval(k) + draft[k] * STAT_STEP[k];
-        const pend = draft[k] !== 0 ? ` <span class="pend ${draft[k] < 0 ? "neg" : ""}">(${draft[k] > 0 ? "+" : ""}${draft[k] * STAT_STEP[k]})</span>` : "";
+        const step = stepFor(hero, k);                  // class-scaled gain per point
+        const preview = dval(k) + draft[k] * step;
+        const pend = draft[k] !== 0 ? ` <span class="pend ${draft[k] < 0 ? "neg" : ""}">(${draft[k] > 0 ? "+" : ""}${draft[k] * step})</span>` : "";
         return `<div class="cp-arow"><span class="k">${ATTR_LABEL[k]}</span>
-          <span class="v">${fmtStep(k, preview)}${pend} <span class="cp-astep">+${STAT_STEP[k]}/pt</span></span>
+          <span class="v">${fmtStep(k, preview)}${pend} <span class="cp-astep">+${step}/pt</span></span>
           <button class="cp-ab" data-dec="${k}" ${canSub ? "" : "disabled"}>−</button>
           <button class="cp-ab" data-inc="${k}" ${canAdd ? "" : "disabled"}>+</button></div>`;
       };

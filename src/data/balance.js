@@ -84,6 +84,14 @@ export const BAL = {
   POINTS: {
     PER_LEVEL: [{ upTo: 50, pts: 3 }, { upTo: 100, pts: 2 }, { upTo: Infinity, pts: 1 }],
     STEP: { hp: 4, atk: 1, def: 1, dodge: 1, crit: 1 },   // one point = +4 HP, or +1 to any other stat
+    // Per-class affinity ADDED to STEP for that class's signature stats, so a point spent scales
+    // toward the class's identity (applies to the main hero's point-buy AND companion stat rolls).
+    CLASS_STEP: {
+      fighter: { hp: 1, def: 1 },   // hp +5/pt, def +2/pt
+      mage:    { atk: 2 },          // atk +3/pt
+      rogue:   { crit: 1, dodge: 1 }, // crit +2/pt, dodge +2/pt
+      cleric:  { def: 1, atk: 1 },  // def +2/pt, atk +2/pt
+    },
   },
 
   // Respec: wiping the skill tree refunds every point for silver — cost rises with how much is invested.

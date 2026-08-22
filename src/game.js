@@ -6,7 +6,7 @@ import { fxUpdateDraw, fxClear, fxText, fxSlash, fxBolt, fxDissolve, fxRing, fxB
 import { GCOLS, GROWS, buildGameRoom, buildRoamingFloor, cx0g, cy0g, isBlocked } from './engine/dungeon.js';
 import { xpToReach } from './engine/combat.js';
 import { DUNGEONS, LAYOUTS, ROOM_COUNT, BOSS_ROOM, dungeonById, isUnlocked, nextDungeon } from './data/dungeons.js';
-import { unspentPoints, earnedPoints, pointsForLevel, ASSIGNABLE, emptyPoints, STAT_STEP } from './systems/Leveling.js';
+import { unspentPoints, earnedPoints, pointsForLevel, ASSIGNABLE, emptyPoints, STAT_STEP, stepFor } from './systems/Leveling.js';
 import { combatMods, activeSkills, unspentSkillPoints, earnedSkillPoints, spentSkillPoints, branchInvested, tierUnlocked, rankOf, allSkills,
          reflectFrac, guardianFrac, waveHealFrac, lastStand, momentum, heroKit } from './systems/Skills.js';
 import { CLASS_SKILLS, TIER_GATES, MAX_POINTS, PTS_PER_STAR } from './data/skills.js';
@@ -811,7 +811,7 @@ function applyCompanionRoll(h){
 const STAT_LABEL = { hp:"HP", atk:"ATK", def:"DEF", dodge:"Dodge", crit:"Crit" };
 /* compact one-line readout of what a rolled level granted, for the combat log */
 function rollSummary(roll, h){
-  const parts=ASSIGNABLE.filter(k=>roll.stats[k]).map(k=>`+${roll.stats[k]*STAT_STEP[k]} ${STAT_LABEL[k]||k}`);
+  const parts=ASSIGNABLE.filter(k=>roll.stats[k]).map(k=>`+${roll.stats[k]*stepFor(h,k)} ${STAT_LABEL[k]||k}`);
   if(roll.skillId){ const s=allSkills(h.cls).find(x=>x.id===roll.skillId); if(s) parts.push(`${s.name} ⭑`); }
   return parts.length ? parts.join(" · ") : "no gains";
 }

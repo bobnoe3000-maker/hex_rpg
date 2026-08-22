@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-22d · Party now fights in formation — tanks (melee fighters) hold the front and interpose for the squishies, ranged casters and support/healers keep a standoff behind the tank line, and everyone obeys a leash so the party moves as one group instead of scattering to separate foes. Character-panel point-spend footers hold a fixed size; dungeon 2 is the 2D Drowned Warren roaming floor";
+export const APP_BUILD = "2026-08-22e · Stat points now scale by class — on top of the base (+4 HP / +1 else per point), Fighter gets +1 HP & +1 DEF, Mage +2 ATK, Rogue +1 Crit & +1 Dodge, Cleric +1 DEF & +1 ATK per point (applies to the main hero's point-buy and companion level-up rolls). Party fights in formation (tanks front, casters/support back, leashed together); dungeon 2 is the 2D Drowned Warren roaming floor";
 
 const BUF = [];
 const MAX = 400;

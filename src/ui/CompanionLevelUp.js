@@ -4,7 +4,7 @@
    the roll data, silver, and apply/commit all come through ctx. Renders into #overlay. */
 "use strict";
 
-import { STAT_STEP, ASSIGNABLE } from "../systems/Leveling.js";
+import { STAT_STEP, ASSIGNABLE, stepFor } from "../systems/Leveling.js";
 import { MAX_POINTS } from "../data/skills.js";
 import { starsHtml, starLabel } from "./stars.js";
 import { iconImg } from "../engine/icons.js";
@@ -154,7 +154,7 @@ export function openCompanionRoll(hero, ctx) {
     ASSIGNABLE.forEach(k => {
       const v = roll.stats[k] || 0, st = stripOf(k);
       st.innerHTML = cellHtml(v); st.style.transform = "translateY(0)";
-      effOf(k).textContent = v > 0 ? `+${v * STAT_STEP[k]} ${STAT_LABEL[k]}` : "—";
+      effOf(k).textContent = v > 0 ? `+${v * stepFor(hero, k)} ${STAT_LABEL[k]}` : "—";
       boxOf(k).className = "clv-reel locked" + (v === 0 ? " zero" : "");
     });
     const s = roll.skillId ? kit.find(x => x.id === roll.skillId) : null;
@@ -205,7 +205,7 @@ export function openCompanionRoll(hero, ctx) {
     if (a.kind === "stat") {
       const v = ctx.getRoll().stats[a.k] || 0, box = boxOf(a.k);
       box.classList.add("locked", "pop"); if (v === 0) box.classList.add("zero");
-      effOf(a.k).textContent = v > 0 ? `+${v * STAT_STEP[a.k]} ${STAT_LABEL[a.k]}` : "—";
+      effOf(a.k).textContent = v > 0 ? `+${v * stepFor(hero, a.k)} ${STAT_LABEL[a.k]}` : "—";
       setTimeout(() => box.classList.remove("pop"), 300);
     } else {
       skillBox().classList.add("locked", "pop");
@@ -222,7 +222,7 @@ export function openCompanionRoll(hero, ctx) {
   }
 
   function hintRoll(roll) {
-    const parts = ASSIGNABLE.filter(k => roll.stats[k]).map(k => `+${roll.stats[k] * STAT_STEP[k]} ${STAT_LABEL[k]}`);
+    const parts = ASSIGNABLE.filter(k => roll.stats[k]).map(k => `+${roll.stats[k] * stepFor(hero, k)} ${STAT_LABEL[k]}`);
     const kit = ctx.kit(), s = roll.skillId ? kit.find(x => x.id === roll.skillId) : null;
     const skillTxt = s ? `<b>${s.name} +1</b>` : (hasEligible() ? `<b>no skill</b>` : "");
     hintEl().innerHTML = `This roll: <b>${parts.join(" · ") || "no stats"}</b>${skillTxt ? ` · ${skillTxt}` : ""}`;
