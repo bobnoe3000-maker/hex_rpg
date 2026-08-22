@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-22g · Misty Wetlands descent is now MANUAL — beating a level's mini-boss UNLOCKS the next level instead of auto-descending; a level selector in the dungeon header (① ② ☠, current/unlocked/locked) lets you travel to any unlocked level, forward or back. Fully clearing a level re-forms it so it stays farmable. Random elites drop gear alongside bosses/mini-bosses; ordinary foes give gold/potions. Class-scaled stat points; formation combat";
+export const APP_BUILD = "2026-08-22h · Misty Wetlands: mini-bosses now respawn on a ~10-min timer like a floor boss (their room farms trash until they return; a MINI/BOSS countdown shows in the header). Gear-drop odds by tier — elite 25%, mini-boss 50%, final boss 100%; ordinary foes still give only gold/potions. Manual level selector (① ② ☠) with permanent unlocks; class-scaled stat points; formation combat";
 
 const BUF = [];
 const MAX = 400;

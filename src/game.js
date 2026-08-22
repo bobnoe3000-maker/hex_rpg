@@ -69,6 +69,7 @@ const state={ roomIdx:0, scene:"town", phase:"idle", room:null, foes:[], t:0, sp
   dungeonId:"emberdeep", cleared:[], roomMax:0,   // active dungeon + set of cleared-boss ids (persisted) + furthest room reached this delve
   bossAt:null, bossInWave:false,       // when the boss may next appear (runtime) + is it on the field now
   roamLevel:0, roamUnlocked:0, miniAlive:false, eliteRolls:0,   // Misty Wetlands: current level (0–2), deepest UNLOCKED level, mini-boss up?, elites spawned
+  roamBossAt:[null,null,null],   // per-level champion respawn time (runtime): a slain mini-boss/boss returns after BOSS_RESPAWN
   autoLevel:false,   // when true, companion level-ups resolve their own free roll (no popup, no silver)
   fogbound:false, floor:null,   // opt-in Fogbound Floor traversal (dungeon 1 only): {cur, visited:[]}
   cam:{x:0,y:0},     // camera offset (logical px) for the roaming floor — follows the party
@@ -423,9 +424,16 @@ const curFloor=()=>FLOOR2_LEVELS[state.roamLevel||0];
 function spawnRoaming(){
   const d=activeDungeon(), fl=curFloor(), rects=state.room.roomRects;
   state.miniAlive=false; state.bossInWave=false;
+  // the level's champion (mini-boss/boss) only reforms once its respawn timer is up; until then its
+  // room fields the pack's ordinary trash and a couple of farm foes so the level stays fightable
+  const champAt=state.roamBossAt[state.roamLevel], champReady=(champAt==null || state.t>=champAt);
   for(const pk of fl.packs){ const rect=rects[pk.room];
     const cells=[]; for(let r=rect.r+1;r<rect.r+rect.h-1;r++) for(let c=rect.c+1;c<rect.c+rect.w-1;c++) if(!isBlocked(state.room,r,c)) cells.push([r,c]);
-    pk.comp.forEach((tok,i)=>{
+    // when the champion is on cooldown, drop its token from the pack and top up with farm trash
+    let comp=pk.comp;
+    if(!champReady && (comp.includes("BOSS")||comp.includes("MINIBOSS")))
+      comp=[...comp.filter(t=>t!=="BOSS"&&t!=="MINIBOSS"), ...BOSS_FARM_COMP.slice(0,2)];
+    comp.forEach((tok,i)=>{
       let cell=cells[(i*5+3)%(cells.length||1)]||[rect.cr,rect.cc], g=0;
       while(occupied(cell[0],cell[1])&&g++<cells.length) cell=cells[(i*5+3+g)%cells.length];
       let f;
@@ -800,9 +808,11 @@ function hurt(u,dmg,src,opt){
       awardXP(u.xp);
       const d=activeDungeon(), roam=roamingActive();
       const dropChance=Math.min(BAL.DROP_CHANCE_MAX, BAL.DROP_CHANCE + BAL.DROP_CHANCE_PER_TIER*(d.power-1));
-      // On the Misty Wetlands roaming floor, GEAR drops only from bosses (incl. mini-bosses) and elites;
-      // ordinary foes give gold/potions only. Other dungeons keep their small chance-based gear drops.
-      const gearDrop = roam ? (u.boss||u.elite) : (u.boss||combatRng()<dropChance);
+      // On the Misty Wetlands roaming floor, GEAR drops only from champions, by tier: final boss 100%,
+      // mini-boss 50%, elite 25% — ordinary foes give gold/potions only. Other dungeons keep their
+      // small chance-based gear drops.
+      const roamGearP = u.finalboss?BAL.ROAM_GEAR.BOSS : u.miniboss?BAL.ROAM_GEAR.MINIBOSS : u.elite?BAL.ROAM_GEAR.ELITE : 0;
+      const gearDrop = roam ? (roamGearP>0 && combatRng()<roamGearP) : (u.boss||combatRng()<dropChance);
       if(gearDrop){
         // Only ONE roll popup at a time: while a loot ROLL is open, ordinary drops are skipped to prevent
         // stacking (the battle rolls on behind it). Boss/elite drops always come through. Drops that land
@@ -1147,17 +1157,21 @@ function updateRoaming(){
       if(pk.treasure){ state.gems+=2; log(`${iconImg("gem",14)} <b>A hidden cache!</b> <span class="sys">+2 Runic Gems</span> for taking the detour.`,"sys"); updateHud(); }
       maybeSpawnElite(); } }
   // MINI-BOSS death UNLOCKS the descent — the player chooses when to move via the level selector.
+  // The mini-boss then goes on a respawn timer (like a floor boss); its room farms trash until it returns.
   if(state.miniAlive && !state.foes.some(f=>f.alive&&f.miniboss)){
-    state.miniAlive=false;
+    state.miniAlive=false; state.roamBossAt[state.roamLevel]=state.t+BAL.BOSS_RESPAWN;
     const nx=(state.roamLevel||0)+1;
     if(nx>(state.roamUnlocked||0)){ state.roamUnlocked=nx;
       log(`${iconImg("skull",14)} <span class="heal">${fl.miniboss.name} is slain!</span> <span class="sys">Level ${nx+1} unlocked — tap it in the header to descend.</span>`,"heal");
     } else log(`${iconImg("skull",14)} <span class="heal">${fl.miniboss.name} is slain!</span>`,"heal");
+    log(`${iconImg("skull",14)} <span class="sys">${fl.miniboss.name} will return in ~${Math.round(BAL.BOSS_RESPAWN/60)} min.</span>`,"sys");
     renderDungeonHeader(); saveGame();
   }
-  // FINAL boss death → the dungeon is cleared (first-clear reward, all levels stay unlocked).
+  // FINAL boss death → the dungeon is cleared (first-clear reward, all levels stay unlocked); it too
+  // returns on the respawn timer so the lair keeps farming trash in the meantime.
   if(state.bossInWave && !state.foes.some(f=>f.alive&&f.finalboss)){
-    state.bossInWave=false; state.roamUnlocked=LAST_ROAM_LEVEL; onBossDown();
+    state.bossInWave=false; state.roamUnlocked=LAST_ROAM_LEVEL; state.roamBossAt[state.roamLevel]=state.t+BAL.BOSS_RESPAWN; onBossDown();
+    log(`${iconImg("skull",14)} <span class="sys">${activeDungeon().boss.name} will return in ~${Math.round(BAL.BOSS_RESPAWN/60)} min.</span>`,"sys");
   }
   // Endless: once the current level is fully cleared, re-form it after a beat so it stays farmable.
   if(!state.foes.some(f=>f.alive) && state.respawnAt===null){ state.respawnAt=state.t+BAL.RESPAWN_DELAY; healWave(); }
@@ -1362,7 +1376,7 @@ function openPartyScreen(){
 function startDungeon(id){
   state.dungeonId=dungeonById(id).id; state.roomIdx=0; state.roomMax=0; state.phase="idle";
   state.bossAt=null; state.bossInWave=false;      // boss is ready the first time you reach its room
-  state.roamLevel=0; state.roamUnlocked=0;         // Misty Wetlands: a fresh delve starts locked at Level 1
+  state.roamLevel=0; state.roamUnlocked=0; state.roamBossAt=[null,null,null];   // Misty Wetlands: fresh delve, all champions ready
   if(fogboundActive()) initFloor(); else state.floor=null;   // Fogbound Floor starts at its entrance
   loadRoom(); saveGame(); enterDungeon();
 }
@@ -1619,7 +1633,13 @@ function renderDungeonHeader(){
     mini=`<div class="dh-mini">${nodes}</div>`;
   }
   let bossPill="";
-  if(idx===BOSS_ROOM){
+  if(roam){
+    // the current level's champion (mini-boss on Lv1–2, boss on Lv3) and its respawn countdown
+    const lbl=(state.roamLevel>=LAST_ROAM_LEVEL)?"BOSS":"MINI", at=state.roamBossAt[state.roamLevel];
+    const onCd=at!==null&&state.t<at, rem=onCd?Math.max(0,at-state.t):0;
+    const txt=onCd?`${lbl} ${Math.floor(rem/60)}:${String(Math.floor(rem%60)).padStart(2,"0")}`:`${lbl} ✦ READY`;
+    bossPill=`<span class="dh-boss ${onCd?"":"ready"}" data-roamboss>${txt}</span>`;
+  } else if(idx===BOSS_ROOM){
     const onCd=state.bossAt!==null&&state.t<state.bossAt, rem=onCd?Math.max(0,state.bossAt-state.t):0;
     const txt=onCd?`BOSS ${Math.floor(rem/60)}:${String(Math.floor(rem%60)).padStart(2,"0")}`:"BOSS ✦ READY";
     bossPill=`<span class="dh-boss ${onCd?"":"ready"}" data-boss>${txt}</span>`;
@@ -1639,9 +1659,14 @@ function renderDungeonHeader(){
 function tickDungeonHeader(){
   if(state.scene!=="dungeon") return;
   if(roamingActive()){                         // roaming floor: keep the live foe count fresh
-    const el=dheadEl.querySelector(".dh-foes"); if(!el) return;
-    const left=state.foes.filter(f=>f.alive).length, txt=`☠ ${left}`;
-    if(el.textContent!==txt) el.textContent=txt; return;
+    const el=dheadEl.querySelector(".dh-foes");
+    if(el){ const left=state.foes.filter(f=>f.alive).length, txt=`☠ ${left}`; if(el.textContent!==txt) el.textContent=txt; }
+    const bp=dheadEl.querySelector("[data-roamboss]");
+    if(bp){ const lbl=(state.roamLevel>=LAST_ROAM_LEVEL)?"BOSS":"MINI", at=state.roamBossAt[state.roamLevel];
+      const onCd=at!==null&&state.t<at, rem=onCd?Math.max(0,at-state.t):0;
+      const txt=onCd?`${lbl} ${Math.floor(rem/60)}:${String(Math.floor(rem%60)).padStart(2,"0")}`:`${lbl} ✦ READY`;
+      if(bp.textContent!==txt){ bp.textContent=txt; bp.classList.toggle("ready",!onCd); } }
+    return;
   }
   if(state.roomIdx!==BOSS_ROOM) return;
   const el=dheadEl.querySelector("[data-boss]"); if(!el) return;

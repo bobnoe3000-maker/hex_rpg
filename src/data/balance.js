@@ -53,6 +53,8 @@ export const BAL = {
   // Elite NPCs (random, spawn as you progress the roaming floor — "a bit harder"). A normal roster
   // enemy, level-bumped and beefed, that (with bosses) is the only non-boss to drop gear.
   ELITE: { LEVEL_BUMP: 3, HP_MULT: 1.7, ATK_MULT: 1.35, CHANCE: 0.34, CHANCE_PER_LEVEL: 0.12, XP_MULT: 2.4 },
+  // Gear-drop odds on the Misty Wetlands roaming floor, by champion tier (ordinary foes never drop gear).
+  ROAM_GEAR: { ELITE: 0.25, MINIBOSS: 0.5, BOSS: 1.0 },
   // loot scales with a dungeon's tier (1–10): rolled stat values ×(1 + LOOT_POWER_STEP*(tier-1)),
   // and drop/gem rates rise a little each tier. A dungeon's dropFloor sets the worst rarity it rolls.
   // The 0.75 step is what keeps party gear pacing enemy scaling through the deep tiers.
