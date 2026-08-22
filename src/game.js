@@ -1201,6 +1201,15 @@ function act(u){
     u.aggro=true;
   }
   const tg=nearest(u);
+  // Player rally flag: an explicit "gather here" order. Heroes march to the flag — overriding auto-seek
+  // and the roaming objective — but still strike (or cast on) any foe already within reach so they defend
+  // themselves on the way; once standing on the flag they hold there, hitting only foes that wander in.
+  if(u.team===0 && state.rally){
+    const atFlag=u.r===state.rally.r && u.c===state.rally.c;
+    if(tg && distU(u,tg)<=derive(u).rng){ if(tryCast(u,tg)) return; attack(u,tg); return; }
+    if(!atFlag){ stepToward(u,state.rally); return; }
+    return;                                     // on the flag, nothing in reach → hold position
+  }
   if(tg){
     if(tryCast(u,tg)) return;                  // spend the action on a ready skill when one fits
     // Roaming march: unless an AWAKE foe is within striking range, push toward the level objective (the
@@ -1229,8 +1238,7 @@ function act(u){
     else stepToward(u,tg);                     // otherwise chase
     return;
   }
-  // no foe to engage — heroes regroup on the rally flag if one is planted
-  if(u.team===0 && state.rally && distU(u,state.rally)>0) stepToward(u,state.rally);
+  // (no foe, no rally flag → nothing to do; the rally-flag order is handled up top)
 }
 /* wave clears -> schedule respawn; party wipes -> schedule revive (endless map) */
 function healWave(){ for(const h of party) if(h.alive){ const mh=derive(h).maxhp;
@@ -1755,7 +1763,8 @@ function menuAct(a){
 { let fav=document.querySelector("link[rel='icon']");
   if(!fav){ fav=document.createElement("link"); fav.rel="icon"; document.head.appendChild(fav); }
   fav.href=iconCanvas("sword",64).toDataURL(); }
-/* tap the dungeon floor to plant a rally flag; idle pals (no foe engaged) regroup there */
+/* tap the dungeon floor to plant a rally flag — the whole party marches there and holds. Tap the flagged
+   tile again to pull the flag and let them resume auto-seeking. */
 cvG.addEventListener("click", e=>{
   if(state.scene!=="dungeon" || panelShown() || !state.room) return;
   const rect=cvG.getBoundingClientRect();
@@ -1763,7 +1772,8 @@ cvG.addEventListener("click", e=>{
   const cam=state.cam||{x:0,y:0};                                     // roaming: the floor is scrolled under the viewport
   const c=Math.floor((px+cam.x-cx0g(0))/T), r=Math.floor((py+cam.y-cy0g(0))/T);
   if(r<0||c<0||r>=gR()||c>=gC()||isBlocked(state.room,r,c)) return;   // any reachable floor cell
-  state.rally={r,c};
+  // toggle: tapping the already-flagged tile removes the flag
+  state.rally=(state.rally && state.rally.r===r && state.rally.c===c) ? null : {r,c};
 });
 
 /* ---------- render ---------- */

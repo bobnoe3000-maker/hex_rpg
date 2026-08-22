@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-22o · Active skills now grow with EVERY point, not just full stars — a skill's damage/heal/shield/buff magnitude interpolates per point (a full star still lands exactly on the ladder value), matching how passives already scaled. The skill panel shows the live value and previews what the next point yields. Roaming levels re-form NPCs in place after a champion falls (no teleport to the entrance); the party mops up bypassed side rooms first. The Shaded Foothills (dungeon 1) is a roaming 3-level descent; roaming floors are per-dungeon data";
+export const APP_BUILD = "2026-08-22p · The rally flag is now a real order: tap the floor and the whole party marches there and holds (striking anything in reach on the way, overriding auto-seek and the level objective); tap the flagged tile again to pull the flag and let them resume auto-seeking. Active skills grow with EVERY point, not just full stars (magnitude interpolates per point; a full star still lands on the ladder value), and the panel shows the live value + next-point preview. Roaming levels re-form NPCs in place after a champion falls (no teleport to the entrance)";
 
 const BUF = [];
 const MAX = 400;
