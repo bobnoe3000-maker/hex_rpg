@@ -96,6 +96,7 @@ export function openLootRoll(roll, ctx) {
   const overlay = document.getElementById("overlay");
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   let spinning = false, autoTimer = null, autoLeft = 10;
+  let revealed = false;   // the item name + assembled card stay hidden until the reels first settle
 
   const statText = c => {
     if (!c.stat) return "";
@@ -135,7 +136,7 @@ export function openLootRoll(roll, ctx) {
     overlay.innerHTML = `<div class="lr" style="--gc:${GRADE_COLOR[roll.item.grade] || "#e8e8e8"}">
       <div class="lr-top">
         <div class="lr-slot" data-slot>${gearIconImg(roll.item, 28)}</div>
-        <div class="lr-who"><span class="eye" data-eye>${cap(roll.item.slot)} drop${ctx.from ? ` · ${ctx.from}` : ""}</span><b data-nm>${roll.item.n}</b></div>
+        <div class="lr-who"><span class="eye" data-eye>${cap(roll.item.slot)} drop${ctx.from ? ` · ${ctx.from}` : ""}</span><b data-nm></b></div>
         <div class="lr-tr">
           <span class="lr-grade" data-grade>${roll.item.grade}</span>
           <span class="lr-purse">${iconImg("coin", 11)} <span data-silver>${ctx.silver()}</span></span>
@@ -144,7 +145,7 @@ export function openLootRoll(roll, ctx) {
       <div class="lr-reels">
         ${["prefix", "material", "type"].map(k => `<div class="lr-reel" data-reel="${k}"><span class="rl">${k}</span><div class="lr-win"><div class="lr-strip"></div></div></div>`).join("")}
       </div>
-      <div class="lr-item" data-item><div class="nm" data-inm>${roll.item.n}</div><div class="lr-stats" data-istats></div></div>
+      <div class="lr-item" data-item style="display:none"><div class="nm" data-inm></div><div class="lr-stats" data-istats></div></div>
       <div class="lr-ctrl">
         <button class="lr-reroll" data-reroll>${iconImg("refresh", 12)} Reroll · ${iconImg("coin", 11)} <span data-rc>${ctx.rerollCost()}</span></button>
         <button class="lr-accept" data-accept>Accept → Bag</button>
@@ -164,16 +165,21 @@ export function openLootRoll(roll, ctx) {
     el(".lr").style.setProperty("--gc", g);
     el("[data-slot]").innerHTML = gearIconImg(roll.item, 28);
     el("[data-eye]").textContent = `${cap(roll.item.slot)} drop${ctx.from ? ` · ${ctx.from}` : ""}`;
-    el("[data-nm]").innerHTML = roll.item.n;
-    el("[data-inm]").innerHTML = roll.item.n;
     el("[data-grade]").textContent = roll.item.grade;
-    const it = roll.item, chips = [];
-    for (const s of ["atk", "crit", "def", "hp", "aspd", "dodge"]) if (it[s] !== undefined)
-      chips.push(`<span class="lr-chip ${it[s] < 0 ? "bad" : ""}">${it[s] >= 0 ? "+" : ""}${s === "aspd" ? it[s].toFixed(1) : it[s]} ${SL[s]}</span>`);
-    if (it.rng > 1) chips.push(`<span class="lr-chip kw blue">Ranged</span>`);
-    if (it.twoH) chips.push(`<span class="lr-chip kw blue">Two-handed</span>`);
-    if (it.proc) chips.push(`<span class="lr-chip kw">${cap(it.proc.kind)}</span>`);
-    el("[data-istats]").innerHTML = chips.join("");
+    // The item name + assembled card are the reveal — keep them blank/hidden until the reels settle,
+    // so the initial drop doesn't spoil its own name while the reels are still spinning.
+    el("[data-nm]").innerHTML = revealed ? roll.item.n : "";
+    const item = el("[data-item]"); if (item) item.style.display = revealed ? "" : "none";
+    if (revealed) {
+      el("[data-inm]").innerHTML = roll.item.n;
+      const it = roll.item, chips = [];
+      for (const s of ["atk", "crit", "def", "hp", "aspd", "dodge"]) if (it[s] !== undefined)
+        chips.push(`<span class="lr-chip ${it[s] < 0 ? "bad" : ""}">${it[s] >= 0 ? "+" : ""}${s === "aspd" ? it[s].toFixed(1) : it[s]} ${SL[s]}</span>`);
+      if (it.rng > 1) chips.push(`<span class="lr-chip kw blue">Ranged</span>`);
+      if (it.twoH) chips.push(`<span class="lr-chip kw blue">Two-handed</span>`);
+      if (it.proc) chips.push(`<span class="lr-chip kw">${cap(it.proc.kind)}</span>`);
+      el("[data-istats]").innerHTML = chips.join("");
+    }
     const rc = el("[data-rc]"); if (rc) rc.textContent = ctx.rerollCost();
     const sv = el("[data-silver]"); if (sv) sv.textContent = ctx.silver();
     syncReroll();
@@ -209,7 +215,7 @@ export function openLootRoll(roll, ctx) {
         else done = false;
       }
       if (!done) requestAnimationFrame(frame);
-      else { spinning = false; el("[data-accept]").disabled = false; paint(); startAuto(); }  // 10s decision window begins once it settles
+      else { spinning = false; revealed = true; el("[data-accept]").disabled = false; paint(); startAuto(); }  // reels settled → reveal the name/card; 10s decision window begins
     })(start);
   }
 

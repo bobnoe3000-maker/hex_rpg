@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-22h · Misty Wetlands: mini-bosses now respawn on a ~10-min timer like a floor boss (their room farms trash until they return; a MINI/BOSS countdown shows in the header). Gear-drop odds by tier — elite 25%, mini-boss 50%, final boss 100%; ordinary foes still give only gold/potions. Manual level selector (① ② ☠) with permanent unlocks; class-scaled stat points; formation combat";
+export const APP_BUILD = "2026-08-22i · Loot Roll: the item name and assembled card now stay hidden until the reels settle, so the initial drop no longer spoils its own result mid-spin. Misty Wetlands mini-bosses respawn on a ~10-min timer; tiered gear-drop odds (elite 25% / mini-boss 50% / boss 100%); manual level selector; class-scaled stat points; formation combat";
 
 const BUF = [];
 const MAX = 400;
