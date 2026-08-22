@@ -179,8 +179,57 @@ function paintRim(g,x,y,floor,r,c){
 }
 
 function isBlocked(room,r,c){
-  if(r<0||c<0||r>=GROWS||c>=GCOLS) return true;
+  const R=room.rows||GROWS, C=room.cols||GCOLS;      // roaming floors are taller than the classic 8×11
+  if(r<0||c<0||r>=R||c>=C) return true;
   return !!room.blocked[r+","+c];
 }
 
-export { GCOLS, GROWS, setRoomGeom, buildGameRoom, cx0g, cy0g, isBlocked };
+/* ---- Roaming Floor: one tall, larger-than-screen level of sub-rooms joined by corridors (dungeon 2).
+   Width is kept at GCOLS so the camera only scrolls vertically. `spec.rooms` are rectangles, `spec.links`
+   join them with 2-wide corridors. Returns the same room shape as buildGameRoom plus rows/cols/roaming
+   and roomRects (used to place enemies + draw the minimap). No animated tile-parts (bog = static deco). */
+function buildRoamingFloor(seed, spec){
+  setRoomGeom();
+  seedRng(seed); setParts([]);
+  const FC=GCOLS, FR=spec.rows;
+  const worldH=OY+FR*T+26, worldW=OX*2+FC*T;
+  const base=document.createElement("canvas"); base.width=worldW*2; base.height=worldH*2;
+  const g=base.getContext("2d"); g.scale(2,2);
+  g.fillStyle="#0a0812"; g.fillRect(0,0,worldW,worldH);
+  const tone=pick(spec.palette&&spec.palette.length?spec.palette:STONE);
+  const rng=mulberry32((seed*2654435761)>>>0);
+
+  const floor=new Set();
+  const inb=(r,c)=> r>=0&&r<FR&&c>=0&&c<FC;
+  const addRect=(r0,c0,h,w)=>{ for(let r=r0;r<r0+h;r++) for(let c=c0;c<c0+w;c++) if(inb(r,c)) floor.add(r+","+c); };
+  const rects=spec.rooms.map(rm=>({ ...rm, cr:Math.round(rm.r+rm.h/2), cc:Math.round(rm.c+rm.w/2) }));
+  for(const rm of rects) addRect(rm.r,rm.c,rm.h,rm.w);
+  // corridors: an L-path (vertical then horizontal), 2 cells wide, between two room centres
+  for(const [i,j] of spec.links){ const a=rects[i], b=rects[j];
+    let r=a.cr; const cc=a.cc, tr=b.cr, tc=b.cc, sr=r<tr?1:-1;
+    while(r!==tr){ addRect(r, cc-1, 1, 2); r+=sr; }
+    let c=cc, sc=c<tc?1:-1;
+    while(c!==tc){ addRect(tr-1, c, 2, 1); c+=sc; }
+    addRect(tr-1, tc-1, 2, 2);
+  }
+  // decorative (walkable) bog tiles
+  const decoPool=spec.tiles&&spec.tiles.length?spec.tiles:["moss","puddle","mushroom"];
+  const deco=new Map();
+  for(const k of floor){ if(rng()<.22){ deco.set(k, decoPool[(rng()*decoPool.length)|0]); } }
+  // paint floors + rims
+  for(const k of floor){ const [r,c]=k.split(",").map(Number); const x=cx0g(c), y=cy0g(r), d=deco.get(k);
+    (d&&DECO[d]?DECO[d]:pFloor)(g,x,y,tone); paintRim(g,x,y,floor,r,c); }
+  setParts(null);
+
+  const blocked={};
+  for(let r=0;r<FR;r++) for(let c=0;c<FC;c++){ const k=r+","+c; if(!floor.has(k)) blocked[k]="void"; }
+  // entry cells: the bottom row(s) of the entrance room
+  const eRoom=rects[spec.entry!=null?spec.entry:0], entry=[];
+  for(let r=eRoom.r+eRoom.h-2;r<eRoom.r+eRoom.h;r++) for(let c=eRoom.c+1;c<eRoom.c+eRoom.w-1;c++)
+    if(floor.has(r+","+c)) entry.push([r,c]);
+
+  return { base, parts:[], blocked, exits:[], entry, cols:FC, rows:FR, roaming:true,
+           roomRects:rects, worldW, worldH, floorCells:[...floor].map(k=>k.split(",").map(Number)), seed };
+}
+
+export { GCOLS, GROWS, setRoomGeom, buildGameRoom, buildRoamingFloor, cx0g, cy0g, isBlocked };

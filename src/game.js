@@ -3,7 +3,7 @@ import { makeHeroPortrait } from './engine/portraits.js';
 import { buildFigure } from './engine/creatures.js';
 import { iconImg, iconCanvas } from './engine/icons.js';
 import { fxUpdateDraw, fxClear, fxText, fxSlash, fxBolt, fxDissolve, fxRing, fxBlock } from './engine/fx.js';
-import { GCOLS, GROWS, buildGameRoom, cx0g, cy0g, isBlocked } from './engine/dungeon.js';
+import { GCOLS, GROWS, buildGameRoom, buildRoamingFloor, cx0g, cy0g, isBlocked } from './engine/dungeon.js';
 import { xpToReach } from './engine/combat.js';
 import { DUNGEONS, LAYOUTS, ROOM_COUNT, BOSS_ROOM, dungeonById, isUnlocked, nextDungeon } from './data/dungeons.js';
 import { unspentPoints, earnedPoints, pointsForLevel, ASSIGNABLE, emptyPoints, STAT_STEP } from './systems/Leveling.js';
@@ -70,6 +70,7 @@ const state={ roomIdx:0, scene:"town", phase:"idle", room:null, foes:[], t:0, sp
   bossAt:null, bossInWave:false,       // when the boss may next appear (runtime) + is it on the field now
   autoLevel:false,   // when true, companion level-ups resolve their own free roll (no popup, no silver)
   fogbound:false, floor:null,   // opt-in Fogbound Floor traversal (dungeon 1 only): {cur, visited:[]}
+  cam:{x:0,y:0},     // camera offset (logical px) for the roaming floor — follows the party
   rally:null };      // {r,c} flag heroes regroup on when no foe is engaged
 /* the dungeon the party is currently delving (falls back to the Emberdeep) */
 const activeDungeon=()=>dungeonById(state.dungeonId);
@@ -319,6 +320,66 @@ function randFloor(pred){
   const [r,c]=cells[Math.floor(combatRng()*cells.length)];
   return {r,c};
 }
+/* current grid height — the roaming floor is taller than the classic 8×11 (width stays GCOLS). */
+const gR=()=>(state.room&&state.room.rows)||GROWS;
+
+/* ---------- Roaming Floor (The Misty Wetlands / dungeon 2): one tall, larger-than-screen level of
+   sub-rooms joined by corridors. The camera scrolls vertically to follow the party as it climbs and
+   fights room to room. Reuses all combat — enemies are just placed across the floor at once (with an
+   aggro range so distant rooms wake as you approach). ---------- */
+const ROAM_DUNGEON="frostmere";
+const roamingDungeon=id=>id===ROAM_DUNGEON;
+const roamingActive=()=>!!(state.room&&state.room.roaming);
+const FLOOR2={
+  rows:30,
+  // sub-room rectangles (r,c top-left; h,w) — index 0 is the bottom entrance, last is the boss room
+  rooms:[
+    {r:24,c:2,h:5,w:4},   // 0 · entrance (bottom)
+    {r:18,c:1,h:5,w:6},   // 1 · fight
+    {r:12,c:2,h:5,w:5},   // 2 · fight (junction)
+    {r:7, c:0,h:4,w:4},   // 3 · treasure (left dead-end branch)
+    {r:6, c:4,h:5,w:4},   // 4 · fight
+    {r:0, c:1,h:6,w:6},   // 5 · boss (top)
+  ],
+  links:[[0,1],[1,2],[2,3],[2,4],[4,5]],   // corridors; room 3 is an optional detour off the climb
+  entry:0,
+  // one enemy pack per room; deeper rooms field higher-level foes (dungeon 2 band is Lv 11–20)
+  packs:[
+    { room:1, lvl:11, comp:["rat","spider","goblin"] },
+    { room:2, lvl:13, comp:["goblin","slime","kobold"] },
+    { room:3, lvl:14, comp:["skeleton","skeleton"], treasure:true },
+    { room:4, lvl:15, comp:["wight","harpy","cutthroat"] },
+    { room:5, lvl:18, comp:["BOSS","skeleton","kobold"] },
+  ],
+};
+/* place every pack across the floor's sub-rooms (one big encounter the party roams through). */
+function spawnRoaming(){
+  const d=activeDungeon(), rects=state.room.roomRects;
+  for(const pk of FLOOR2.packs){ const rect=rects[pk.room];
+    const cells=[]; for(let r=rect.r+1;r<rect.r+rect.h-1;r++) for(let c=rect.c+1;c<rect.c+rect.w-1;c++) if(!isBlocked(state.room,r,c)) cells.push([r,c]);
+    pk.comp.forEach((tok,i)=>{
+      let cell=cells[(i*5+3)%(cells.length||1)]||[rect.cr,rect.cc], g=0;
+      while(occupied(cell[0],cell[1])&&g++<cells.length) cell=cells[(i*5+3+g)%cells.length];
+      const f = tok==="BOSS"
+        ? makeEnemy(d.boss.fig,{level:d.band[1],name:d.boss.name,boss:true,stats:BAL.BOSS_BASE,xp:BAL.BOSS_BASE.xp})
+        : makeEnemy(tok,{level:pk.lvl,name:(d.roster&&d.roster[tok])||undefined});
+      f.r=cell[0]; f.c=cell[1]; f.rr=f.r; f.cc=f.c; f.moveT=1; f.next=state.t+0.5; f.roam=true; f.aggro=false; f.pack=pk.room;
+      resetCombat(f); state.foes.push(f); figOf(f);
+    });
+  }
+  state.bossInWave=true;   // the floor's boss is always on the field → clearing everything is a boss kill
+}
+/* the camera glides vertically to keep the party centred; clamped to the floor's extent. */
+function updateCamera(dt){
+  if(!roamingActive()){ state.cam.x=0; state.cam.y=0; return; }
+  const alive=party.filter(h=>h.alive);
+  let ty=state.cam.y;
+  if(alive.length){ const avg=alive.reduce((s,h)=>s+uyS(h),0)/alive.length; ty=avg-CH/2; }
+  ty=Math.max(0, Math.min(Math.max(0,state.room.worldH-CH), ty));
+  const k=Math.min(1, dt*3.5);
+  state.cam.y += (ty-state.cam.y)*k; state.cam.x=0;
+}
+
 /* build one enemy from a composition token for the active dungeon at the given room depth */
 function spawnFromToken(tok,d,idx){
   if(tok==="BOSS") return makeEnemy(d.boss.fig,{level:d.band[1], name:d.boss.name, boss:true, stats:BAL.BOSS_BASE, xp:BAL.BOSS_BASE.xp});
@@ -328,6 +389,7 @@ function spawnFromToken(tok,d,idx){
 /* Between boss kills the boss room fields a trash wave so it stays farmable (deep-level roster). */
 const BOSS_FARM_COMP=["troll","skeleton","kobold","goblin"];
 function spawnWave(){
+  if(roamingActive()){ spawnRoaming(); return; }   // dungeon 2: place the whole roaming floor at once
   const d=activeDungeon(), idx=state.roomIdx, L=LAYOUTS[idx];
   // The boss only joins the wave when its timer is up; otherwise a trash pack keeps the room busy.
   let comp=L.comp;
@@ -353,9 +415,18 @@ function roomTitle(d,idx){
 }
 function loadRoom(){
   const d=activeDungeon(), idx=state.roomIdx, L=LAYOUTS[idx];
+  if(roamingDungeon(d.id)){          // dungeon 2 is one big roaming floor, not a linear room chain
+    state.room=buildRoamingFloor((Date.now()&0x7fffffff)|0, { rows:FLOOR2.rows, rooms:FLOOR2.rooms, links:FLOOR2.links, entry:FLOOR2.entry, tiles:d.tiles, palette:d.palette });
+    state.cam={x:0,y:0};
+    state.foes=[]; fxClear(); state.respawnAt=null; state.wipeAt=null; state.rally=null; state.bossInWave=false;
+    placeHeroes(); updateCamera(1); spawnWave();
+    log(`— <span class="sys">${d.name}</span> — the mire opens before you —`);
+    return;
+  }
   const spec={ title:roomTitle(d,idx), shape:L.shape, blockers:L.blockers,
     blockerKinds:L.blockerKinds, tiles:d.tiles||L.tiles, exits:L.exits, palette:d.palette };
   state.room=buildGameRoom((Date.now()+idx*7919)|0,spec);
+  state.cam={x:0,y:0};
   state.foes=[]; fxClear(); state.respawnAt=null; state.wipeAt=null; state.rally=null;
   state.bossInWave=false;   // re-determined by spawnWave; the boss RESPAWN timer (bossAt) persists across
                             // room hops so travelling the minimap never re-rolls it (set fresh in startDungeon)
@@ -390,7 +461,7 @@ const DIRS=[[1,0],[-1,0],[0,1],[0,-1]];
    unit just holds a tick when the downhill cell is momentarily occupied). Cheap on this 8×11 grid.
    Flat array indexed r*GCOLS+c; -1 = unreachable / off-grid. */
 function distField(tr,tc){
-  const dist=new Int16Array(GROWS*GCOLS).fill(-1);
+  const dist=new Int16Array(gR()*GCOLS).fill(-1);      // gR() = grid height (taller on the roaming floor)
   if(isBlocked(state.room,tr,tc)) return dist;         // target on a wall/off-grid → all -1 (caller falls back)
   const q=[[tr,tc]]; dist[tr*GCOLS+tc]=0;
   for(let i=0;i<q.length;i++){ const r=q[i][0], c=q[i][1], d=dist[r*GCOLS+c];
@@ -807,9 +878,15 @@ function resetSkills(h){
   log(`${iconImg("spark",14)} <b>${h.name}</b> unlearns every skill for ${iconImg("coin",12)} ${cost}.`,"sys");
   return true;
 }
+const AGGRO_R=6;   // roaming foes wake when a hero comes within this many tiles (so rooms activate as you arrive)
 function act(u){
   if(!u.alive)return;
   if(hasBuff(u,"stun")) return;               // stunned → skip this action entirely
+  if(u.team===1 && u.roam && !u.aggro){       // a sleeping roaming foe holds its room until the party nears
+    let near=99; for(const h of liveHeroes()){ const d=distU(u,h); if(d<near) near=d; }
+    if(near>AGGRO_R) return;
+    u.aggro=true;
+  }
   const tg=nearest(u);
   if(tg){
     if(tryCast(u,tg)) return;                  // spend the action on a ready skill when one fits
@@ -827,25 +904,38 @@ function act(u){
   if(u.team===0 && state.rally && distU(u,state.rally)>0) stepToward(u,state.rally);
 }
 /* wave clears -> schedule respawn; party wipes -> schedule revive (endless map) */
+function healWave(){ for(const h of party) if(h.alive){ const mh=derive(h).maxhp;
+  h.hp=Math.min(mh, h.hp+Math.round(mh*BAL.WAVE_HEAL_FRAC)+Math.round(mh*waveHealFrac(h))); } renderParty(); }
+/* roaming floor: heal each time a sub-room's pack is wiped (mirrors the classic between-wave heal), and
+   count the FLOOR cleared when the BOSS falls — leftover trash in a skipped side-room doesn't gate it. */
+function updateRoaming(){
+  const room=state.room; if(!room) return;
+  if(!room.cleared) room.cleared=new Set();
+  for(const pk of FLOOR2.packs){ if(room.cleared.has(pk.room)) continue;
+    if(!state.foes.some(f=>f.alive&&f.pack===pk.room)){ room.cleared.add(pk.room);
+      healWave(); log(`${iconImg("check",14)} <span class="sys">Room cleared.</span> The party presses on…`);
+      if(pk.treasure){ state.gems+=2; log(`${iconImg("gem",14)} <b>A hidden cache!</b> <span class="sys">+2 Runic Gems</span> for taking the detour.`,"sys"); updateHud(); } } }
+  if(state.bossInWave && !state.foes.some(f=>f.alive&&f.boss) && state.respawnAt===null){
+    state.bossInWave=false; onBossDown(); state.respawnAt=state.t+2.6;   // boss down → floor re-forms for another run
+  }
+}
 function updateWaves(){
   const heroesAlive=party.some(h=>h.alive);
-  const foesAlive=state.foes.some(f=>f.alive);
   if(!heroesAlive){
     if(state.wipeAt===null){ state.wipeAt=state.t+BAL.WIPE_DELAY;
       log(`${iconImg("skull",14)} <span class="crit">The party falls…</span> retreating to the Keep.`); }
     return;
   }
+  if(roamingActive()){ updateRoaming(); return; }
+  const foesAlive=state.foes.some(f=>f.alive);
   if(!foesAlive && state.respawnAt===null){
     // Every room (the boss room included) keeps an endless-wave rhythm so you can farm as long as you
     // like. In the boss room, killing the wave that HELD the boss puts the boss on a respawn timer —
     // the room then fields trash until the boss recovers, and you never get pulled back to the Keep.
-    const bossKill = state.roomIdx===BOSS_ROOM && state.bossInWave;
+    const bossKill = state.bossInWave && state.roomIdx===BOSS_ROOM;
     if(bossKill){ state.bossInWave=false; state.bossAt=state.t+BAL.BOSS_RESPAWN; onBossDown(); }
     state.respawnAt=state.t+BAL.RESPAWN_DELAY;
-    for(const h of party) if(h.alive){ const mh=derive(h).maxhp;
-      const heal=Math.round(mh*BAL.WAVE_HEAL_FRAC)+Math.round(mh*waveHealFrac(h));   // + Second Wind
-      h.hp=Math.min(mh,h.hp+heal); }
-    renderParty();
+    healWave();
     if(!bossKill) log(`${iconImg("check",14)} <span class="sys">Wave cleared.</span> Another approaches…`);
   }
 }
@@ -864,7 +954,8 @@ function onBossDown(){
     const nx=nextDungeon(d);
     if(nx) log(`${iconImg("spark",14)} <span class="sys">${nx.name} is now open at the Dungeons board.</span>`,"sys");
   }
-  log(`${iconImg("skull",14)} <span class="sys">${d.boss.name} will return in ~${Math.round(BAL.BOSS_RESPAWN/60)} min.</span>`,"sys");
+  if(!roamingActive()) log(`${iconImg("skull",14)} <span class="sys">${d.boss.name} will return in ~${Math.round(BAL.BOSS_RESPAWN/60)} min.</span>`,"sys");
+  else log(`${iconImg("spark",14)} <span class="sys">The mire stirs — the floor re-forms for another delve.</span>`,"sys");
   updateHud(); saveGame();
 }
 /* ---------- controls & menus ---------- */
@@ -1238,11 +1329,15 @@ function renderDungeonHeader(){
   if(state.scene!=="dungeon" || !state.room){ dheadEl.classList.remove("show"); dmenufab.classList.remove("show"); floormapEl.classList.remove("show"); closeFloorFull(); return; }
   dheadEl.classList.add("show"); dmenufab.classList.add("show");
   const d=activeDungeon(), idx=state.roomIdx, max=state.roomMax||0, reach=Math.min(BOSS_ROOM,max+1);
+  const roam=roamingActive();
   const fog=fogboundActive()&&state.floor;
-  const roomName = fog ? (FLOOR.nodes[state.floor.cur].kind==="boss"?d.boss.name:FLOOR.nodes[state.floor.cur].name)
+  const roomName = roam ? (d.sub||"The Mire")
+                 : fog ? (FLOOR.nodes[state.floor.cur].kind==="boss"?d.boss.name:FLOOR.nodes[state.floor.cur].name)
                        : (idx===BOSS_ROOM ? d.boss.name : LAYOUTS[idx].roomName);
   let mini;
-  if(fog){ const mapicon=`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14"/></svg>`;
+  if(roam){ const left=state.foes.filter(f=>f.alive).length;
+    mini=`<span class="dh-fmap" style="cursor:default">☠ ${left} foe${left===1?"":"s"} ahead</span>`; }
+  else if(fog){ const mapicon=`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14"/></svg>`;
     mini=`<button class="dh-fmap" data-openmap>${mapicon} Floor · ${floorProgress(state.floor.visited)}</button>`; }
   else {
     let nodes="";
@@ -1272,7 +1367,13 @@ function renderDungeonHeader(){
 }
 /* live boss-timer text (cheap; only touches the DOM when the displayed value changes) */
 function tickDungeonHeader(){
-  if(state.scene!=="dungeon" || state.roomIdx!==BOSS_ROOM) return;
+  if(state.scene!=="dungeon") return;
+  if(roamingActive()){                         // roaming floor: keep the "foes ahead" count live
+    const el=dheadEl.querySelector(".dh-fmap"); if(!el) return;
+    const left=state.foes.filter(f=>f.alive).length, txt=`☠ ${left} foe${left===1?"":"s"} ahead`;
+    if(el.textContent!==txt) el.textContent=txt; return;
+  }
+  if(state.roomIdx!==BOSS_ROOM) return;
   const el=dheadEl.querySelector("[data-boss]"); if(!el) return;
   const onCd=state.bossAt!==null&&state.t<state.bossAt, rem=onCd?Math.max(0,state.bossAt-state.t):0;
   const txt=onCd?`BOSS ${Math.floor(rem/60)}:${String(Math.floor(rem%60)).padStart(2,"0")}`:"BOSS ✦ READY";
@@ -1333,8 +1434,9 @@ cvG.addEventListener("click", e=>{
   if(state.scene!=="dungeon" || panelShown() || !state.room) return;
   const rect=cvG.getBoundingClientRect();
   const px=(e.clientX-rect.left)/rect.width*CW, py=(e.clientY-rect.top)/rect.height*CH;
-  const c=Math.floor((px-cx0g(0))/T), r=Math.floor((py-cy0g(0))/T);
-  if(r<0||c<0||r>=GROWS||c>=GCOLS||isBlocked(state.room,r,c)) return;  // any reachable floor cell
+  const cam=state.cam||{x:0,y:0};                                     // roaming: the floor is scrolled under the viewport
+  const c=Math.floor((px+cam.x-cx0g(0))/T), r=Math.floor((py+cam.y-cy0g(0))/T);
+  if(r<0||c<0||r>=gR()||c>=GCOLS||isBlocked(state.room,r,c)) return;   // any reachable floor cell
   state.rally={r,c};
 });
 
@@ -1403,13 +1505,20 @@ function drawFlag(cx,cy){
 /* (The room compass + boss timer moved to the DOM dungeon header — see renderDungeonHeader.) */
 function render(dt){
   G.setTransform(2,0,0,2,0,0);
-  G.drawImage(state.room.base,0,0,CW,CH);
+  const roam=roamingActive(); if(roam) updateCamera(dt);
+  const cam=state.cam||{x:0,y:0};
+  // blit the visible floor: the whole room (classic), or a camera window into the tall roaming floor
+  if(roam) G.drawImage(state.room.base, cam.x*2, cam.y*2, CW*2, CH*2, 0,0, CW, CH);
+  else G.drawImage(state.room.base,0,0,CW,CH);
+  // world layer (tiles' animated parts, flag, units, fx) offset by the camera
+  G.save(); G.translate(-cam.x,-cam.y);
   for(const p of state.room.parts) drawPartPx(G,p,state.t);
   if(state.rally) drawFlag(cx0g(state.rally.c)+T/2, cy0g(state.rally.r)+T/2);
-  // draw heroes + foes together, back-to-front; drawUnit skips the dead so fallen pals don't render
-  const sorted=[...party,...state.foes].sort((a,b)=>a.r-b.r||a.c-b.c);
+  const sorted=[...party,...state.foes].sort((a,b)=>a.r-b.r||a.c-b.c);   // back→front
   for(const u of sorted) drawUnit(u);
   fxUpdateDraw(G,dt);
+  G.restore();
+  if(roam){ drawTorch(cam); drawRoamMinimap(cam); }
   if(state.phase==="idle"){
     G.fillStyle="#e8dcc4"; G.font="bold 13px monospace"; G.textAlign="center";
     G.fillText("Press Fight! to begin",CW/2,CH-8);
@@ -1418,6 +1527,48 @@ function render(dt){
     G.fillText("Paused",CW/2,CH-8);
   }
 }
+/* torch-lit fog: darken the viewport toward the edges, brightest on the party's position */
+function drawTorch(cam){
+  const alive=party.filter(h=>h.alive);
+  const py=alive.length ? alive.reduce((s,h)=>s+uyS(h),0)/alive.length - cam.y : CH/2;
+  const grd=G.createRadialGradient(CW/2,py,40, CW/2,py,CH*0.62);
+  grd.addColorStop(0,"rgba(6,4,9,0)"); grd.addColorStop(.62,"rgba(6,4,9,.35)"); grd.addColorStop(1,"rgba(6,4,9,.82)");
+  G.fillStyle=grd; G.fillRect(0,0,CW,CH);
+}
+/* corner minimap: the whole tall floor scaled down, sub-rooms revealed as the party enters them,
+   with the party marker and remaining (woken) foes. */
+function drawRoamMinimap(cam){
+  const room=state.room, rects=room.roomRects; if(!rects) return;
+  if(!room.seen) room.seen=new Set();
+  // reveal any room the party currently stands in (+ its immediate corridor neighbours stay hidden until entered)
+  for(let i=0;i<rects.length;i++){ const rc=rects[i];
+    if(party.some(h=>h.alive && h.r>=rc.r-1 && h.r<rc.r+rc.h+1 && h.c>=rc.c-1 && h.c<rc.c+rc.w+1)) room.seen.add(i); }
+  const mw=64, pad=8, mh=Math.round(mw*room.rows/GCOLS*0.5), x0=CW-mw-8, y0=8;
+  G.save();
+  G.fillStyle="rgba(10,8,18,.8)"; G.strokeStyle="#4a3d68"; G.lineWidth=1;
+  roundRect(G,x0-4,y0-4,mw+8,mh+8,6); G.fill(); G.stroke();
+  const sx=mw/GCOLS, sy=mh/room.rows;
+  for(let i=0;i<rects.length;i++){ const rc=rects[i];
+    const seen=room.seen.has(i), boss=i===rects.length-1;
+    G.fillStyle = !seen?"#221a30" : boss?"#5a2420":"#3a4a2c";
+    G.globalAlpha = seen?1:.5;
+    G.fillRect(x0+rc.c*sx, y0+rc.r*sy, rc.w*sx, rc.h*sy);
+    G.globalAlpha=1;
+  }
+  // remaining foes (only the ones that have woken, so unexplored packs stay hidden)
+  G.fillStyle="#e5637a";
+  for(const f of state.foes) if(f.alive && f.aggro) G.fillRect(x0+f.c*sx-0.5, y0+f.r*sy-0.5, 2, 2);
+  // party marker
+  const a=party.filter(h=>h.alive);
+  if(a.length){ const pr=a.reduce((s,h)=>s+h.r,0)/a.length, pc=a.reduce((s,h)=>s+h.c,0)/a.length;
+    G.fillStyle="#f0c877"; G.beginPath(); G.arc(x0+pc*sx, y0+pr*sy, 2.4, 0, 7); G.fill(); }
+  // current camera window outline (cam.y is world px; convert to row units for the minimap scale)
+  const camTopRow=(cam.y-54)/44, camRows=CH/44;
+  G.strokeStyle="rgba(240,200,119,.4)"; G.lineWidth=1;
+  G.strokeRect(x0, y0+Math.max(0,camTopRow)*sy, mw, camRows*sy);
+  G.restore();
+}
+function roundRect(g,x,y,w,h,r){ g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); }
 /* ---------- main loop ---------- */
 let last=performance.now();
 function loop(now){
@@ -1440,8 +1591,9 @@ function loop(now){
           if(state.t>=u.next){ act(u); u.next=state.t+BAL.BASE_INTERVAL/derive(u).aspd+combatRng()*BAL.ASPD_JITTER; }
         }
         updateWaves();
-        // endless map: respawn a fresh wave on its timer
-        if(state.respawnAt!==null && state.t>=state.respawnAt){ state.respawnAt=null; spawnWave(); }
+        // endless map: respawn a fresh wave on its timer (roaming → rebuild the whole floor for another run)
+        if(state.respawnAt!==null && state.t>=state.respawnAt){ state.respawnAt=null;
+          if(roamingActive()){ loadRoom(); seedBattle(); state.phase="fight"; } else spawnWave(); }
         // full wipe: pull back to the Keep (main revives free there; fallen pals need the Temple)
         if(state.wipeAt!==null && state.t>=state.wipeAt){ state.wipeAt=null; enterTown(true); }
         // prune slain FOES only (heroes are never pruned — they live in `party`, dead or alive)

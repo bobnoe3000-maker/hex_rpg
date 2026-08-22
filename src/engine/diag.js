@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-18 · Fogbound Floor traversal (playtest, The Shaded Foothills only) — opt-in via the dungeon menu: roam an interconnected floor with side-rooms and a fog-of-war minimap that unveils as you explore; reuses all combat";
+export const APP_BUILD = "2026-08-18 · The Misty Wetlands (dungeon 2) is now a Roaming Floor — one larger-than-screen level of sub-rooms joined by corridors; the camera follows the party as it fights room to room, with torch fog + a fog-of-war minimap. Rooms wake as you approach; the floor re-forms after the boss falls";
 
 const BUF = [];
 const MAX = 400;
