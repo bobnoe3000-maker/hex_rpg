@@ -8,7 +8,7 @@ import { xpToReach } from './engine/combat.js';
 import { DUNGEONS, LAYOUTS, ROOM_COUNT, BOSS_ROOM, dungeonById, isUnlocked, nextDungeon } from './data/dungeons.js';
 import { unspentPoints, earnedPoints, pointsForLevel, ASSIGNABLE, emptyPoints, STAT_STEP, stepFor } from './systems/Leveling.js';
 import { combatMods, activeSkills, unspentSkillPoints, earnedSkillPoints, spentSkillPoints, branchInvested, tierUnlocked, rankOf, allSkills,
-         reflectFrac, guardianFrac, waveHealFrac, lastStand, momentum, heroKit } from './systems/Skills.js';
+         reflectFrac, guardianFrac, waveHealFrac, lastStand, momentum, heroKit, fxNum } from './systems/Skills.js';
 import { CLASS_SKILLS, TIER_GATES, MAX_POINTS, PTS_PER_STAR } from './data/skills.js';
 import { BAL } from './data/balance.js';
 import { derive, mitigate } from './systems/StatEngine.js';
@@ -786,52 +786,55 @@ function attack(att,def){
 }
 /* an active skill the battle AI chose to cast this action */
 function castActive(u,s,tg){
-  const a=s.a, r=s.rank, atk=derive(u).atk, def=derive(u).def;
+  const a=s.a, r=s.rank, p=s.points, atk=derive(u).atk, def=derive(u).def;
+  // continuous MAGNITUDES scale smoothly per point (like passives), so every point adds power; discrete
+  // "shape" fields (cooldown, added burn/stun, durations, hit counts) still shift only on a full star (r).
+  const mag=arr=>Array.isArray(arr)?fxNum(arr,p):(arr||0);
   const say=(txt,col)=>{ fxText(uxS(u),uyS(u)-46,txt,col||"#ffd166",true);
     log(`${iconImg("spark",14)} <b>${u.name}</b> — <span class="sys">${s.name}</span>`,"sys"); };
   const hit=(foe,dmg)=>{ if(!foe.alive)return; const d=Math.max(1,Math.round(mitigate(dmg,derive(foe).def)));
     fxSlash(uxS(foe),uyS(foe)-14,false); fxText(uxS(foe),uyS(foe)-38,String(d),"#ffd166"); hurt(foe,d,u); };
   switch(a.kind){
     case "sunder":{ say("SUNDER","#ff9a5c"); hit(tg,atk*a.dmg);
-      const sh=a.shred[r-1]; addBuff(tg,{k:"shred",mult:true,stat:"def",v:-sh,until:state.t+a.dur});
+      const sh=mag(a.shred); addBuff(tg,{k:"shred",mult:true,stat:"def",v:-sh,until:state.t+a.dur});
       if(r>=5) adjFoes(u).forEach(f=>{ if(f!==tg) addBuff(f,{k:"shred",mult:true,stat:"def",v:-sh,until:state.t+a.dur}); }); break; }
     case "whirl":{ say("WHIRLWIND","#ff9a5c"); fxRing(uxS(u),uyS(u)+6,"#ff9a5c");
-      adjFoes(u).forEach(f=>{ hit(f,atk*a.dmg[r-1]); if(r>=a.bleedAt) applyBleed(f,u,{pct:.06,dur:4,stacks:1}); }); break; }
-    case "rampage":{ say("RAMPAGE","#ff9a5c"); for(let i=0;i<a.hits;i++) hit(tg,atk*a.dmg[r-1]); break; }
+      adjFoes(u).forEach(f=>{ hit(f,atk*mag(a.dmg)); if(r>=a.bleedAt) applyBleed(f,u,{pct:.06,dur:4,stacks:1}); }); break; }
+    case "rampage":{ say("RAMPAGE","#ff9a5c"); for(let i=0;i<a.hits;i++) hit(tg,atk*mag(a.dmg)); break; }
     case "wrath":{ say("WARLORD'S WRATH","#ffdf6b"); fxRing(uxS(u),uyS(u)+6,"#ffdf6b");
       adjFoes(u).forEach(f=>hit(f,atk*a.dmg));
-      const bf=a.buff[r-1]; party.forEach(h=>{ if(h.alive) addBuff(h,{k:"wrath",mult:true,stat:"atk",v:bf,until:state.t+a.dur}); }); break; }
-    case "guard":{ say("GUARD","#9ad1ff"); addBuff(u,{k:"guard",mult:true,stat:"def",v:a.def[r-1],until:state.t+a.dur}); fxBlock(uxS(u),uyS(u)-18); break; }
+      const bf=mag(a.buff); party.forEach(h=>{ if(h.alive) addBuff(h,{k:"wrath",mult:true,stat:"atk",v:bf,until:state.t+a.dur}); }); break; }
+    case "guard":{ say("GUARD","#9ad1ff"); addBuff(u,{k:"guard",mult:true,stat:"def",v:mag(a.def),until:state.t+a.dur}); fxBlock(uxS(u),uyS(u)-18); break; }
     case "taunt":{ say("TAUNT","#9ad1ff"); const dur=a.dur[r-1]; addBuff(u,{k:"taunt",until:state.t+dur});
-      if(a.defBuff[r-1]>0) addBuff(u,{k:"taunt",mult:true,stat:"def",v:a.defBuff[r-1],until:state.t+dur}); break; }
+      if(a.defBuff[r-1]>0) addBuff(u,{k:"taunt",mult:true,stat:"def",v:mag(a.defBuff),until:state.t+dur}); break; }
     case "bash":{ say("SHIELD BASH","#9ad1ff"); hit(tg,def*a.dmg); if(tg.alive){ addBuff(tg,{k:"stun",until:state.t+a.stun[r-1]}); fxText(uxS(tg),uyS(tg)-30,"stun","#9ad1ff"); } break; }
-    case "rally":{ say("RALLYING CRY","#9ad1ff"); const sh=Math.round(derive(u).maxhp*a.shield[r-1]);
+    case "rally":{ say("RALLYING CRY","#9ad1ff"); const sh=Math.round(derive(u).maxhp*mag(a.shield));
       party.forEach(h=>{ if(h.alive){ addBuff(h,{k:"shield",v:sh,until:state.t+12}); fxText(uxS(h),uyS(h)-30,"shield","#9ad1ff"); } }); break; }
     case "unbreak":{ say("UNBREAKABLE","#ffdf6b"); const dur=a.dur[r-1];
       addBuff(u,{k:"immune",until:state.t+dur}); addBuff(u,{k:"taunt",until:state.t+dur});
-      const heal=Math.round(derive(u).maxhp*a.heal[r-1]); u.hp=Math.min(derive(u).maxhp,u.hp+heal);
+      const heal=Math.round(derive(u).maxhp*mag(a.heal)); u.hp=Math.min(derive(u).maxhp,u.hp+heal);
       fxText(uxS(u),uyS(u)-30,"+"+heal,"#7ee787"); break; }
     // ---- generic archetypes shared by Mage / Cleric / Rogue ----
-    case "bolt":{ say(s.name.split(" ")[0].toUpperCase(),"#b48bff"); hit(tg,atk*a.dmg[r-1]);
+    case "bolt":{ say(s.name.split(" ")[0].toUpperCase(),"#b48bff"); hit(tg,atk*mag(a.dmg));
       if(tg.alive){
         if(a.burn&&a.burn[r-1]>0) applyBleed(tg,u,{pct:a.burn[r-1],dur:3,stacks:1});
-        if(a.mark&&a.mark[r-1]>0) addBuff(tg,{k:"mark",mult:true,stat:"def",v:-a.mark[r-1],until:state.t+(a.dur||5)});
-        if(a.slow&&a.slow[r-1]>0) addBuff(tg,{k:"slow",mult:true,stat:"aspd",v:-a.slow[r-1],until:state.t+3});
+        if(a.mark&&a.mark[r-1]>0) addBuff(tg,{k:"mark",mult:true,stat:"def",v:-mag(a.mark),until:state.t+(a.dur||5)});
+        if(a.slow&&a.slow[r-1]>0) addBuff(tg,{k:"slow",mult:true,stat:"aspd",v:-mag(a.slow),until:state.t+3});
         if(a.stun&&a.stun[r-1]>0){ addBuff(tg,{k:"stun",until:state.t+a.stun[r-1]}); fxText(uxS(tg),uyS(tg)-30,"stun","#9ad1ff"); }
       } break; }
     case "nova":{ say(s.name.split(" ")[0].toUpperCase(),"#b48bff"); fxRing(uxS(u),uyS(u)+6,"#b48bff");
-      foesInRange(u,a.radius||2).forEach(f=>{ hit(f,atk*a.dmg[r-1]);
-        if(a.slow&&a.slow[r-1]>0) addBuff(f,{k:"slow",mult:true,stat:"aspd",v:-a.slow[r-1],until:state.t+3});
+      foesInRange(u,a.radius||2).forEach(f=>{ hit(f,atk*mag(a.dmg));
+        if(a.slow&&a.slow[r-1]>0) addBuff(f,{k:"slow",mult:true,stat:"aspd",v:-mag(a.slow),until:state.t+3});
         if(a.stun&&a.stun[r-1]>0) addBuff(f,{k:"stun",until:state.t+a.stun[r-1]}); }); break; }
     case "heal":{ say("HEAL","#7ee787"); const imm=Array.isArray(a.immune)?a.immune[r-1]:0;
       const targets=a.party?party.filter(h=>h.alive):[lowestHurtAlly(u)].filter(Boolean);
-      targets.forEach(t=>{ const mh=derive(t).maxhp, amt=Math.round(mh*a.pct[r-1]); t.hp=Math.min(mh,t.hp+amt);
+      targets.forEach(t=>{ const mh=derive(t).maxhp, amt=Math.round(mh*mag(a.pct)); t.hp=Math.min(mh,t.hp+amt);
         fxText(uxS(t),uyS(t)-30,"+"+amt,"#7ee787"); if(imm) addBuff(t,{k:"immune",until:state.t+imm}); }); break; }
     case "buff":{ say(s.name.toUpperCase().slice(0,10),"#9ad1ff"); const dur=Array.isArray(a.dur)?a.dur[r-1]:(a.dur||6);
       const targets=a.party?party.filter(h=>h.alive):[u];
       targets.forEach(t=>{
-        if(a.stat) addBuff(t,{k:"sbuff",mult:!a.flat,flat:!!a.flat,stat:a.stat,v:a.v[r-1],until:state.t+dur});
-        if(a.shield){ const sh=Math.round(derive(u).maxhp*a.shield[r-1]); addBuff(t,{k:"shield",v:sh,until:state.t+12}); fxText(uxS(t),uyS(t)-30,"shield","#9ad1ff"); } });
+        if(a.stat) addBuff(t,{k:"sbuff",mult:!a.flat,flat:!!a.flat,stat:a.stat,v:mag(a.v),until:state.t+dur});
+        if(a.shield){ const sh=Math.round(derive(u).maxhp*mag(a.shield)); addBuff(t,{k:"shield",v:sh,until:state.t+12}); fxText(uxS(t),uyS(t)-30,"shield","#9ad1ff"); } });
       break; }
   }
   if(u.team===0) renderParty();

@@ -28,6 +28,47 @@ export function fxNum(arr, pts) {
 }
 export const fxStep = (arr, pts) => (arr ? (arr[starTier(pts) - 1] || 0) : 0);
 
+/* Short human readout of a skill's PRIMARY magnitude at `pts` points invested, interpolated per point
+   (matches how combat now resolves it). Lets the panel show the live value so every point visibly adds —
+   e.g. Firebolt at 3 pts reads "84% ATK", at a full star "140% ATK". Returns "" when there's no single
+   headline number (pure shape/utility skills), and the panel falls back to the star-milestone text. */
+const _STAT = { atk: "ATK", def: "DEF", hp: "HP", dodge: "Dodge", crit: "Crit", aspd: "Speed" };
+const _pct = v => `${Math.round(v * 100)}%`;
+export function skillEffectNow(s, pts) {
+  const P = Math.max(0, pts | 0); if (!P || !s || !s.fx) return "";
+  const fx = s.fx, a = fx.active;
+  if (a) {
+    if (Array.isArray(a.dmg)) return `${_pct(fxNum(a.dmg, P))} ATK`;
+    if (a.kind === "heal" && Array.isArray(a.pct)) return `heal ${_pct(fxNum(a.pct, P))}`;
+    if (Array.isArray(a.shield)) return `${_pct(fxNum(a.shield, P))} shield`;
+    if (Array.isArray(a.buff)) return `+${_pct(fxNum(a.buff, P))} party ATK`;
+    if (a.kind === "buff" && Array.isArray(a.v)) {
+      const v = fxNum(a.v, P), lbl = _STAT[a.stat] || a.stat || "";
+      return a.flat ? `+${Math.round(v)} ${lbl}` : `+${_pct(v)} ${lbl}`;
+    }
+    if (Array.isArray(a.def)) return `+${_pct(fxNum(a.def, P))} DEF`;
+    if (typeof a.dmg === "number") return `${_pct(a.dmg)} ${a.kind === "bash" ? "DEF" : "ATK"}`;
+    return "";
+  }
+  if (fx.flat) { const parts = []; for (const k in fx.flat) {
+    const v = fxNum(fx.flat[k], P); if (Math.abs(v) < 0.005) continue;
+    parts.push(`${v >= 0 ? "+" : "−"}${k === "aspd" ? Math.round(Math.abs(v) * 100) / 100 : Math.round(Math.abs(v))} ${_STAT[k] || k}`);
+  } return parts.join(", "); }
+  if (fx.mult) return `up to +${_pct(fxNum(fx.mult.pct, P))} ${_STAT[fx.mult.stat] || fx.mult.stat}`;
+  if (fx.lifesteal) return `${_pct(fxNum(fx.lifesteal, P))} lifesteal`;
+  if (fx.exec) return `+${_pct(fxNum(fx.exec.pct, P))} vs low HP`;
+  if (fx.critDefIgnore) return `crits ignore ${_pct(fxNum(fx.critDefIgnore, P))} DEF`;
+  if (fx.critDmgReduce) return `−${_pct(fxNum(fx.critDmgReduce, P))} crit dmg`;
+  if (fx.reflect) return `reflect ${_pct(fxNum(fx.reflect, P))}`;
+  if (fx.waveheal) return `heal ${_pct(fxNum(fx.waveheal, P))} on clear`;
+  if (fx.guardian) return `redirect ${_pct(fxNum(fx.guardian, P))}`;
+  if (fx.rend) return `${_pct(fxNum(fx.rend.pct, P))} ATK/s bleed`;
+  if (fx.momentum) return `+${_pct(fxNum(fx.momentum.pct, P))} per kill`;
+  if (fx.cleave) return `${_pct(fxNum(fx.cleave.pct, P))} ATK splash`;
+  if (fx.lastst) return `heal ${_pct(fxNum(fx.lastst.heal, P))}`;
+  return "";
+}
+
 /* ---- tree lookups ---- */
 export function classTree(cls) { return CLASS_SKILLS[cls] || null; }
 export function skillDef(cls, id) {

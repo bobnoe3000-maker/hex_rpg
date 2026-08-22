@@ -6,7 +6,7 @@
 import { derive } from "../systems/StatEngine.js";
 import { canEquip, equip, unequip, compareToEquipped } from "../systems/Equipment.js";
 import { STAT_STEP, ASSIGNABLE, stepFor } from "../systems/Leveling.js";
-import { heroKit, starTier, skillDef } from "../systems/Skills.js";
+import { heroKit, starTier, skillDef, skillEffectNow } from "../systems/Skills.js";
 import { starsHtml, starLabel } from "./stars.js";
 import { SLOTS } from "../data/items/gearTypes.js";
 import { POTION_BY_ID, potionName, potionEffectText } from "../data/potions.js";
@@ -279,6 +279,8 @@ function injectCss() {
   .skm.off .skm-st .stars{--sc:#ff8a5a}.skm.def .skm-st .stars{--sc:#79c7e6}
   .skm-st .lb{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;color:var(--gold);font-weight:bold}
   .skm-st .lb small{color:#8a7fae;font-weight:normal}
+  .skm-st .now{margin-left:auto;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;font-weight:bold;
+    color:#f0c877;background:rgba(216,162,74,.12);border:1px solid rgba(216,162,74,.28);border-radius:6px;padding:3px 8px;white-space:nowrap}
   .skm-bd{padding:13px 16px}
   .skm-sec{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:#6f6486;margin-bottom:7px}
   .skm-lad{display:flex;flex-direction:column;gap:2px}
@@ -576,7 +578,9 @@ export function openCharacter(hero, ctx) {
       if (!un) action = `<div class="skm-lock">${skIcon("lock", 13)} Locked — invest <b>${sk.gates[s.tier]}</b> in ${bname} to unlock ${s.tier === 5 ? "the Capstone" : "Tier " + s.tier} <span>(${skInvested(br)} now)</span></div>`;
       else if (maxed) action = `<div class="skm-max">★ Mastered — 5 / 5 stars</div>`;
       else {
-        const canAdd = skAvail() > 0, nextTxt = s.text[starTier(r + 1) - 1] || "";
+        // preview the value the NEXT point actually yields (interpolated per point), falling back to the
+        // next star-milestone text for pure utility skills that have no single headline number.
+        const canAdd = skAvail() > 0, nextNum = skillEffectNow(s, r + 1), nextTxt = nextNum || s.text[starTier(r + 1) - 1] || "";
         action = `<button class="skm-learn ${canAdd ? "" : "no"}" data-sk-inc="${s.id}" ${canAdd ? "" : "disabled"}>
           ${canAdd ? "Learn" : "No points to spend"}${canAdd && nextTxt ? ` <small>+1 pt → ${nextTxt}</small>` : ""}</button>`;
       }
@@ -595,7 +599,7 @@ export function openCharacter(hero, ctx) {
             <div class="skm-tags"><span class="tg ${br}">${bname}</span><span class="tg tr">${s.tier === 5 ? "Capstone" : "Tier " + s.tier}</span><span class="tg ty">${s.type === "active" ? "Active" : "Passive"}</span></div>
             <div class="skm-nm">${s.name}</div>
             <div class="skm-de">${s.desc}</div>
-            <div class="skm-st">${starsHtml(r, 15)}<span class="lb">${rank} / 5 ★ <small>· ${r}/${sk.maxRank} pts${pend > 0 ? ` (+${pend})` : ""}</small></span></div>
+            <div class="skm-st">${starsHtml(r, 15)}<span class="lb">${rank} / 5 ★ <small>· ${r}/${sk.maxRank} pts${pend > 0 ? ` (+${pend})` : ""}</small></span>${r > 0 && skillEffectNow(s, r) ? `<span class="now">${skillEffectNow(s, r)}</span>` : ""}</div>
           </div>
           <div class="skm-bd"><div class="skm-sec">Rank ladder</div><div class="skm-lad">${ladder}</div></div>
           <div class="skm-ft">${action}${undo}${draftBar}</div>
@@ -609,7 +613,8 @@ export function openCharacter(hero, ctx) {
       const na = kit.filter(k => k.type === "active").length, np = kit.filter(k => k.type === "passive").length;
       const row = k => {
         const def = skillDef(hero.cls, k.id), open = kitOpen === k.id;
-        const eff = def ? (def.text[k.stars - 1] || def.text[0]) : "";
+        // show the live per-point value (matches combat), falling back to the star-milestone text
+        const eff = (def && skillEffectNow(def, k.points)) || (def ? (def.text[k.stars - 1] || def.text[0]) : "");
         return `<div class="cp-kit ${k.br} ${open ? "open" : ""}" data-kit="${k.id}">
           <div class="cp-kit-h">
             <span class="stype ${k.type[0]}">${k.type === "active" ? "Active" : "Passive"}</span>

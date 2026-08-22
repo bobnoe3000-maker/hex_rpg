@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-22n · Roaming levels no longer teleport the party back to the entrance after a mini-boss/boss falls — the level re-forms its NPCs in place and the party auto-seeks from wherever it stands. Once a champion is slain the party mops up any bypassed side rooms before the floor re-forms. The Shaded Foothills (dungeon 1) is a roaming 3-level descent (Thornjaw, Old Grum, Mosstooth); roaming floors are per-dungeon data. Bag sorted upgrades-first with a filter; diagnostics export full per-character stats";
+export const APP_BUILD = "2026-08-22o · Active skills now grow with EVERY point, not just full stars — a skill's damage/heal/shield/buff magnitude interpolates per point (a full star still lands exactly on the ladder value), matching how passives already scaled. The skill panel shows the live value and previews what the next point yields. Roaming levels re-form NPCs in place after a champion falls (no teleport to the entrance); the party mops up bypassed side rooms first. The Shaded Foothills (dungeon 1) is a roaming 3-level descent; roaming floors are per-dungeon data";
 
 const BUF = [];
 const MAX = 400;
