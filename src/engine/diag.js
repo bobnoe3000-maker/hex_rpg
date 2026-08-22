@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-22f · The Misty Wetlands is now a 3-level descent — each roaming level ends at a mini-boss that GATES the way down (Gribb on Lv1, Sepshka on Lv2), with Mudmaw the final boss on Lv3; the floor re-forms after he falls. Random ELITE foes prowl in as you push deeper. Loot rule: only bosses, mini-bosses, and elites drop gear — ordinary foes give gold or the occasional potion. Class-scaled stat points; formation combat (tanks front, casters back)";
+export const APP_BUILD = "2026-08-22g · Misty Wetlands descent is now MANUAL — beating a level's mini-boss UNLOCKS the next level instead of auto-descending; a level selector in the dungeon header (① ② ☠, current/unlocked/locked) lets you travel to any unlocked level, forward or back. Fully clearing a level re-forms it so it stays farmable. Random elites drop gear alongside bosses/mini-bosses; ordinary foes give gold/potions. Class-scaled stat points; formation combat";
 
 const BUF = [];
 const MAX = 400;

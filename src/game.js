@@ -68,7 +68,7 @@ const state={ roomIdx:0, scene:"town", phase:"idle", room:null, foes:[], t:0, sp
   inventory:[], potions:[], gems:0, silver:0, shopStock:[], recruits:[], bench:[], respawnAt:null, wipeAt:null,
   dungeonId:"emberdeep", cleared:[], roomMax:0,   // active dungeon + set of cleared-boss ids (persisted) + furthest room reached this delve
   bossAt:null, bossInWave:false,       // when the boss may next appear (runtime) + is it on the field now
-  roamLevel:0, descendAt:null, miniAlive:false, eliteRolls:0,   // Misty Wetlands: current level (0–2), descent timer, mini-boss up?, elites spawned
+  roamLevel:0, roamUnlocked:0, miniAlive:false, eliteRolls:0,   // Misty Wetlands: current level (0–2), deepest UNLOCKED level, mini-boss up?, elites spawned
   autoLevel:false,   // when true, companion level-ups resolve their own free roll (no popup, no silver)
   fogbound:false, floor:null,   // opt-in Fogbound Floor traversal (dungeon 1 only): {cur, visited:[]}
   cam:{x:0,y:0},     // camera offset (logical px) for the roaming floor — follows the party
@@ -108,7 +108,7 @@ function snapshotState(){
   return { v:SAVE_VERSION, party, bench:state.bench, silver:state.silver, gems:state.gems,
     inventory:state.inventory, potions:state.potions, roomIdx:state.roomIdx,
     dungeonId:state.dungeonId, cleared:state.cleared, roomMax:state.roomMax, autoLevel:state.autoLevel,
-    fogbound:state.fogbound, floor:state.floor, roamLevel:state.roamLevel,
+    fogbound:state.fogbound, floor:state.floor, roamLevel:state.roamLevel, roamUnlocked:state.roamUnlocked,
     savedAt:new Date().toISOString() };
 }
 function saveGame(){ if(activeSlot!==null) writeSlot(activeSlot, snapshotState()); }
@@ -133,6 +133,7 @@ function loadGame(save){
   state.autoLevel=!!save.autoLevel;                            // per-save preference (off for older saves)
   state.fogbound=!!save.fogbound; state.floor=save.floor||null;   // Fogbound Floor opt-in + progress (dungeon 1)
   state.roamLevel=Math.max(0,Math.min(LAST_ROAM_LEVEL, save.roamLevel|0));   // Misty Wetlands descent progress
+  state.roamUnlocked=Math.max(state.roamLevel, Math.min(LAST_ROAM_LEVEL, save.roamUnlocked|0));   // deepest reachable level
 }
 const partyClasses=()=>party.length?[...new Set(party.map(h=>h.cls))]:["fighter","mage","cleric","rogue"];
 let combatRng=Math.random;  // reseeded deterministically when a fight starts / area changes
@@ -519,7 +520,7 @@ function loadRoom(){
     const fl=curFloor();
     state.room=buildRoamingFloor((Date.now()&0x7fffffff)|0, { cols:fl.cols, rows:fl.rows, rooms:fl.rooms, links:fl.links, entry:fl.entry, tiles:d.tiles, palette:d.palette });
     state.cam={x:0,y:0};
-    state.foes=[]; fxClear(); state.respawnAt=null; state.descendAt=null; state.wipeAt=null; state.rally=null; state.bossInWave=false; state.miniAlive=false; state.eliteRolls=0;
+    state.foes=[]; fxClear(); state.respawnAt=null; state.wipeAt=null; state.rally=null; state.bossInWave=false; state.miniAlive=false; state.eliteRolls=0;
     placeHeroes(); updateCamera(1); spawnWave();
     const last=state.roamLevel>=LAST_ROAM_LEVEL;
     log(`— <span class="sys">${d.name} · Level ${(state.roamLevel||0)+1}/${FLOOR2_LEVELS.length}</span> — ${last?"the fiend's lair looms":"the mire opens before you"} —`);
@@ -1134,7 +1135,8 @@ function act(u){
 function healWave(){ for(const h of party) if(h.alive){ const mh=derive(h).maxhp;
   h.hp=Math.min(mh, h.hp+Math.round(mh*BAL.WAVE_HEAL_FRAC)+Math.round(mh*waveHealFrac(h))); } renderParty(); }
 /* roaming floor: heal on each sub-room clear, roll an elite as the party pushes on, then gate progress —
-   a MINI-BOSS must fall before you can descend (levels 1–2); the FINAL boss clears the whole dungeon. */
+   a MINI-BOSS must fall to UNLOCK the next level (you descend manually via the header's level selector);
+   the FINAL boss clears the whole dungeon. Fully clearing a level re-forms it so it stays farmable. */
 function updateRoaming(){
   const room=state.room; if(!room) return;
   const fl=curFloor();
@@ -1144,18 +1146,21 @@ function updateRoaming(){
       healWave(); log(`${iconImg("check",14)} <span class="sys">Room cleared.</span> The party presses on…`);
       if(pk.treasure){ state.gems+=2; log(`${iconImg("gem",14)} <b>A hidden cache!</b> <span class="sys">+2 Runic Gems</span> for taking the detour.`,"sys"); updateHud(); }
       maybeSpawnElite(); } }
-  if(state.descendAt!==null || state.respawnAt!==null) return;   // already resolving a transition
-  const last=state.roamLevel>=LAST_ROAM_LEVEL;
-  if(!last){
-    // MINI-BOSS gates the descent: you can't drop to the next level until it's dead
-    if(state.miniAlive && !state.foes.some(f=>f.alive&&f.miniboss)){
-      state.miniAlive=false; healWave();
-      log(`${iconImg("skull",14)} <span class="heal">${curFloor().miniboss.name} is slain!</span> <span class="sys">The way down opens…</span>`,"heal");
-      state.descendAt=state.t+2.4;   // brief beat, then the party descends
-    }
-  } else if(state.bossInWave && !state.foes.some(f=>f.alive&&f.finalboss)){
-    state.bossInWave=false; onBossDown(); state.respawnAt=state.t+2.6;   // final boss down → the dungeon re-forms from Level 1
+  // MINI-BOSS death UNLOCKS the descent — the player chooses when to move via the level selector.
+  if(state.miniAlive && !state.foes.some(f=>f.alive&&f.miniboss)){
+    state.miniAlive=false;
+    const nx=(state.roamLevel||0)+1;
+    if(nx>(state.roamUnlocked||0)){ state.roamUnlocked=nx;
+      log(`${iconImg("skull",14)} <span class="heal">${fl.miniboss.name} is slain!</span> <span class="sys">Level ${nx+1} unlocked — tap it in the header to descend.</span>`,"heal");
+    } else log(`${iconImg("skull",14)} <span class="heal">${fl.miniboss.name} is slain!</span>`,"heal");
+    renderDungeonHeader(); saveGame();
   }
+  // FINAL boss death → the dungeon is cleared (first-clear reward, all levels stay unlocked).
+  if(state.bossInWave && !state.foes.some(f=>f.alive&&f.finalboss)){
+    state.bossInWave=false; state.roamUnlocked=LAST_ROAM_LEVEL; onBossDown();
+  }
+  // Endless: once the current level is fully cleared, re-form it after a beat so it stays farmable.
+  if(!state.foes.some(f=>f.alive) && state.respawnAt===null){ state.respawnAt=state.t+BAL.RESPAWN_DELAY; healWave(); }
 }
 /* As you clear rooms, occasionally an elite prowls in — more likely the deeper you are. */
 function maybeSpawnElite(){
@@ -1163,11 +1168,16 @@ function maybeSpawnElite(){
   const chance=Math.min(0.85, BAL.ELITE.CHANCE + (state.roamLevel||0)*BAL.ELITE.CHANCE_PER_LEVEL);
   if(combatRng()<chance){ spawnElite(); state.eliteRolls=(state.eliteRolls||0)+1; }
 }
-/* Descend to the next roaming level: rebuild the floor, reform the party at its entrance, fight on. */
-function descendLevel(){
-  state.roamLevel=Math.min(LAST_ROAM_LEVEL, (state.roamLevel||0)+1);
+/* Player-driven level change (header selector). Only unlocked levels are reachable; rebuilds that
+   level's floor, reforms the party at its entrance, and fights on. */
+function goToRoamLevel(n){
+  if(!roamingActive()) return;
+  n=Math.max(0, Math.min(LAST_ROAM_LEVEL, n|0));
+  if(n>(state.roamUnlocked||0) || n===state.roamLevel) return;   // locked, or already here
+  state.roamLevel=n; state.respawnAt=null;
   loadRoom(); seedBattle(); state.phase="fight";
   renderDungeonHeader(); saveGame();
+  log(`— <span class="sys">Level ${n+1} · ${curFloor().names[0]}</span> —`);
 }
 function updateWaves(){
   const heroesAlive=party.some(h=>h.alive);
@@ -1352,7 +1362,7 @@ function openPartyScreen(){
 function startDungeon(id){
   state.dungeonId=dungeonById(id).id; state.roomIdx=0; state.roomMax=0; state.phase="idle";
   state.bossAt=null; state.bossInWave=false;      // boss is ready the first time you reach its room
-  state.roamLevel=0; state.descendAt=null;        // Misty Wetlands: a fresh delve starts at Level 1
+  state.roamLevel=0; state.roamUnlocked=0;         // Misty Wetlands: a fresh delve starts locked at Level 1
   if(fogboundActive()) initFloor(); else state.floor=null;   // Fogbound Floor starts at its entrance
   loadRoom(); saveGame(); enterDungeon();
 }
@@ -1586,8 +1596,16 @@ function renderDungeonHeader(){
                  : fog ? (FLOOR.nodes[state.floor.cur].kind==="boss"?d.boss.name:FLOOR.nodes[state.floor.cur].name)
                        : (idx===BOSS_ROOM ? d.boss.name : LAYOUTS[idx].roomName);
   let mini;
-  if(roam){ const left=state.foes.filter(f=>f.alive).length;
-    mini=`<span class="dh-fmap" style="cursor:default">☠ ${left} foe${left===1?"":"s"} ahead</span>`; }
+  if(roam){ const left=state.foes.filter(f=>f.alive).length, unlocked=state.roamUnlocked||0, lvl=state.roamLevel||0;
+    // level selector: tap an UNLOCKED level to travel there; the current level's mini-boss unlocks the next
+    let nodes="";
+    for(let i=0;i<FLOOR2_LEVELS.length;i++){
+      const boss=i===LAST_ROAM_LEVEL, cur=i===lvl, locked=i>unlocked, done=i<lvl;
+      const cls = cur?"cur": locked?"lock": done?"done":"next";
+      const glyph = boss?"☠":(i+1);
+      nodes+=`<button class="dh-node ${cls} ${boss?"boss":""}" title="Level ${i+1}${locked?" · locked":""}" ${(!locked&&!cur)?`data-level="${i}"`:""}><span class="dot">${glyph}</span></button>`;
+    }
+    mini=`<div class="dh-mini">${nodes}</div><span class="dh-foes">☠ ${left}</span>`; }
   else if(fog){ const mapicon=`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14"/></svg>`;
     mini=`<button class="dh-fmap" data-openmap>${mapicon} Floor · ${floorProgress(state.floor.visited)}</button>`; }
   else {
@@ -1611,6 +1629,7 @@ function renderDungeonHeader(){
       <span class="dh-cur"></span></div>
     <div class="dh-r2">${mini}<span class="dh-spd" data-spd>${state.speed}×</span>${bossPill}</div>`;
   dheadEl.querySelectorAll("[data-room]").forEach(b=>b.onclick=()=>goToRoom(+b.getAttribute("data-room")));
+  dheadEl.querySelectorAll("[data-level]").forEach(b=>b.onclick=()=>goToRoamLevel(+b.getAttribute("data-level")));
   const om=dheadEl.querySelector("[data-openmap]"); if(om) om.onclick=openFloorFull;
   dheadEl.querySelector("[data-spd]").onclick=()=>{ state.speed=state.speed===1?2:1; renderDungeonHeader(); };
   updateHud();
@@ -1619,9 +1638,9 @@ function renderDungeonHeader(){
 /* live boss-timer text (cheap; only touches the DOM when the displayed value changes) */
 function tickDungeonHeader(){
   if(state.scene!=="dungeon") return;
-  if(roamingActive()){                         // roaming floor: keep the "foes ahead" count live
-    const el=dheadEl.querySelector(".dh-fmap"); if(!el) return;
-    const left=state.foes.filter(f=>f.alive).length, txt=`☠ ${left} foe${left===1?"":"s"} ahead`;
+  if(roamingActive()){                         // roaming floor: keep the live foe count fresh
+    const el=dheadEl.querySelector(".dh-foes"); if(!el) return;
+    const left=state.foes.filter(f=>f.alive).length, txt=`☠ ${left}`;
     if(el.textContent!==txt) el.textContent=txt; return;
   }
   if(state.roomIdx!==BOSS_ROOM) return;
@@ -1840,11 +1859,10 @@ function loop(now){
           if(state.t>=u.next){ act(u); u.next=state.t+BAL.BASE_INTERVAL/derive(u).aspd+combatRng()*BAL.ASPD_JITTER; }
         }
         updateWaves();
-        // mini-boss down → descend to the next roaming level once the short beat elapses
-        if(state.descendAt!==null && state.t>=state.descendAt){ state.descendAt=null; descendLevel(); }
-        // endless map: respawn a fresh wave on its timer (roaming → rebuild from Level 1 for another run)
+        // endless map: respawn a fresh wave on its timer (roaming → re-form the CURRENT level for another lap;
+        // the player changes levels only via the header selector, never automatically)
         if(state.respawnAt!==null && state.t>=state.respawnAt){ state.respawnAt=null;
-          if(roamingActive()){ state.roamLevel=0; loadRoom(); seedBattle(); state.phase="fight"; } else spawnWave(); }
+          if(roamingActive()){ loadRoom(); seedBattle(); state.phase="fight"; } else spawnWave(); }
         // full wipe: pull back to the Keep (main revives free there; fallen pals need the Temple)
         if(state.wipeAt!==null && state.t>=state.wipeAt){ state.wipeAt=null; enterTown(true); }
         // prune slain FOES only (heroes are never pruned — they live in `party`, dead or alive)
