@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-18 · Bestiary expanded +8: spider · slime · harpy · cutthroat · golem · lich · troll · wyvern — woven into every dungeon's rooms with themed names; two new figures (bog slime, mire troll)";
+export const APP_BUILD = "2026-08-18 · Potions simplified to a single standard size (no more tiny/small/medium/large/giant) — one Buy button per brew; legacy stacks fold to the standard on load";
 
 const BUF = [];
 const MAX = 400;

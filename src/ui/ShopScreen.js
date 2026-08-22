@@ -7,7 +7,7 @@ import { ensureTownCss } from "./TownScreen.js";
 import { itemNameHtml } from "./itemView.js";
 import { iconImg } from "../engine/icons.js";
 import { gearIconImg } from "../engine/gearIcon.js";
-import { POTIONS, SIZES, potionCost, potionSell, potionEffectText, potionName } from "../data/potions.js";
+import { POTIONS, STD_SIZE, potionCost, potionSell, potionEffectText, potionName } from "../data/potions.js";
 import { flaskSvg } from "./potionChip.js";
 
 let cssDone = false;
@@ -79,19 +79,19 @@ export function openShop(ctx) {
 
     // Potions — brews × priced sizes to buy, plus a sell-back list (was the Apothecary).
     const owned = ctx.potions ? ctx.potions() : [];
-    const brewRow = p => `<div class="pot-row"><div class="fl">${flaskSvg(p.color, 34)}</div>
+    const brewRow = p => { const cost = potionCost();
+      return `<div class="pot-row"><div class="fl">${flaskSvg(p.color, 34)}</div>
         <div class="b"><div class="pn" style="color:${p.color}">${p.name}</div>
-          <div class="pe">${p.blurb} · ${p.cd}s cooldown · ${p.trigger === "hurt" ? "when hurt" : "in combat"}</div>
-          <div class="pot-sizes">${SIZES.map(s => { const cost = potionCost(p.id, s.id);
-            return `<button class="pot-sz" data-pbuy="${p.id}:${s.id}" title="${potionEffectText(p.id, s.id)}" ${silver < cost ? "disabled" : ""}>
-              <b>${s.name}</b><span class="pr">${iconImg("coin", 10)} ${cost}</span></button>`; }).join("")}</div>
-        </div></div>`;
+          <div class="pe">${potionEffectText(p.id)} · ${p.cd}s cooldown · ${p.trigger === "hurt" ? "when hurt" : "in combat"}</div>
+          <div class="pot-sizes"><button class="pot-sz" data-pbuy="${p.id}:${STD_SIZE}" ${silver < cost ? "disabled" : ""}>
+            <b>Buy</b><span class="pr">${iconImg("coin", 10)} ${cost}</span></button></div>
+        </div></div>`; };
     const ownRow = st => { const p = POTIONS.find(x => x.id === st.type);
       return `<div class="pot-own"><div class="fl">${flaskSvg(p.color, 24)}</div>
-        <span class="n2">${potionName(st.type, st.size)}</span><span class="q">×${st.qty}</span>
-        <button class="shop-btn sell" data-psell="${st.type}:${st.size}">Sell ${iconImg("coin", 10)} ${potionSell(st.type, st.size)}</button></div>`; };
+        <span class="n2">${potionName(st.type)}</span><span class="q">×${st.qty}</span>
+        <button class="shop-btn sell" data-psell="${st.type}:${st.size}">Sell ${iconImg("coin", 10)} ${potionSell()}</button></div>`; };
     const potPane = `
-      <div class="tw-sec">Brews — tap a size to buy one</div>
+      <div class="tw-sec">Brews — tap to buy</div>
       ${POTIONS.map(brewRow).join("")}
       <div class="tw-sec">Your potions${owned.length ? "" : " — none"}</div>
       ${owned.length ? owned.map(ownRow).join("") : `<div class="shop-none">Buy a brew above, or find them as loot.</div>`}`;

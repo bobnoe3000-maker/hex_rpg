@@ -457,25 +457,23 @@ ok("different seed diverges", seq(123) !== seq(777));
 
 // ---- potions ----
 {
-  const { POTIONS, SIZES, potionEffect, potionCost, potionSell, potionEffectText, rollLootPotion, POTION_CAP }
+  const { POTIONS, SIZES, STD_SIZE, potionEffect, potionCost, potionSell, potionEffectText, potionName, rollLootPotion, POTION_CAP }
     = await import("../src/data/potions.js");
-  ok("seven brews, five sizes", POTIONS.length === 7 && SIZES.length === 5);
+  ok("seven brews, one standard size", POTIONS.length === 7 && SIZES.length === 1 && SIZES[0].id === STD_SIZE);
   ok("stack cap is 99", POTION_CAP === 99);
   ok("every brew has effect + cooldown + trigger", POTIONS.every(p => p.effect && p.cd > 0 && (p.trigger === "hurt" || p.trigger === "combat")));
-  // magnitude scales with size (Healing: tiny 12% → giant 70%)
-  ok("heal tiny ≈ 12% HP", Math.round(potionEffect("heal", "tiny").val * 100) === 12);
-  ok("heal giant ≈ 70% HP", Math.round(potionEffect("heal", "giant").val * 100) === 70);
-  ok("bigger size = bigger effect", potionEffect("might", "giant").val > potionEffect("might", "small").val);
-  ok("buff duration grows with size", potionEffect("might", "giant").dur > potionEffect("might", "tiny").dur);
-  // cost climbs steeply, sell < cost
-  ok("cost increases every size", SIZES.every((s, i) => i === 0 || potionCost("heal", s.id) > potionCost("heal", SIZES[i-1].id)));
-  ok("giant costs far more than tiny", potionCost("heal", "giant") >= potionCost("heal", "tiny") * 10);
-  ok("sell price is below buy price", potionSell("heal", "medium") < potionCost("heal", "medium"));
-  ok("effect text renders", /Restore 32% HP/.test(potionEffectText("heal", "medium")) && /\+.* Crit for/.test(potionEffectText("fortune", "large")));
-  // loot roll is always a valid brew+size, biased bigger with tier
-  const seed = mb(7);
+  // single size: fixed magnitude (Healing 24% HP at mult 2.0), name carries no size prefix
+  ok("heal restores 24% HP", Math.round(potionEffect("heal", STD_SIZE).val * 100) === 24);
+  ok("name has no size prefix", potionName("heal") === "Healing Draught");
+  // any legacy size id folds to the one standard (no crash, same result)
+  ok("legacy size folds to standard", potionEffect("heal", "giant").val === potionEffect("heal", STD_SIZE).val);
+  // fixed price, sell < cost, ignores any passed args
+  ok("cost is a flat price", potionCost() === potionCost("heal", STD_SIZE) && potionCost() > 0);
+  ok("sell price is below buy price", potionSell() < potionCost());
+  ok("effect text renders", /Restore 24% HP/.test(potionEffectText("heal")) && /\+.* Crit for/.test(potionEffectText("fortune")));
+  // loot roll is always a valid brew in the standard size
   ok("loot potion is valid", (()=>{ for (let i=0;i<50;i++){ const p=rollLootPotion(5, mb(i));
-    if (!POTIONS.some(x=>x.id===p.type) || !SIZES.some(s=>s.id===p.size) || p.qty!==1) return false; } return true; })());
+    if (!POTIONS.some(x=>x.id===p.type) || p.size !== STD_SIZE || p.qty!==1) return false; } return true; })());
 }
 
 console.log(fails ? `\n${fails} FAILED` : "\nall passed");

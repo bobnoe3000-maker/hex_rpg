@@ -29,7 +29,7 @@ import { startOnboarding } from './ui/Onboarding.js';
 import { makeCompanion, makeEnemy } from './models/units.js';
 import { openDungeonSelect } from './ui/DungeonSelect.js';
 import { openCompanionRoll } from './ui/CompanionLevelUp.js';
-import { POTION_BY_ID, POTION_CAP, potionEffect, potionCost, potionSell, rollLootPotion } from './data/potions.js';
+import { POTION_BY_ID, POTION_CAP, STD_SIZE, potionEffect, potionCost, potionSell, rollLootPotion } from './data/potions.js';
 import { potionTileChip, ensurePotChipCss, setPotRing, flashPotBox } from './ui/potionChip.js';
 import { readSlot, writeSlot, SAVE_VERSION } from './state/save.js';
 import { installDiag, diag, diagText, APP_BUILD } from './engine/diag.js';
@@ -106,11 +106,21 @@ function snapshotState(){
     savedAt:new Date().toISOString() };
 }
 function saveGame(){ if(activeSlot!==null) writeSlot(activeSlot, snapshotState()); }
+/* Collapse a saved potion stash to the single size: rewrite each stack's size to STD_SIZE and merge
+   any that now share a brew (e.g. an old "Small Heal" + "Large Heal" become one Healing Draught stack). */
+function foldPotionSizes(stacks){
+  const byType={};
+  for(const s of stacks||[]){ const q=(byType[s.type]||0)+(s.qty||0); byType[s.type]=Math.min(POTION_CAP,q); }
+  return Object.entries(byType).map(([type,qty])=>({type,size:STD_SIZE,qty}));
+}
 function loadGame(save){
   party=(save.party||[]).map(h=>({alive:true, pts:emptyPoints(), skills:{}, potion:null, ...h}));   // defaults for older saves
   state.bench=(save.bench||[]).map(h=>({alive:true, pts:emptyPoints(), skills:{}, potion:null, ...h})); // benched reserves (keep gear)
   state.silver=save.silver||0; state.gems=save.gems||0;
-  state.inventory=save.inventory||[]; state.potions=save.potions||[]; state.roomIdx=save.roomIdx||0;
+  state.inventory=save.inventory||[];
+  state.potions=foldPotionSizes(save.potions||[]);   // legacy tiny/small/…/giant stacks fold into the one standard size
+  for(const h of [...party, ...state.bench]) if(h.potion) h.potion.size=STD_SIZE;   // belts too
+  state.roomIdx=save.roomIdx||0;
   state.dungeonId=dungeonById(save.dungeonId).id;    // older saves default to the Emberdeep
   state.cleared=Array.isArray(save.cleared)?save.cleared.slice():[];
   state.roomMax=Math.max(save.roomMax||0, state.roomIdx||0);   // reached rooms are jumpable on the minimap
@@ -620,9 +630,9 @@ function hurt(u,dmg,src,opt){
       if(combatRng()<(u.boss?BAL.GEM_CHANCE_BOSS:BAL.GEM_CHANCE)){ state.gems++;
         log(`${iconImg("gem",14)} <b>${u.name}</b> drops a <span class="sys">Runic Gem</span> <span style="opacity:.6">(${state.gems})</span>`,"sys");
         fxText(uxS(u),uyS(u)-46,"gem","#9ad1ff"); }
-      if(u.boss||combatRng()<BAL.POTION_DROP_CHANCE){    // potions drop into the shared stash (size ~ tier)
+      if(u.boss||combatRng()<BAL.POTION_DROP_CHANCE){    // potions drop into the shared stash
         const pd=rollLootPotion(d.power, combatRng); addPotion(pd.type,pd.size,pd.qty);
-        log(`${iconImg("chest",14)} <b>${u.name}</b> drops a <span class="sys">${POTION_BY_ID[pd.type].name}</span> <span style="opacity:.6">(${pd.size})</span>`,"sys");
+        log(`${iconImg("chest",14)} <b>${u.name}</b> drops a <span class="sys">${POTION_BY_ID[pd.type].name}</span>`,"sys");
         fxText(uxS(u),uyS(u)-58,"potion",POTION_BY_ID[pd.type].color); saveGame(); }
       const sv=Math.max(1,Math.round(u.xp*(BAL.SILVER_MULT+combatRng()*BAL.SILVER_JITTER)));
       state.silver+=sv;

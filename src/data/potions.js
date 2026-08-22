@@ -1,8 +1,7 @@
 /* ============ DATA :: potions.js — consumable brews (the potion belt) ============ */
-/* Pure content. Seven brews × five sizes. A hero equips a stack into their potion slot and the
-   battle AI auto-quaffs it on cooldown when the trigger fits (see game.js tryQuaff). Effects reuse
-   the timed-buff system (heal / heal-over-time / shield / stat auras). Sizes scale the magnitude
-   (and buff duration) and, steeply, the price — a silver sink. Stacks cap at 99. */
+/* Pure content. Seven brews, one standard size each. A hero equips a stack into their potion slot
+   and the battle AI auto-quaffs it on cooldown when the trigger fits (see game.js tryQuaff). Effects
+   reuse the timed-buff system (heal / heal-over-time / shield / stat auras). Stacks cap at 99. */
 "use strict";
 
 export const POTION_CAP = 99;
@@ -19,33 +18,35 @@ export const POTIONS = [
   { id: "fortune", name: "Fortune Philter", color: "#b48bff", effect: "flat", stat: "crit", base: 8,    dur: 6, cd: 20, trigger: "combat", blurb: "+Crit for a while" },
 ];
 
+/* One standard potion — no size tiers. The single size scales the brews' base magnitude/duration and
+   sets the flat shop price. (Potion stacks still carry a `size` field so the stash/belt key stays
+   stable and old saves keep working, but there is only ever this one value.) */
+export const STD_SIZE = "std";
 export const SIZES = [
-  { id: "tiny",   name: "Tiny",   mult: 1.00, durMult: 1.00, cost: 8   },
-  { id: "small",  name: "Small",  mult: 1.67, durMult: 1.15, cost: 20  },
-  { id: "medium", name: "Medium", mult: 2.67, durMult: 1.30, cost: 50  },
-  { id: "large",  name: "Large",  mult: 4.00, durMult: 1.50, cost: 120 },
-  { id: "giant",  name: "Giant",  mult: 5.83, durMult: 1.75, cost: 280 },
+  { id: STD_SIZE, name: "", mult: 2.00, durMult: 1.25, cost: 25 },
 ];
 
 export const POTION_BY_ID = Object.fromEntries(POTIONS.map(p => [p.id, p]));
 export const SIZE_BY_ID = Object.fromEntries(SIZES.map((s, i) => [s.id, { ...s, order: i }]));
+/* every stack resolves to the one size — any legacy id (tiny/small/…/giant) folds to the standard. */
+const sizeOf = sizeId => SIZE_BY_ID[sizeId] || SIZE_BY_ID[STD_SIZE];
 const STAT_LABEL = { atk: "ATK", def: "DEF", aspd: "Speed", crit: "Crit" };
 const round3 = v => Math.round(v * 1000) / 1000;
 const round1 = v => Math.round(v * 10) / 10;
 
-export const potionName = (typeId, sizeId) => `${SIZE_BY_ID[sizeId].name} ${POTION_BY_ID[typeId].name}`;
-export const potionCost = (typeId, sizeId) => SIZE_BY_ID[sizeId].cost;
-export const potionSell = (typeId, sizeId) => Math.max(1, Math.floor(potionCost(typeId, sizeId) * 0.35));
+export const potionName = typeId => POTION_BY_ID[typeId].name;
+export const potionCost = () => SIZE_BY_ID[STD_SIZE].cost;
+export const potionSell = () => Math.max(1, Math.floor(potionCost() * 0.35));
 
-/* resolved effect for a brew at a size: magnitude (val), duration, cooldown, trigger. */
+/* resolved effect for a brew: magnitude (val), duration, cooldown, trigger. */
 export function potionEffect(typeId, sizeId) {
-  const t = POTION_BY_ID[typeId], s = SIZE_BY_ID[sizeId];
-  if (!t || !s) return null;
+  const t = POTION_BY_ID[typeId], s = sizeOf(sizeId);
+  if (!t) return null;
   const val = t.effect === "flat" ? Math.round(t.base * s.mult) : round3(t.base * s.mult);
   const dur = t.dur ? round1(t.dur * s.durMult) : 0;
   return { effect: t.effect, stat: t.stat || null, val, dur, cd: t.cd, trigger: t.trigger, color: t.color, name: t.name };
 }
-/* one-line human description of what a brew at a size does */
+/* one-line human description of what a brew does */
 export function potionEffectText(typeId, sizeId) {
   const e = potionEffect(typeId, sizeId); if (!e) return "";
   switch (e.effect) {
@@ -58,10 +59,8 @@ export function potionEffectText(typeId, sizeId) {
   return "";
 }
 
-/* a loot-dropped potion: random brew, size biased toward the dungeon tier (deeper = bigger). */
+/* a loot-dropped potion: a random brew in the one standard size. */
 export function rollLootPotion(tier, rng) {
   const type = POTIONS[(rng() * POTIONS.length) | 0].id;
-  const center = Math.max(0, Math.min(4, (Math.max(1, tier || 1) - 1) / 2));
-  const idx = Math.round(Math.max(0, Math.min(4, center + (rng() * 2 - 1) * 1.5)));
-  return { type, size: SIZES[idx].id, qty: 1 };
+  return { type, size: STD_SIZE, qty: 1 };
 }
