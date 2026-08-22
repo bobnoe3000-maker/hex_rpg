@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-22k · Party cards: fixed-height stat and gear rows so the HP bar, HP number, and gear line align across all tiles and heights stay constant, even when stats/gear wrap or the upgrade ▲ shows. Potion belt Equip All + ×10; Loot Roll hides the name until the reels settle; Misty Wetlands 3-level descent with mini-boss timers + tiered gear odds; manual level selector; class-scaled stat points";
+export const APP_BUILD = "2026-08-22l · Bag redesign: gear is sorted upgrades-first and shown through a filter — Upgrades (upgrades + empty-slot fits) by default, All, or By slot — as tight one-line rows (icon · name · stats · a net-power tag · Equip); tap a row to expand the full compare. Party cards align on fixed-height rows; potion belt Equip All + ×10; Loot Roll hides the name until the reels settle; Misty Wetlands 3-level descent";
 
 const BUF = [];
 const MAX = 400;

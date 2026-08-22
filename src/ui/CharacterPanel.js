@@ -21,6 +21,11 @@ const ATTR_LABEL = { hp: "HP", atk: "ATK", def: "DEF", dodge: "Dodge", crit: "Cr
 /* gear-comparison formatting */
 const CMP_LABEL = { atk: "ATK", def: "DEF", hp: "HP", dodge: "Dodge", crit: "Crit", aspd: "Speed" };
 const VD_TEXT = { up: "▲ Upgrade", side: "⇄ Sidegrade", down: "▼ Downgrade", new: "✦ New" };
+const VD_SYM = { up: "▲", side: "⇄", down: "▼", new: "✦" };
+const VD_ORDER = { up: 0, new: 1, side: 2, down: 3 };
+// a compact net-power tag for a bag item's comparison (uses the same rough score the sort ranks on)
+const netTag = c => c.verdict === "new" ? "NEW"
+  : (n => (n > 0 ? "+" : n < 0 ? "−" : "±") + Math.abs(n))(Math.round(c.scoreTo - c.scoreFrom));
 const cmpEps = s => s === "aspd" ? 0.005 : 0.05;
 const cmpNum = (s, v) => s === "aspd" ? (Math.round(v * 100) / 100).toFixed(2) : String(Math.round(v * 10) / 10);
 const cmpDelta = (s, v) => (v > 0 ? "+" : "−") + cmpNum(s, Math.abs(v));   // signed, uses a real minus glyph
@@ -129,6 +134,22 @@ function injectCss() {
     padding:3px 6px;border-radius:5px;white-space:nowrap;flex:0 0 auto}
   .cp-vd.up{color:#08260f;background:#7ee787}.cp-vd.side{color:#241606;background:#e0b063}
   .cp-vd.down{color:#2a0808;background:#ff6b6b}.cp-vd.new{color:#06121a;background:#9ad1ff}
+  /* bag row (Concept 3): minimal one-liner — icon · name/slot · net-power tag · Equip; tap name to expand */
+  .cp-brow{display:flex;align-items:center;gap:7px;padding:6px 8px}
+  .cp-bmain{display:flex;align-items:center;gap:6px;flex:1;min-width:0;cursor:pointer}
+  .cp-caret{color:#6f6486;font-size:9px;flex:0 0 auto}
+  .cp-net{font-family:ui-monospace,monospace;font-size:10px;font-weight:bold;letter-spacing:.02em;
+    padding:2.5px 7px;border-radius:999px;white-space:nowrap;flex:0 0 auto;font-variant-numeric:tabular-nums}
+  .cp-net.up{color:#7ee787;background:rgba(126,231,135,.12);border:1px solid rgba(126,231,135,.42)}
+  .cp-net.down{color:#ff8a80;background:rgba(255,107,107,.1);border:1px solid rgba(255,107,107,.32)}
+  .cp-net.side{color:#a7bdec;background:rgba(143,168,214,.12);border:1px solid rgba(143,168,214,.42)}
+  .cp-net.new{color:#ffd166;background:rgba(216,162,74,.14);border:1px solid #6a521f}
+  .cp-seg{display:flex;gap:4px;background:#100b1c;border:1px solid var(--line);border-radius:9px;padding:3px;margin:0 2px 8px}
+  .cp-seg button{flex:1;font-family:ui-monospace,monospace;font-size:9.5px;letter-spacing:.04em;text-transform:uppercase;
+    border:0;border-radius:6px;padding:6px 4px;background:transparent;color:#9a8fb8;cursor:pointer}
+  .cp-seg button.on{background:linear-gradient(#e8bf78,#b4802f);color:#241606;font-weight:bold}
+  .cp-seg button:active:not(.on){color:var(--parchment)}
+  .cp-subh{font-family:ui-monospace,monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:#6f6486;margin:9px 3px 4px}
   .cp-cmpline{display:flex;flex-wrap:wrap;gap:5px;align-items:center;padding:0 8px 7px 40px}
   .cp-dl{font-family:ui-monospace,monospace;font-size:8.5px;letter-spacing:.05em;text-transform:uppercase;color:#6f6486;margin-right:1px}
   .cp-chip{font-family:ui-monospace,monospace;font-size:10px;font-weight:bold;padding:1.5px 6px;border-radius:999px;font-variant-numeric:tabular-nums}
@@ -319,6 +340,7 @@ export function openCharacter(hero, ctx) {
   injectCss();
   const overlay = document.getElementById("overlay");
   let filterSlot = null; // when set, the bag lists only items for that slot
+  let bagView = "help";  // bag filter: "help" (upgrades + empty-slot fits) · "all" · "slot" (grouped by slot)
   const expandedCmp = new WeakSet(); // bag items whose side-by-side compare is open
   let tab = "stats";     // main-hero panel tab: "stats" | "skills" | "equip"
   let skillBranch = "off"; // Skills tab sub-tab: "off" | "def"
@@ -358,10 +380,9 @@ export function openCharacter(hero, ctx) {
       if (preview) return `<div class="cp-slot" style="cursor:default"><span class="sl">${cap(key)}</span>${body}</div>`;
       return `<div class="cp-slot ${filterSlot === key ? "sel" : ""}" data-filter="${key}"><span class="sl">${cap(key)}</span>${body}</div>`;
     };
-    // A bag item shows how it compares to what's equipped in its slot: a verdict pill, always-on
-    // stat-delta chips, and a tap-to-open side-by-side (Equipped → This → Δ).
-    const itemRow = (it, i) => {
-      const c = compareToEquipped(hero, it);
+    // A bag item is a tight one-line row: icon · name · slot & stats · a net-power verdict tag · Equip.
+    // Tapping the name/icon expands the full side-by-side compare (delta chips + Equipped → This → Δ).
+    const itemRow = (it, i, c) => {
       const isNew = c.verdict === "new", isOpen = expandedCmp.has(it);
       const changed = c.stats.filter(x => Math.abs(x.diff) >= cmpEps(x.stat));
       const statChips = changed.map(x =>
@@ -375,12 +396,12 @@ export function openCharacter(hero, ctx) {
           ${c.keywords.map(k => `<span class="k">${cap(k.label)}</span><span class="a">${k.sign < 0 ? "✓" : "—"}</span><span class="b">${k.sign >= 0 ? "✓" : "—"}</span><span class="d ${k.sign > 0 ? "p" : k.sign < 0 ? "n" : "z"}">${k.sign > 0 ? "new" : k.sign < 0 ? "lost" : "—"}</span>`).join("")}
         </div>` : "";
       return `<div class="cp-item ${isOpen ? "open" : ""}">
-        <div class="cp-irow">${gearIconImg(it, 26)}<span class="it">${itemName(it)}<br><small>${it.d}</small></span>
-          <span class="cp-vd ${c.verdict}">${VD_TEXT[c.verdict]}</span></div>
-        <div class="cp-cmpline"><span class="cp-dl">${isNew ? "empty slot" : "vs equipped"}</span>${statChips}${kwChips}
-          ${isNew ? "" : `<span class="cp-cmpx" data-cmp="${i}">${isOpen ? "hide ▲" : "compare ▾"}</span>`}
-          <button class="cp-btn" data-eq="${i}" style="${isNew ? "margin-left:auto" : "margin-left:6px"}">Equip</button></div>
-        ${grid}</div>`;
+        <div class="cp-brow">
+          <div class="cp-bmain" data-cmp="${i}">${gearIconImg(it, 24)}<span class="it">${itemName(it)}<br><small>${cap(it.slot)} · ${it.d}</small></span><span class="cp-caret">${isOpen ? "▾" : "▸"}</span></div>
+          <span class="cp-net ${c.verdict}" title="${VD_TEXT[c.verdict]}">${VD_SYM[c.verdict]} ${netTag(c)}</span>
+          <button class="cp-btn" data-eq="${i}">Equip</button></div>
+        ${isOpen ? `<div class="cp-cmpline"><span class="cp-dl">${isNew ? "empty slot" : "vs equipped"}</span>${statChips}${kwChips}</div>${grid}` : ""}
+      </div>`;
     };
 
     // Attribute point-buy — main hero only (ctx.points supplied). Draft with +/−, then Confirm.
@@ -439,9 +460,40 @@ export function openCharacter(hero, ctx) {
       : `
       <div class="cp-sec"><span>Equipped</span><span class="hint">tap a slot to filter the bag</span></div>
       ${SLOTS.map(slotRow).join("")}
-      <div class="cp-sec"><span>Bag${filterSlot ? ` — ${cap(filterSlot)}` : ""}${others > 0 && !filterSlot ? ` · ${others} for other heroes` : ""}</span>${filterSlot ? `<span class="cp-clear" data-clear="1">show all ✕</span>` : ""}</div>
-      ${usable.length ? usable.map(it => itemRow(it, ctx.inventory.indexOf(it))).join("")
-                      : `<div class="cp-none">${filterSlot ? "No " + cap(filterSlot) + " items in the bag." : "No items " + hero.name + " can equip yet — fight to find loot."}</div>`}`;
+      ${bagSection()}`;
+
+    // Bag: compare every usable item once, sort the actionable gear to the top, and show it through a
+    // filter — "Upgrades" (upgrades + empty-slot fits) by default, "All", or grouped "By slot". A tapped
+    // equipped slot overrides the filter to list just that slot. Each row is minimal; tap to expand.
+    function bagSection() {
+      const withCmp = usable.map(it => ({ it, i: ctx.inventory.indexOf(it), c: compareToEquipped(hero, it) }));
+      const netVal = c => c.verdict === "new" ? 1e9 : (c.scoreTo - c.scoreFrom);
+      withCmp.sort((a, b) => (VD_ORDER[a.c.verdict] - VD_ORDER[b.c.verdict]) || (netVal(b.c) - netVal(a.c)));
+      const helpN = withCmp.filter(x => x.c.verdict === "up" || x.c.verdict === "new").length;
+
+      const secHead = `<div class="cp-sec"><span>Bag${filterSlot ? ` — ${cap(filterSlot)}` : ""}${others > 0 && !filterSlot ? ` · ${others} for other heroes` : ""}</span>${filterSlot ? `<span class="cp-clear" data-clear="1">show all ✕</span>` : ""}</div>`;
+      // the equipped-slot filter IS the "by slot" view, so hide the segmented control while it's active
+      const seg = filterSlot ? "" : `<div class="cp-seg">
+        <button class="${bagView === "help" ? "on" : ""}" data-bagview="help">Upgrades${helpN ? ` · ${helpN}` : ""}</button>
+        <button class="${bagView === "all" ? "on" : ""}" data-bagview="all">All${usable.length ? ` · ${usable.length}` : ""}</button>
+        <button class="${bagView === "slot" ? "on" : ""}" data-bagview="slot">By slot</button></div>`;
+
+      let rows;
+      if (!filterSlot && bagView === "slot") {
+        const bySlot = {}; for (const x of withCmp) (bySlot[x.it.slot] = bySlot[x.it.slot] || []).push(x);
+        rows = SLOTS.filter(s => bySlot[s]).map(s =>
+          `<div class="cp-subh">${cap(s)}</div>` + bySlot[s].map(x => itemRow(x.it, x.i, x.c)).join("")).join("");
+      } else {
+        const list = (filterSlot || bagView === "all") ? withCmp
+          : withCmp.filter(x => x.c.verdict === "up" || x.c.verdict === "new");
+        rows = list.map(x => itemRow(x.it, x.i, x.c)).join("");
+      }
+      const empty = filterSlot ? `No ${cap(filterSlot)} items in the bag.`
+        : !usable.length ? `No items ${hero.name} can equip yet — fight to find loot.`
+        : bagView === "help" ? `Nothing better in the bag right now — tap <b>All</b> to browse everything.`
+        : `The bag is empty.`;
+      return `${secHead}${seg}${rows || `<div class="cp-none">${empty}</div>`}`;
+    }
 
     // Skills tree (main hero only). A talent-grid of icon nodes — columns are branches (via the
     // sub-tabs), rows are gated tiers. Tapping a node opens a center-screen detail modal (skModalHtml)
@@ -626,6 +678,7 @@ export function openCharacter(hero, ctx) {
     const orb = overlay.querySelector("[data-openroll]"); if (orb && ctx.openRoll) orb.onclick = () => ctx.openRoll();
     overlay.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => { tab = b.getAttribute("data-tab"); keepScroll = false; skillOpen = null; render(); });
     const clr = overlay.querySelector("[data-clear]"); if (clr) clr.onclick = () => { filterSlot = null; render(); };
+    overlay.querySelectorAll("[data-bagview]").forEach(b => b.onclick = () => { bagView = b.getAttribute("data-bagview"); render(); });
     overlay.querySelectorAll("[data-filter]").forEach(row => row.onclick = () => {
       const key = row.getAttribute("data-filter");
       filterSlot = filterSlot === key ? null : key; render();
