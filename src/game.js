@@ -68,6 +68,7 @@ const state={ roomIdx:0, scene:"town", phase:"idle", room:null, foes:[], t:0, sp
   inventory:[], potions:[], gems:0, silver:0, shopStock:[], recruits:[], bench:[], respawnAt:null, wipeAt:null,
   dungeonId:"emberdeep", cleared:[], roomMax:0,   // active dungeon + set of cleared-boss ids (persisted) + furthest room reached this delve
   bossAt:null, bossInWave:false,       // when the boss may next appear (runtime) + is it on the field now
+  roamLevel:0, descendAt:null, miniAlive:false, eliteRolls:0,   // Misty Wetlands: current level (0–2), descent timer, mini-boss up?, elites spawned
   autoLevel:false,   // when true, companion level-ups resolve their own free roll (no popup, no silver)
   fogbound:false, floor:null,   // opt-in Fogbound Floor traversal (dungeon 1 only): {cur, visited:[]}
   cam:{x:0,y:0},     // camera offset (logical px) for the roaming floor — follows the party
@@ -107,7 +108,7 @@ function snapshotState(){
   return { v:SAVE_VERSION, party, bench:state.bench, silver:state.silver, gems:state.gems,
     inventory:state.inventory, potions:state.potions, roomIdx:state.roomIdx,
     dungeonId:state.dungeonId, cleared:state.cleared, roomMax:state.roomMax, autoLevel:state.autoLevel,
-    fogbound:state.fogbound, floor:state.floor,
+    fogbound:state.fogbound, floor:state.floor, roamLevel:state.roamLevel,
     savedAt:new Date().toISOString() };
 }
 function saveGame(){ if(activeSlot!==null) writeSlot(activeSlot, snapshotState()); }
@@ -131,6 +132,7 @@ function loadGame(save){
   state.roomMax=Math.max(save.roomMax||0, state.roomIdx||0);   // reached rooms are jumpable on the minimap
   state.autoLevel=!!save.autoLevel;                            // per-save preference (off for older saves)
   state.fogbound=!!save.fogbound; state.floor=save.floor||null;   // Fogbound Floor opt-in + progress (dungeon 1)
+  state.roamLevel=Math.max(0,Math.min(LAST_ROAM_LEVEL, save.roamLevel|0));   // Misty Wetlands descent progress
 }
 const partyClasses=()=>party.length?[...new Set(party.map(h=>h.cls))]:["fighter","mage","cleric","rogue"];
 let combatRng=Math.random;  // reseeded deterministically when a fight starts / area changes
@@ -174,17 +176,18 @@ const FRAME={
   gold:{o:"#3a2405",c1:"#ffe08a",c2:"#c9862a",gem:"#ffd166",glow:"rgba(255,209,102,.5)"},
   blue:{o:"#101a3a",c1:"#7aa8ff",c2:"#2a4aa8",gem:"#9ad1ff",glow:"rgba(90,140,255,.4)"},
   boss:{o:"#2a0808",c1:"#ff9a5a",c2:"#b8321e",gem:"#ffdf6b",glow:"rgba(255,110,60,.55)"},
+  elite:{o:"#25082e",c1:"#e29bff",c2:"#8b2fb0",gem:"#f0b6ff",glow:"rgba(200,90,255,.55)"},
 };
 function rrp(g,x,y,w,h,r){ g.beginPath();
   g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r);
   g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); }
 /* bake a static framed tile (no HP/level — those draw live over it) */
 function tileOf(u){
-  const key=(u.cls||u.fig)+":"+u.figSeed+(u.boss?":b":"");
+  const key=(u.cls||u.fig)+":"+u.figSeed+(u.boss?":b":u.elite?":e":"");
   if(TILECACHE[key]) return TILECACHE[key];
   const S=u.boss?Math.round(T*1.28):Math.round(T*0.92), c=document.createElement("canvas");
   c.width=c.height=S*2; const g=c.getContext("2d"); g.scale(2,2);
-  const pal=u.boss?FRAME.boss:(u.team===0?FRAME.gold:FRAME.blue);
+  const pal=u.boss?FRAME.boss:(u.elite?FRAME.elite:(u.team===0?FRAME.gold:FRAME.blue));
   const r=S*0.16, bw=Math.max(3,S*0.08);
   // backing
   g.fillStyle=pal.o; rrp(g,1,1,S-2,S-2,r); g.fill();
@@ -340,52 +343,129 @@ const gC=()=>(state.room&&state.room.cols)||GCOLS;
 const ROAM_DUNGEON="frostmere";
 const roamingDungeon=id=>id===ROAM_DUNGEON;
 const roamingActive=()=>!!(state.room&&state.room.roaming);
-const FLOOR2={
-  cols:23, rows:20,
-  // sub-room rectangles (r,c top-left; h,w). Index 0 is the entrance; the last is the boss room.
-  rooms:[
-    {r:16,c:9, h:3,w:5},   // 0 · E  The Sinking Ford (entrance, bottom-centre)
-    {r:11,c:8, h:4,w:6},   // 1 · A  Reedmaw Hollow
-    {r:12,c:1, h:3,w:5},   // 2 · B  Drowned Larder   (WEST detour)
-    {r:12,c:17,h:3,w:5},   // 3 · C  Croaking Warren  (EAST)
-    {r:6, c:8, h:4,w:6},   // 4 · D  Sunken Causeway
-    {r:6, c:1, h:3,w:4},   // 5 · F  Mistcaller's Nook (WEST detour)
-    {r:6, c:17,h:4,w:5},   // 6 · G  The Bog Gallery   (EAST)
-    {r:1, c:9, h:3,w:5},   // 7 · H  Fen Approach
-    {r:0, c:15,h:4,w:6},   // 8 · Z  Mudmaw's Wallow   (boss, top-right)
-  ],
-  // corridors — the east side (C–G–Z) forms a loop back to the boss
-  links:[[0,1],[1,2],[1,3],[1,4],[4,5],[4,6],[4,7],[7,8],[3,6],[6,8]],
-  entry:0,
-  names:["The Sinking Ford","Reedmaw Hollow","Drowned Larder","Croaking Warren","Sunken Causeway","Mistcaller's Nook","The Bog Gallery","Fen Approach","Mudmaw's Wallow"],
-  // one enemy pack per room; deeper/side rooms field higher-level foes (dungeon 2 band is Lv 11–20)
-  packs:[
-    { room:1, lvl:11, comp:["rat","spider","goblin"] },
-    { room:2, lvl:12, comp:["skeleton","slime"], treasure:true },   // WEST cache
-    { room:3, lvl:12, comp:["goblin","kobold","harpy"] },
-    { room:4, lvl:14, comp:["wight","slime","goblin"] },
-    { room:5, lvl:14, comp:["skeleton","spider"], treasure:true },  // WEST cache
-    { room:6, lvl:15, comp:["wight","harpy","cutthroat"] },
-    { room:7, lvl:16, comp:["skeleton","kobold","wight"] },
-    { room:8, lvl:18, comp:["BOSS","skeleton","kobold"] },
-  ],
-};
-/* place every pack across the floor's sub-rooms (one big encounter the party roams through). */
+/* Three descending levels. Each is one larger-than-screen roaming floor of sub-rooms joined by
+   corridors; the last room holds that level's champion. Levels 1 & 2 end at a MINI-BOSS that GATES
+   the descent — you can't drop to the next level until it falls — and Level 3 ends at Mudmaw, the
+   floor boss (a full clear). Enemy levels ramp across the dungeon-2 band (Lv 11 → 20). */
+const FLOOR2_LEVELS=[
+  { // ---- Level 1 · Lv 11–15 · mini-boss Gribb guards the way down ----
+    cols:23, rows:20,
+    rooms:[
+      {r:16,c:9, h:3,w:5},   // 0 entrance (bottom-centre)
+      {r:11,c:8, h:4,w:6},   // 1
+      {r:11,c:1, h:3,w:5},   // 2 west cache
+      {r:6, c:9, h:4,w:6},   // 3
+      {r:1, c:9, h:4,w:6},   // 4 mini-boss
+    ],
+    links:[[0,1],[1,2],[1,3],[3,4]], entry:0,
+    names:["The Sinking Ford","Reedmaw Hollow","Drowned Larder","Sunken Steps","Gribb's Warren"],
+    miniboss:{ fig:"troll", name:"Gribb, the Reed Tyrant" },
+    packs:[
+      { room:1, lvl:11, comp:["rat","spider","goblin"] },
+      { room:2, lvl:12, comp:["skeleton","slime"], treasure:true },
+      { room:3, lvl:13, comp:["goblin","kobold","harpy"] },
+      { room:4, lvl:15, comp:["MINIBOSS","skeleton","kobold"] },
+    ],
+  },
+  { // ---- Level 2 · Lv 14–18 · mini-boss Sepshka; the right side loops back ----
+    cols:23, rows:20,
+    rooms:[
+      {r:16,c:1, h:3,w:5},   // 0 entrance (bottom-left)
+      {r:12,c:2, h:4,w:6},   // 1
+      {r:16,c:15,h:3,w:6},   // 2 bottom-right cache
+      {r:11,c:15,h:4,w:6},   // 3
+      {r:6, c:8, h:4,w:7},   // 4
+      {r:1, c:9, h:4,w:6},   // 5 mini-boss
+    ],
+    links:[[0,1],[0,2],[2,3],[1,4],[3,4],[4,5]], entry:0,
+    names:["Miremouth","Sunken Larder","The Bog Gallery","Croaking Warren","Silt Causeway","Sepshka's Hollow"],
+    miniboss:{ fig:"lich", name:"Sepshka, the Bog Warlock" },
+    packs:[
+      { room:1, lvl:14, comp:["wight","slime","goblin"] },
+      { room:2, lvl:15, comp:["skeleton","spider","harpy"], treasure:true },
+      { room:3, lvl:15, comp:["goblin","kobold","cutthroat"] },
+      { room:4, lvl:16, comp:["wight","harpy","skeleton"] },
+      { room:5, lvl:18, comp:["MINIBOSS","wight","kobold"] },
+    ],
+  },
+  { // ---- Level 3 · Lv 17–20 · Mudmaw, the Bog Fiend (final boss); east rooms loop to the lair ----
+    cols:23, rows:20,
+    rooms:[
+      {r:16,c:9, h:3,w:5},   // 0 entrance
+      {r:11,c:8, h:4,w:6},   // 1
+      {r:12,c:1, h:3,w:5},   // 2 west detour
+      {r:12,c:17,h:3,w:5},   // 3 east
+      {r:6, c:8, h:4,w:6},   // 4
+      {r:6, c:1, h:3,w:4},   // 5 west detour
+      {r:6, c:17,h:4,w:5},   // 6 east
+      {r:1, c:9, h:3,w:5},   // 7
+      {r:0, c:15,h:4,w:6},   // 8 boss
+    ],
+    links:[[0,1],[1,2],[1,3],[1,4],[4,5],[4,6],[4,7],[7,8],[3,6],[6,8]], entry:0,
+    names:["The Sinking Ford","Reedmaw Hollow","Drowned Larder","Croaking Warren","Sunken Causeway","Mistcaller's Nook","The Bog Gallery","Fen Approach","Mudmaw's Wallow"],
+    packs:[
+      { room:1, lvl:17, comp:["rat","spider","goblin"] },
+      { room:2, lvl:17, comp:["skeleton","slime"], treasure:true },
+      { room:3, lvl:18, comp:["goblin","kobold","harpy"] },
+      { room:4, lvl:18, comp:["wight","slime","goblin"] },
+      { room:5, lvl:18, comp:["skeleton","spider"], treasure:true },
+      { room:6, lvl:19, comp:["wight","harpy","cutthroat"] },
+      { room:7, lvl:19, comp:["skeleton","kobold","wight"] },
+      { room:8, lvl:20, comp:["BOSS","skeleton","kobold"] },
+    ],
+  },
+];
+const LAST_ROAM_LEVEL=FLOOR2_LEVELS.length-1;
+const curFloor=()=>FLOOR2_LEVELS[state.roamLevel||0];
+/* place every pack across the current level's sub-rooms (one big encounter the party roams through).
+   The last room's pack carries a MINIBOSS (levels 1–2) or the final BOSS (level 3). */
 function spawnRoaming(){
-  const d=activeDungeon(), rects=state.room.roomRects;
-  for(const pk of FLOOR2.packs){ const rect=rects[pk.room];
+  const d=activeDungeon(), fl=curFloor(), rects=state.room.roomRects;
+  state.miniAlive=false; state.bossInWave=false;
+  for(const pk of fl.packs){ const rect=rects[pk.room];
     const cells=[]; for(let r=rect.r+1;r<rect.r+rect.h-1;r++) for(let c=rect.c+1;c<rect.c+rect.w-1;c++) if(!isBlocked(state.room,r,c)) cells.push([r,c]);
     pk.comp.forEach((tok,i)=>{
       let cell=cells[(i*5+3)%(cells.length||1)]||[rect.cr,rect.cc], g=0;
       while(occupied(cell[0],cell[1])&&g++<cells.length) cell=cells[(i*5+3+g)%cells.length];
-      const f = tok==="BOSS"
-        ? makeEnemy(d.boss.fig,{level:d.band[1],name:d.boss.name,boss:true,stats:BAL.BOSS_BASE,xp:BAL.BOSS_BASE.xp})
-        : makeEnemy(tok,{level:pk.lvl,name:(d.roster&&d.roster[tok])||undefined});
+      let f;
+      if(tok==="BOSS"){
+        f=makeEnemy(d.boss.fig,{level:pk.lvl,name:d.boss.name,boss:true,stats:BAL.BOSS_BASE,xp:BAL.BOSS_BASE.xp});
+        f.finalboss=true; state.bossInWave=true;
+      } else if(tok==="MINIBOSS"){
+        const mb=fl.miniboss;
+        f=makeEnemy(mb.fig,{level:pk.lvl,name:mb.name,boss:true,stats:BAL.MINIBOSS_BASE,xp:BAL.MINIBOSS_BASE.xp});
+        f.miniboss=true; state.miniAlive=true;
+      } else {
+        f=makeEnemy(tok,{level:pk.lvl,name:(d.roster&&d.roster[tok])||undefined});
+      }
       f.r=cell[0]; f.c=cell[1]; f.rr=f.r; f.cc=f.c; f.moveT=1; f.next=state.t+0.5; f.roam=true; f.aggro=false; f.pack=pk.room;
       resetCombat(f); state.foes.push(f); figOf(f);
     });
   }
-  state.bossInWave=true;   // the floor's boss is always on the field → clearing everything is a boss kill
+}
+/* Spawn a lone ELITE — a random roster enemy, level-bumped and beefed, that (with bosses) is the only
+   non-boss to drop gear. Dropped into an un-cleared room as the party pushes deeper. */
+function spawnElite(){
+  const d=activeDungeon(), fl=curFloor(), rects=state.room.roomRects, room=state.room;
+  const cleared=room.cleared||new Set();
+  // prefer an un-cleared, non-entrance room the party hasn't wiped yet; fall back to any pack room
+  const bossRoom=fl.packs[fl.packs.length-1].room;
+  const pool=fl.packs.map(p=>p.room).filter(rm=>rm!==bossRoom && !cleared.has(rm));
+  const target=(pool.length?pool:fl.packs.map(p=>p.room))[ (combatRng()*(pool.length||fl.packs.length))|0 ];
+  const rect=rects[target]; if(!rect) return;
+  const cells=[]; for(let r=rect.r+1;r<rect.r+rect.h-1;r++) for(let c=rect.c+1;c<rect.c+rect.w-1;c++) if(!isBlocked(room,r,c)&&!occupied(r,c)) cells.push([r,c]);
+  if(!cells.length) return;
+  const cell=cells[(combatRng()*cells.length)|0];
+  const roster=Object.keys(d.roster||{rat:"Marsh Rat"});
+  const tok=roster[(combatRng()*roster.length)|0];
+  const baseLvl=(curFloor().packs.find(p=>p.room===target)||{lvl:d.band[0]}).lvl;
+  const f=makeEnemy(tok,{level:baseLvl+BAL.ELITE.LEVEL_BUMP, name:`Elite ${d.roster&&d.roster[tok]||tok}`});
+  f.maxhp=Math.round(f.maxhp*BAL.ELITE.HP_MULT); f.hp=f.maxhp;
+  f.atk=Math.round(f.atk*BAL.ELITE.ATK_MULT); f.xp=Math.round(f.xp*BAL.ELITE.XP_MULT);
+  f.elite=true; f.pack=-1;   // ungated: an elite doesn't hold a room's clear/heal accounting
+  f.r=cell[0]; f.c=cell[1]; f.rr=f.r; f.cc=f.c; f.moveT=1; f.next=state.t+0.5; f.roam=true; f.aggro=false;
+  resetCombat(f); state.foes.push(f); figOf(f);
+  log(`${iconImg("skull",14)} <span class="crit">An Elite ${d.roster&&d.roster[tok]||tok}</span> stalks the mire…`,"crit");
 }
 /* the camera glides to keep the party centred, panning in BOTH axes; clamped to the floor's extent. */
 function updateCamera(dt){
@@ -435,12 +515,14 @@ function roomTitle(d,idx){
 }
 function loadRoom(){
   const d=activeDungeon(), idx=state.roomIdx, L=LAYOUTS[idx];
-  if(roamingDungeon(d.id)){          // dungeon 2 is one big roaming floor, not a linear room chain
-    state.room=buildRoamingFloor((Date.now()&0x7fffffff)|0, { cols:FLOOR2.cols, rows:FLOOR2.rows, rooms:FLOOR2.rooms, links:FLOOR2.links, entry:FLOOR2.entry, tiles:d.tiles, palette:d.palette });
+  if(roamingDungeon(d.id)){          // dungeon 2 is a stack of roaming levels, not a linear room chain
+    const fl=curFloor();
+    state.room=buildRoamingFloor((Date.now()&0x7fffffff)|0, { cols:fl.cols, rows:fl.rows, rooms:fl.rooms, links:fl.links, entry:fl.entry, tiles:d.tiles, palette:d.palette });
     state.cam={x:0,y:0};
-    state.foes=[]; fxClear(); state.respawnAt=null; state.wipeAt=null; state.rally=null; state.bossInWave=false;
+    state.foes=[]; fxClear(); state.respawnAt=null; state.descendAt=null; state.wipeAt=null; state.rally=null; state.bossInWave=false; state.miniAlive=false; state.eliteRolls=0;
     placeHeroes(); updateCamera(1); spawnWave();
-    log(`— <span class="sys">${d.name}</span> — the mire opens before you —`);
+    const last=state.roamLevel>=LAST_ROAM_LEVEL;
+    log(`— <span class="sys">${d.name} · Level ${(state.roamLevel||0)+1}/${FLOOR2_LEVELS.length}</span> — ${last?"the fiend's lair looms":"the mire opens before you"} —`);
     return;
   }
   const spec={ title:roomTitle(d,idx), shape:L.shape, blockers:L.blockers,
@@ -715,13 +797,16 @@ function hurt(u,dmg,src,opt){
     fxDissolve(f,uxS(u),uyS(u)+4,S,S,u.team===0?"#9ad1ff":"#c98a8a");
     if(u.team===1&&src&&src.team===0){
       awardXP(u.xp);
-      const d=activeDungeon();
+      const d=activeDungeon(), roam=roamingActive();
       const dropChance=Math.min(BAL.DROP_CHANCE_MAX, BAL.DROP_CHANCE + BAL.DROP_CHANCE_PER_TIER*(d.power-1));
-      if(u.boss||combatRng()<dropChance){
-        // Only ONE roll popup at a time: while a loot ROLL is open, normal drops are skipped to prevent
-        // stacking (the battle rolls on behind it). Boss drops always come through. Drops that land while
-        // the character window is open still queue — they wait and show once that window is closed.
-        if(u.boss || !lootOpen){
+      // On the Misty Wetlands roaming floor, GEAR drops only from bosses (incl. mini-bosses) and elites;
+      // ordinary foes give gold/potions only. Other dungeons keep their small chance-based gear drops.
+      const gearDrop = roam ? (u.boss||u.elite) : (u.boss||combatRng()<dropChance);
+      if(gearDrop){
+        // Only ONE roll popup at a time: while a loot ROLL is open, ordinary drops are skipped to prevent
+        // stacking (the battle rolls on behind it). Boss/elite drops always come through. Drops that land
+        // while the character window is open still queue — they show once that window is closed.
+        if(u.boss || u.elite || !lootOpen){
           fxText(uxS(u),uyS(u)-30,"loot!","#ffd166");
           queueDrop({classes:partyClasses(), power:d.power, floor:d.dropFloor}, u.name);   // opens the slot-roll popup
         }
@@ -1048,18 +1133,41 @@ function act(u){
 /* wave clears -> schedule respawn; party wipes -> schedule revive (endless map) */
 function healWave(){ for(const h of party) if(h.alive){ const mh=derive(h).maxhp;
   h.hp=Math.min(mh, h.hp+Math.round(mh*BAL.WAVE_HEAL_FRAC)+Math.round(mh*waveHealFrac(h))); } renderParty(); }
-/* roaming floor: heal each time a sub-room's pack is wiped (mirrors the classic between-wave heal), and
-   count the FLOOR cleared when the BOSS falls — leftover trash in a skipped side-room doesn't gate it. */
+/* roaming floor: heal on each sub-room clear, roll an elite as the party pushes on, then gate progress —
+   a MINI-BOSS must fall before you can descend (levels 1–2); the FINAL boss clears the whole dungeon. */
 function updateRoaming(){
   const room=state.room; if(!room) return;
+  const fl=curFloor();
   if(!room.cleared) room.cleared=new Set();
-  for(const pk of FLOOR2.packs){ if(room.cleared.has(pk.room)) continue;
+  for(const pk of fl.packs){ if(room.cleared.has(pk.room)) continue;
     if(!state.foes.some(f=>f.alive&&f.pack===pk.room)){ room.cleared.add(pk.room);
       healWave(); log(`${iconImg("check",14)} <span class="sys">Room cleared.</span> The party presses on…`);
-      if(pk.treasure){ state.gems+=2; log(`${iconImg("gem",14)} <b>A hidden cache!</b> <span class="sys">+2 Runic Gems</span> for taking the detour.`,"sys"); updateHud(); } } }
-  if(state.bossInWave && !state.foes.some(f=>f.alive&&f.boss) && state.respawnAt===null){
-    state.bossInWave=false; onBossDown(); state.respawnAt=state.t+2.6;   // boss down → floor re-forms for another run
+      if(pk.treasure){ state.gems+=2; log(`${iconImg("gem",14)} <b>A hidden cache!</b> <span class="sys">+2 Runic Gems</span> for taking the detour.`,"sys"); updateHud(); }
+      maybeSpawnElite(); } }
+  if(state.descendAt!==null || state.respawnAt!==null) return;   // already resolving a transition
+  const last=state.roamLevel>=LAST_ROAM_LEVEL;
+  if(!last){
+    // MINI-BOSS gates the descent: you can't drop to the next level until it's dead
+    if(state.miniAlive && !state.foes.some(f=>f.alive&&f.miniboss)){
+      state.miniAlive=false; healWave();
+      log(`${iconImg("skull",14)} <span class="heal">${curFloor().miniboss.name} is slain!</span> <span class="sys">The way down opens…</span>`,"heal");
+      state.descendAt=state.t+2.4;   // brief beat, then the party descends
+    }
+  } else if(state.bossInWave && !state.foes.some(f=>f.alive&&f.finalboss)){
+    state.bossInWave=false; onBossDown(); state.respawnAt=state.t+2.6;   // final boss down → the dungeon re-forms from Level 1
   }
+}
+/* As you clear rooms, occasionally an elite prowls in — more likely the deeper you are. */
+function maybeSpawnElite(){
+  if(!roamingActive()) return;
+  const chance=Math.min(0.85, BAL.ELITE.CHANCE + (state.roamLevel||0)*BAL.ELITE.CHANCE_PER_LEVEL);
+  if(combatRng()<chance){ spawnElite(); state.eliteRolls=(state.eliteRolls||0)+1; }
+}
+/* Descend to the next roaming level: rebuild the floor, reform the party at its entrance, fight on. */
+function descendLevel(){
+  state.roamLevel=Math.min(LAST_ROAM_LEVEL, (state.roamLevel||0)+1);
+  loadRoom(); seedBattle(); state.phase="fight";
+  renderDungeonHeader(); saveGame();
 }
 function updateWaves(){
   const heroesAlive=party.some(h=>h.alive);
@@ -1244,6 +1352,7 @@ function openPartyScreen(){
 function startDungeon(id){
   state.dungeonId=dungeonById(id).id; state.roomIdx=0; state.roomMax=0; state.phase="idle";
   state.bossAt=null; state.bossInWave=false;      // boss is ready the first time you reach its room
+  state.roamLevel=0; state.descendAt=null;        // Misty Wetlands: a fresh delve starts at Level 1
   if(fogboundActive()) initFloor(); else state.floor=null;   // Fogbound Floor starts at its entrance
   loadRoom(); saveGame(); enterDungeon();
 }
@@ -1473,7 +1582,7 @@ function renderDungeonHeader(){
   const d=activeDungeon(), idx=state.roomIdx, max=state.roomMax||0, reach=Math.min(BOSS_ROOM,max+1);
   const roam=roamingActive();
   const fog=fogboundActive()&&state.floor;
-  const roomName = roam ? (d.sub||"The Mire")
+  const roomName = roam ? `${d.sub||"The Mire"} · Level ${(state.roamLevel||0)+1}/${FLOOR2_LEVELS.length}`
                  : fog ? (FLOOR.nodes[state.floor.cur].kind==="boss"?d.boss.name:FLOOR.nodes[state.floor.cur].name)
                        : (idx===BOSS_ROOM ? d.boss.name : LAYOUTS[idx].roomName);
   let mini;
@@ -1629,7 +1738,9 @@ function drawUnit(u){
     G.fillText(u.level, hx-hh*0.75, hy+hh/2); G.textBaseline="alphabetic";
   }
   if(u.boss){ G.fillStyle="#ffdf6b"; G.font="bold 8px monospace"; G.textAlign="center";
-    G.fillText("· BOSS ·",px,py-S/2-2); }
+    G.fillText(u.miniboss?"· MINI-BOSS ·":"· BOSS ·",px,py-S/2-2); }
+  else if(u.elite){ G.fillStyle="#e29bff"; G.font="bold 8px monospace"; G.textAlign="center";
+    G.fillText("· ELITE ·",px,py-S/2-2); }
 }
 /* rally flag: a small planted pennant heroes regroup on between fights */
 function drawFlag(cx,cy){
@@ -1729,9 +1840,11 @@ function loop(now){
           if(state.t>=u.next){ act(u); u.next=state.t+BAL.BASE_INTERVAL/derive(u).aspd+combatRng()*BAL.ASPD_JITTER; }
         }
         updateWaves();
-        // endless map: respawn a fresh wave on its timer (roaming → rebuild the whole floor for another run)
+        // mini-boss down → descend to the next roaming level once the short beat elapses
+        if(state.descendAt!==null && state.t>=state.descendAt){ state.descendAt=null; descendLevel(); }
+        // endless map: respawn a fresh wave on its timer (roaming → rebuild from Level 1 for another run)
         if(state.respawnAt!==null && state.t>=state.respawnAt){ state.respawnAt=null;
-          if(roamingActive()){ loadRoom(); seedBattle(); state.phase="fight"; } else spawnWave(); }
+          if(roamingActive()){ state.roamLevel=0; loadRoom(); seedBattle(); state.phase="fight"; } else spawnWave(); }
         // full wipe: pull back to the Keep (main revives free there; fallen pals need the Temple)
         if(state.wipeAt!==null && state.t>=state.wipeAt){ state.wipeAt=null; enterTown(true); }
         // prune slain FOES only (heroes are never pruned — they live in `party`, dead or alive)

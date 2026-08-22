@@ -47,6 +47,12 @@ export const BAL = {
   // ENEMY_SCALE), NOT from its figure's archetype — so a boss's difficulty is consistent across
   // dungeons and the dragon figure can't make a tier unwinnable. Tuned against tests/balance.sim.mjs.
   BOSS_BASE: { hp: 125, atk: 13, def: 18, dodge: 5, crit: 10, aspd: 0.92, rng: 1, xp: 90 },
+  // Mini-boss (guards the descent on the Misty Wetlands' upper levels): boss-flavoured but softer than
+  // a floor boss — a real wall you must break to go deeper, without being a full boss fight.
+  MINIBOSS_BASE: { hp: 78, atk: 12, def: 15, dodge: 5, crit: 10, aspd: 0.95, rng: 1, xp: 55 },
+  // Elite NPCs (random, spawn as you progress the roaming floor — "a bit harder"). A normal roster
+  // enemy, level-bumped and beefed, that (with bosses) is the only non-boss to drop gear.
+  ELITE: { LEVEL_BUMP: 3, HP_MULT: 1.7, ATK_MULT: 1.35, CHANCE: 0.34, CHANCE_PER_LEVEL: 0.12, XP_MULT: 2.4 },
   // loot scales with a dungeon's tier (1–10): rolled stat values ×(1 + LOOT_POWER_STEP*(tier-1)),
   // and drop/gem rates rise a little each tier. A dungeon's dropFloor sets the worst rarity it rolls.
   // The 0.75 step is what keeps party gear pacing enemy scaling through the deep tiers.

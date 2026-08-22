@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-22e · Stat points now scale by class — on top of the base (+4 HP / +1 else per point), Fighter gets +1 HP & +1 DEF, Mage +2 ATK, Rogue +1 Crit & +1 Dodge, Cleric +1 DEF & +1 ATK per point (applies to the main hero's point-buy and companion level-up rolls). Party fights in formation (tanks front, casters/support back, leashed together); dungeon 2 is the 2D Drowned Warren roaming floor";
+export const APP_BUILD = "2026-08-22f · The Misty Wetlands is now a 3-level descent — each roaming level ends at a mini-boss that GATES the way down (Gribb on Lv1, Sepshka on Lv2), with Mudmaw the final boss on Lv3; the floor re-forms after he falls. Random ELITE foes prowl in as you push deeper. Loot rule: only bosses, mini-bosses, and elites drop gear — ordinary foes give gold or the occasional potion. Class-scaled stat points; formation combat (tanks front, casters back)";
 
 const BUF = [];
 const MAX = 400;
