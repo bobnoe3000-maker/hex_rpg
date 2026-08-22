@@ -68,7 +68,7 @@ const state={ roomIdx:0, scene:"town", phase:"idle", room:null, foes:[], t:0, sp
   bossAt:null, bossInWave:false,       // when the boss may next appear (runtime) + is it on the field now
   roamLevel:0, roamUnlocked:0, miniAlive:false, eliteRolls:0,   // Misty Wetlands: current level (0–2), deepest UNLOCKED level, mini-boss up?, elites spawned
   roamBossAt:[null,null,null],   // per-level champion respawn time (runtime): a slain mini-boss/boss returns after BOSS_RESPAWN
-  roamObjective:null,   // {r,c} the champion's room — the party marches here so it always pushes toward the boss
+  roamObjective:null,   // {r,c} the living champion's room — the party marches here while it's up; cleared once the champion falls so the party mops up side rooms
   autoLevel:false,   // when true, companion level-ups resolve their own free roll (no popup, no silver)
   cam:{x:0,y:0},     // camera offset (logical px) for the roaming floor — follows the party
   rally:null };      // {r,c} flag heroes regroup on when no foe is engaged
@@ -490,12 +490,15 @@ const curFloor=()=>roamStack()[state.roamLevel||0];
 function spawnRoaming(){
   const d=activeDungeon(), fl=curFloor(), rects=state.room.roomRects;
   state.miniAlive=false; state.bossInWave=false;
-  // the party's march objective = the champion's room centre (last pack), so it always pushes to the boss
-  const champRect=rects[fl.packs[fl.packs.length-1].room];
-  state.roamObjective=champRect ? { r:Math.round(champRect.r+champRect.h/2), c:Math.round(champRect.c+champRect.w/2) } : null;
   // the level's champion (mini-boss/boss) only reforms once its respawn timer is up; until then its
   // room fields the pack's ordinary trash and a couple of farm foes so the level stays fightable
   const champAt=state.roamBossAt[state.roamLevel], champReady=(champAt==null || state.t>=champAt);
+  // march objective = the champion's room centre WHILE the champion is up, so the party reliably pushes
+  // through to it instead of stalling on a straggler. Once the champion falls (its token dropped while on
+  // cooldown) there's no objective, so the party plain auto-seeks and mops up every bypassed side room —
+  // which is what lets a level fully clear and then re-form in place.
+  const champRect=rects[fl.packs[fl.packs.length-1].room];
+  state.roamObjective=(champRect && champReady) ? { r:Math.round(champRect.r+champRect.h/2), c:Math.round(champRect.c+champRect.w/2) } : null;
   for(const pk of fl.packs){ const rect=rects[pk.room];
     const cells=[]; for(let r=rect.r+1;r<rect.r+rect.h-1;r++) for(let c=rect.c+1;c<rect.c+rect.w-1;c++) if(!isBlocked(state.room,r,c)) cells.push([r,c]);
     // when the champion is on cooldown, drop its token from the pack and top up with farm trash
@@ -520,6 +523,15 @@ function spawnRoaming(){
       resetCombat(f); state.foes.push(f); figOf(f);
     });
   }
+}
+/* Endless re-form on the SAME roaming level: repopulate the rooms in place (the champion still gated by
+   its respawn timer) WITHOUT rebuilding the floor or moving the party — they auto-seek from wherever
+   they stand. Used when a level is fully cleared; a fresh delve / descent still forms up at the entrance. */
+function reformRoaming(){
+  state.foes=[]; fxClear();
+  if(state.room) state.room.cleared=new Set();   // rooms become clearable again
+  spawnRoaming();                                // repopulate (champion only if its timer is up)
+  seedBattle(); state.phase="fight";
 }
 /* Spawn a lone ELITE — a random roster enemy, level-bumped and beefed, that (with bosses) is the only
    non-boss to drop gear. Dropped into an un-cleared room as the party pushes deeper. */
@@ -1235,7 +1247,7 @@ function updateRoaming(){
   // MINI-BOSS death UNLOCKS the descent — the player chooses when to move via the level selector.
   // The mini-boss then goes on a respawn timer (like a floor boss); its room farms trash until it returns.
   if(state.miniAlive && !state.foes.some(f=>f.alive&&f.miniboss)){
-    state.miniAlive=false; state.roamBossAt[state.roamLevel]=state.t+BAL.BOSS_RESPAWN;
+    state.miniAlive=false; state.roamObjective=null; state.roamBossAt[state.roamLevel]=state.t+BAL.BOSS_RESPAWN;
     const nx=(state.roamLevel||0)+1;
     if(nx>(state.roamUnlocked||0)){ state.roamUnlocked=nx;
       log(`${iconImg("skull",14)} <span class="heal">${fl.miniboss.name} is slain!</span> <span class="sys">Level ${nx+1} unlocked — tap it in the header to descend.</span>`,"heal");
@@ -1246,7 +1258,7 @@ function updateRoaming(){
   // FINAL boss death → the dungeon is cleared (first-clear reward, all levels stay unlocked); it too
   // returns on the respawn timer so the lair keeps farming trash in the meantime.
   if(state.bossInWave && !state.foes.some(f=>f.alive&&f.finalboss)){
-    state.bossInWave=false; state.roamUnlocked=lastRoamLevel(); state.roamBossAt[state.roamLevel]=state.t+BAL.BOSS_RESPAWN; onBossDown();
+    state.bossInWave=false; state.roamObjective=null; state.roamUnlocked=lastRoamLevel(); state.roamBossAt[state.roamLevel]=state.t+BAL.BOSS_RESPAWN; onBossDown();
     log(`${iconImg("skull",14)} <span class="sys">${activeDungeon().boss.name} will return in ~${Math.round(BAL.BOSS_RESPAWN/60)} min.</span>`,"sys");
   }
   // Endless: once the current level is fully cleared, re-form it after a beat so it stays farmable.
@@ -1900,10 +1912,11 @@ function loop(now){
           if(state.t>=u.next){ act(u); u.next=state.t+BAL.BASE_INTERVAL/derive(u).aspd+combatRng()*BAL.ASPD_JITTER; }
         }
         updateWaves();
-        // endless map: respawn a fresh wave on its timer (roaming → re-form the CURRENT level for another lap;
-        // the player changes levels only via the header selector, never automatically)
+        // endless map: respawn on the timer. Roaming re-forms the CURRENT level IN PLACE — NPCs respawn
+        // and the party keeps auto-seeking from where they stand (no jump back to the entrance); the player
+        // changes levels only via the header selector.
         if(state.respawnAt!==null && state.t>=state.respawnAt){ state.respawnAt=null;
-          if(roamingActive()){ loadRoom(); seedBattle(); state.phase="fight"; } else spawnWave(); }
+          if(roamingActive()){ reformRoaming(); } else spawnWave(); }
         // full wipe: pull back to the Keep (main revives free there; fallen pals need the Temple)
         if(state.wipeAt!==null && state.t>=state.wipeAt){ state.wipeAt=null; enterTown(true); }
         // prune slain FOES only (heroes are never pruned — they live in `party`, dead or alive)

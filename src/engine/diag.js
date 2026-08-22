@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-22m · The Shaded Foothills (dungeon 1) is now a roaming 3-level descent too — camera follows the party, mini-bosses Thornjaw and Old Grum gate the way down, and the ridge ends at Mosstooth. Roaming floors are now per-dungeon data (any dungeon can convert). The party marches to the level objective so it never stalls on a straggler. The old Fogbound playtest mode is retired. Bag sorted upgrades-first with a filter; diagnostics export full per-character stats";
+export const APP_BUILD = "2026-08-22n · Roaming levels no longer teleport the party back to the entrance after a mini-boss/boss falls — the level re-forms its NPCs in place and the party auto-seeks from wherever it stands. Once a champion is slain the party mops up any bypassed side rooms before the floor re-forms. The Shaded Foothills (dungeon 1) is a roaming 3-level descent (Thornjaw, Old Grum, Mosstooth); roaming floors are per-dungeon data. Bag sorted upgrades-first with a filter; diagnostics export full per-character stats";
 
 const BUF = [];
 const MAX = 400;
