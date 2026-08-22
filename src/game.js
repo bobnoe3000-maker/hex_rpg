@@ -1912,19 +1912,49 @@ function loop(now){
   }
   requestAnimationFrame(loop);
 }
+/* Full stat breakdown for one hero — derived (final) stats, the class/level BASE they grow from, the
+   contribution from gear and from spent points, so a HP/DEF gap between heroes is explainable at a glance. */
+function charStats(h){
+  const D=derive(h), isMain=h===party[0];
+  const STATS=["hp","atk","def","dodge","crit"];
+  const gear={}; for(const st of STATS){ let s=0; for(const slot in (h.gear||{})){ const it=h.gear[slot]; if(it&&it[st]) s+=it[st]; } if(s) gear[st]=Math.round(s*10)/10; }
+  const spent={}; let spentN=0; for(const k of ASSIGNABLE){ const n=(h.pts&&h.pts[k])||0; if(n){ spent[k]=n; spentN+=n; } }
+  const ptHp=(h.pts&&h.pts.hp||0)*stepFor(h,"hp");   // HP contributed by allocated points
+  return {
+    name:h.name, cls:h.cls, lv:h.level, main:isMain, alive:h.alive,
+    // final (what actually fights)
+    HP:`${h.hp}/${D.maxhp}`, maxhp:D.maxhp, ATK:D.atk, DEF:D.def, Dodge:D.dodge, Crit:D.crit,
+    Speed:+D.aspd.toFixed(2), Range:D.rng>1?`ranged(${D.rng})`:"melee",
+    // where the HP came from
+    baseMaxhp:h.maxhp,          // class/level base (companions grow this per level; the MAIN hero does NOT)
+    hpFromGear:gear.hp||0, hpFromPoints:ptHp,
+    // full base block (raw, before gear/points)
+    base:{ hp:h.maxhp, atk:h.atk, def:h.def, dodge:h.dodge, crit:h.crit, aspd:h.aspd },
+    gearBonus:gear, gearEquipped:Object.values(h.gear||{}).filter(Boolean).length,
+    pointsSpent:spentN?spent:undefined,
+    points: isMain?{ earned:earnedPoints(h.level), spent:spentN, unspent:unspentPoints(h) }:undefined,
+    skills:{ learned:Object.keys(h.skills||{}).length, spent:spentSkillPoints(h), unspent:unspentSkillPoints(h) },
+  };
+}
 /* assemble a copy-pasteable diagnostics export: live state + captured errors + combat log */
 function buildDiagnostics(){
   const snap={ scene:state.scene, phase:state.phase, panelShown:panelShown(), frozen:uiFrozen,
-    speed:state.speed, roomIdx:state.roomIdx, rally:state.rally, silver:state.silver, gems:state.gems,
+    speed:state.speed, roomIdx:state.roomIdx, roamLevel:state.roamLevel, rally:state.rally, silver:state.silver, gems:state.gems,
     foes:state.foes.length, heroesAlive:liveHeroes().length, inventory:state.inventory.length, recruits:state.recruits.length,
-    respawnAt:state.respawnAt, wipeAt:state.wipeAt, loopErrs:loop._errs||0,
-    party:party.map(h=>({name:h.name,cls:h.cls,lv:h.level,hp:h.hp,alive:h.alive})) };
+    respawnAt:state.respawnAt, wipeAt:state.wipeAt, loopErrs:loop._errs||0 };
+  // live foes on the field, with their scaled stats — so an over-tuned pack is visible next to the party
+  const foes=state.foes.filter(f=>f.alive).map(f=>{ const D=derive(f);
+    return { name:f.name, lv:f.level, hp:`${f.hp}/${D.maxhp}`, ATK:D.atk, DEF:D.def, Dodge:D.dodge, Crit:D.crit, Speed:+D.aspd.toFixed(2),
+      kind:f.finalboss?"boss":f.miniboss?"mini-boss":f.elite?"elite":"trash" }; });
   const logLines=[...logEl.children].slice(-40).map(d=>d.textContent).join("\n");
   return [
     `Dungeon Pals — The Emberdeep · diagnostics`,
     `build: ${APP_BUILD}`,
     `time: ${new Date().toISOString()}`,
     ``, `== state ==`, JSON.stringify(snap,null,2),
+    ``, `== party (full stats) ==`, JSON.stringify(party.map(charStats),null,2),
+    ...(state.bench&&state.bench.length?[``, `== bench ==`, JSON.stringify(state.bench.map(charStats),null,2)]:[]),
+    ``, `== foes on field ==`, foes.length?JSON.stringify(foes,null,2):"(none)",
     ``, `== event / error log ==`, diagText()||"(none)",
     ``, `== combat log (recent) ==`, logLines||"(empty)",
   ].join("\n");
