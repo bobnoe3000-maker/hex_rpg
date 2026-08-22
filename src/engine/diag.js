@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-22i · Loot Roll: the item name and assembled card now stay hidden until the reels settle, so the initial drop no longer spoils its own result mid-spin. Misty Wetlands mini-bosses respawn on a ~10-min timer; tiered gear-drop odds (elite 25% / mini-boss 50% / boss 100%); manual level selector; class-scaled stat points; formation combat";
+export const APP_BUILD = "2026-08-22j · Potion belt: the stash's Equip button is now 'Equip All' (loads the whole stack), with an extra '×10' button that equips just ten at a time (shown on stacks over 10). Loot Roll hides the item name until the reels settle; Misty Wetlands mini-bosses on a ~10-min timer with tiered gear odds (elite 25% / mini 50% / boss 100%); manual level selector; class-scaled stat points";
 
 const BUF = [];
 const MAX = 400;

@@ -157,6 +157,8 @@ function injectCss() {
     cursor:pointer;background:linear-gradient(#e0b063,#a8722a);color:#241606;box-shadow:0 2px 0 #6e4a14;flex:0 0 auto}
   .cp-btn.off{background:linear-gradient(#2c2342,#1c1630);color:var(--parchment);box-shadow:0 2px 0 #100b1c}
   .cp-btn:active{transform:translateY(1px)}
+  .cp-pbtns{display:flex;gap:5px;flex:0 0 auto}
+  .cp-btn.sm{padding:6px 8px;font-size:10.5px;background:linear-gradient(#2c2342,#1c1630);color:var(--parchment);box-shadow:0 2px 0 #100b1c}
   .cp-none{opacity:.55;font-size:11.5px;font-style:italic;padding:2px}
   .cp-pts{background:#120d1c;border:1px solid var(--line);border-radius:8px;padding:7px 9px;margin-bottom:10px}
   .cp-pts-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
@@ -424,7 +426,7 @@ export function openCharacter(hero, ctx) {
       const slot = eq && eq.qty > 0
         ? `<div class="cp-slot" style="cursor:default">${flaskSvg(POTION_BY_ID[eq.type].color, 24)}<span class="it"><b>${potionName(eq.type, eq.size)}</b> <span style="color:#9ad1ff">×${eq.qty}</span><br><small>${potionEffectText(eq.type, eq.size)}</small></span><button class="cp-btn off" data-punequip>✕</button></div>`
         : `<div class="cp-slot" style="cursor:default"><span class="it cp-empty">— no potion equipped —</span></div>`;
-      const stackRow = (s, i) => `<div class="cp-item"><div class="cp-irow">${flaskSvg(POTION_BY_ID[s.type].color, 24)}<span class="it"><b>${potionName(s.type, s.size)}</b> <span style="color:#9ad1ff">×${s.qty}</span><br><small>${potionEffectText(s.type, s.size)} · ${POTION_BY_ID[s.type].cd}s cd</small></span><button class="cp-btn" data-pequip="${i}">Equip</button></div></div>`;
+      const stackRow = (s, i) => `<div class="cp-item"><div class="cp-irow">${flaskSvg(POTION_BY_ID[s.type].color, 24)}<span class="it"><b>${potionName(s.type, s.size)}</b> <span style="color:#9ad1ff">×${s.qty}</span><br><small>${potionEffectText(s.type, s.size)} · ${POTION_BY_ID[s.type].cd}s cd</small></span><div class="cp-pbtns">${s.qty > 10 ? `<button class="cp-btn sm" data-pequip10="${i}">×10</button>` : ""}<button class="cp-btn" data-pequip="${i}">Equip All</button></div></div></div>`;
       return `<div class="cp-sec"><span>Potion Belt</span><span class="hint">auto-quaffed in battle on a cooldown</span></div>
         ${slot}
         <div class="cp-sec"><span>Potions${stash.length ? "" : " — none"}</span></div>
@@ -642,7 +644,11 @@ export function openCharacter(hero, ctx) {
     const pun = overlay.querySelector("[data-punequip]"); if (pun && ctx.potion) pun.onclick = () => { ctx.potion.unequip(); render(); };
     overlay.querySelectorAll("[data-pequip]").forEach(b => b.onclick = () => {
       const s = ctx.potion && ctx.potion.stash()[+b.getAttribute("data-pequip")];
-      if (s) { ctx.potion.equip(s); render(); }
+      if (s) { ctx.potion.equip(s); render(); }               // Equip All — the whole stack (up to the cap)
+    });
+    overlay.querySelectorAll("[data-pequip10]").forEach(b => b.onclick = () => {
+      const s = ctx.potion && ctx.potion.stash()[+b.getAttribute("data-pequip10")];
+      if (s) { ctx.potion.equip(s, 10); render(); }           // ×10 — only ten at a time
     });
     // attribute point-buy: draft with +/−, Reset discards, Confirm commits via ctx.assign
     overlay.querySelectorAll("[data-inc]").forEach(b => b.onclick = () => {

@@ -1283,7 +1283,7 @@ function openHero(h){
     potion: {                // the belt: equipped brew + shared stash + load/unload
       equipped: ()=>h.potion,
       stash: ()=>state.potions,
-      equip: stack=>equipPotion(h,stack),
+      equip: (stack,n)=>equipPotion(h,stack,n),
       unequip: ()=>unequipPotion(h),
     },
     gems: ()=>state.gems,
@@ -1414,10 +1414,12 @@ function takePotion(type,size,n){   // pull up to n from the stash; returns how 
   const i=state.potions.findIndex(s=>s.type===type&&s.size===size); if(i<0) return 0;
   const st=state.potions[i], take=Math.min(st.qty,n); st.qty-=take; if(st.qty<=0) state.potions.splice(i,1); return take;
 }
-/* load a whole stash stack onto a hero's belt (merges same brew, swaps different, caps at 99). */
-function equipPotion(h,stack){
+/* load potions from a stash stack onto a hero's belt (merges same brew, swaps different, caps at 99).
+   `n` limits how many to take (default = the whole stack, up to the cap). */
+function equipPotion(h,stack,n=POTION_CAP){
   if(!stack) return false;
-  const take=takePotion(stack.type,stack.size,POTION_CAP); if(!take) return false;
+  const want=Math.max(1,Math.min(POTION_CAP,n|0));
+  const take=takePotion(stack.type,stack.size,want); if(!take) return false;
   const same=h.potion&&h.potion.qty>0&&h.potion.type===stack.type&&h.potion.size===stack.size;
   if(same){ const room=POTION_CAP-h.potion.qty, add=Math.min(room,take); h.potion.qty+=add;
     if(take-add>0) addPotion(stack.type,stack.size,take-add); }
