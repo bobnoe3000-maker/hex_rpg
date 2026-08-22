@@ -320,36 +320,47 @@ function randFloor(pred){
   const [r,c]=cells[Math.floor(combatRng()*cells.length)];
   return {r,c};
 }
-/* current grid height — the roaming floor is taller than the classic 8×11 (width stays GCOLS). */
+/* current grid dimensions — the roaming floor is a true 2D level, bigger than the classic 8×11 in
+   BOTH axes; classic rooms fall back to the constants. */
 const gR=()=>(state.room&&state.room.rows)||GROWS;
+const gC=()=>(state.room&&state.room.cols)||GCOLS;
 
-/* ---------- Roaming Floor (The Misty Wetlands / dungeon 2): one tall, larger-than-screen level of
-   sub-rooms joined by corridors. The camera scrolls vertically to follow the party as it climbs and
-   fights room to room. Reuses all combat — enemies are just placed across the floor at once (with an
-   aggro range so distant rooms wake as you approach). ---------- */
+/* ---------- Roaming Floor (The Misty Wetlands / dungeon 2): one 2D, larger-than-screen level of
+   sub-rooms joined by corridors that branch east, west and up (the "Drowned Warren"). The camera
+   follows the party in BOTH axes as it roams and fights room to room. Reuses all combat — every pack
+   is placed across the floor at once (with an aggro range so distant rooms wake as you approach). The
+   eastern rooms form a loop, so there are two routes to the boss. ---------- */
 const ROAM_DUNGEON="frostmere";
 const roamingDungeon=id=>id===ROAM_DUNGEON;
 const roamingActive=()=>!!(state.room&&state.room.roaming);
 const FLOOR2={
-  rows:30,
-  // sub-room rectangles (r,c top-left; h,w) — index 0 is the bottom entrance, last is the boss room
+  cols:23, rows:20,
+  // sub-room rectangles (r,c top-left; h,w). Index 0 is the entrance; the last is the boss room.
   rooms:[
-    {r:24,c:2,h:5,w:4},   // 0 · entrance (bottom)
-    {r:18,c:1,h:5,w:6},   // 1 · fight
-    {r:12,c:2,h:5,w:5},   // 2 · fight (junction)
-    {r:7, c:0,h:4,w:4},   // 3 · treasure (left dead-end branch)
-    {r:6, c:4,h:5,w:4},   // 4 · fight
-    {r:0, c:1,h:6,w:6},   // 5 · boss (top)
+    {r:16,c:9, h:3,w:5},   // 0 · E  The Sinking Ford (entrance, bottom-centre)
+    {r:11,c:8, h:4,w:6},   // 1 · A  Reedmaw Hollow
+    {r:12,c:1, h:3,w:5},   // 2 · B  Drowned Larder   (WEST detour)
+    {r:12,c:17,h:3,w:5},   // 3 · C  Croaking Warren  (EAST)
+    {r:6, c:8, h:4,w:6},   // 4 · D  Sunken Causeway
+    {r:6, c:1, h:3,w:4},   // 5 · F  Mistcaller's Nook (WEST detour)
+    {r:6, c:17,h:4,w:5},   // 6 · G  The Bog Gallery   (EAST)
+    {r:1, c:9, h:3,w:5},   // 7 · H  Fen Approach
+    {r:0, c:15,h:4,w:6},   // 8 · Z  Mudmaw's Wallow   (boss, top-right)
   ],
-  links:[[0,1],[1,2],[2,3],[2,4],[4,5]],   // corridors; room 3 is an optional detour off the climb
+  // corridors — the east side (C–G–Z) forms a loop back to the boss
+  links:[[0,1],[1,2],[1,3],[1,4],[4,5],[4,6],[4,7],[7,8],[3,6],[6,8]],
   entry:0,
-  // one enemy pack per room; deeper rooms field higher-level foes (dungeon 2 band is Lv 11–20)
+  names:["The Sinking Ford","Reedmaw Hollow","Drowned Larder","Croaking Warren","Sunken Causeway","Mistcaller's Nook","The Bog Gallery","Fen Approach","Mudmaw's Wallow"],
+  // one enemy pack per room; deeper/side rooms field higher-level foes (dungeon 2 band is Lv 11–20)
   packs:[
     { room:1, lvl:11, comp:["rat","spider","goblin"] },
-    { room:2, lvl:13, comp:["goblin","slime","kobold"] },
-    { room:3, lvl:14, comp:["skeleton","skeleton"], treasure:true },
-    { room:4, lvl:15, comp:["wight","harpy","cutthroat"] },
-    { room:5, lvl:18, comp:["BOSS","skeleton","kobold"] },
+    { room:2, lvl:12, comp:["skeleton","slime"], treasure:true },   // WEST cache
+    { room:3, lvl:12, comp:["goblin","kobold","harpy"] },
+    { room:4, lvl:14, comp:["wight","slime","goblin"] },
+    { room:5, lvl:14, comp:["skeleton","spider"], treasure:true },  // WEST cache
+    { room:6, lvl:15, comp:["wight","harpy","cutthroat"] },
+    { room:7, lvl:16, comp:["skeleton","kobold","wight"] },
+    { room:8, lvl:18, comp:["BOSS","skeleton","kobold"] },
   ],
 };
 /* place every pack across the floor's sub-rooms (one big encounter the party roams through). */
@@ -369,15 +380,17 @@ function spawnRoaming(){
   }
   state.bossInWave=true;   // the floor's boss is always on the field → clearing everything is a boss kill
 }
-/* the camera glides vertically to keep the party centred; clamped to the floor's extent. */
+/* the camera glides to keep the party centred, panning in BOTH axes; clamped to the floor's extent. */
 function updateCamera(dt){
   if(!roamingActive()){ state.cam.x=0; state.cam.y=0; return; }
   const alive=party.filter(h=>h.alive);
-  let ty=state.cam.y;
-  if(alive.length){ const avg=alive.reduce((s,h)=>s+uyS(h),0)/alive.length; ty=avg-CH/2; }
+  let tx=state.cam.x, ty=state.cam.y;
+  if(alive.length){ tx=alive.reduce((s,h)=>s+uxS(h),0)/alive.length - CW/2;
+                    ty=alive.reduce((s,h)=>s+uyS(h),0)/alive.length - CH/2; }
+  tx=Math.max(0, Math.min(Math.max(0,state.room.worldW-CW), tx));
   ty=Math.max(0, Math.min(Math.max(0,state.room.worldH-CH), ty));
   const k=Math.min(1, dt*3.5);
-  state.cam.y += (ty-state.cam.y)*k; state.cam.x=0;
+  state.cam.x += (tx-state.cam.x)*k; state.cam.y += (ty-state.cam.y)*k;
 }
 
 /* build one enemy from a composition token for the active dungeon at the given room depth */
@@ -416,7 +429,7 @@ function roomTitle(d,idx){
 function loadRoom(){
   const d=activeDungeon(), idx=state.roomIdx, L=LAYOUTS[idx];
   if(roamingDungeon(d.id)){          // dungeon 2 is one big roaming floor, not a linear room chain
-    state.room=buildRoamingFloor((Date.now()&0x7fffffff)|0, { rows:FLOOR2.rows, rooms:FLOOR2.rooms, links:FLOOR2.links, entry:FLOOR2.entry, tiles:d.tiles, palette:d.palette });
+    state.room=buildRoamingFloor((Date.now()&0x7fffffff)|0, { cols:FLOOR2.cols, rows:FLOOR2.rows, rooms:FLOOR2.rooms, links:FLOOR2.links, entry:FLOOR2.entry, tiles:d.tiles, palette:d.palette });
     state.cam={x:0,y:0};
     state.foes=[]; fxClear(); state.respawnAt=null; state.wipeAt=null; state.rally=null; state.bossInWave=false;
     placeHeroes(); updateCamera(1); spawnWave();
@@ -461,13 +474,14 @@ const DIRS=[[1,0],[-1,0],[0,1],[0,-1]];
    unit just holds a tick when the downhill cell is momentarily occupied). Cheap on this 8×11 grid.
    Flat array indexed r*GCOLS+c; -1 = unreachable / off-grid. */
 function distField(tr,tc){
-  const dist=new Int16Array(gR()*GCOLS).fill(-1);      // gR() = grid height (taller on the roaming floor)
+  const W=gC();                                        // grid width (wider on the 2D roaming floor)
+  const dist=new Int16Array(gR()*W).fill(-1);
   if(isBlocked(state.room,tr,tc)) return dist;         // target on a wall/off-grid → all -1 (caller falls back)
-  const q=[[tr,tc]]; dist[tr*GCOLS+tc]=0;
-  for(let i=0;i<q.length;i++){ const r=q[i][0], c=q[i][1], d=dist[r*GCOLS+c];
+  const q=[[tr,tc]]; dist[tr*W+tc]=0;
+  for(let i=0;i<q.length;i++){ const r=q[i][0], c=q[i][1], d=dist[r*W+c];
     for(const [dr,dc] of DIRS){ const nr=r+dr, nc=c+dc;
       if(isBlocked(state.room,nr,nc)) continue;        // wall or off-grid
-      const idx=nr*GCOLS+nc; if(dist[idx]!==-1) continue;
+      const idx=nr*W+nc; if(dist[idx]!==-1) continue;
       dist[idx]=d+1; q.push([nr,nc]); } }
   return dist;
 }
@@ -477,15 +491,15 @@ function distField(tr,tc){
    target is walled off in a separate pocket (rare), so units still try in the open. */
 function stepToward(u,tg){
   const opts=stepOpts(u); if(!opts.length) return;      // fully boxed in for this action
-  const df=distField(tg.r,tg.c);
-  const here=df[u.r*GCOLS+u.c];
+  const df=distField(tg.r,tg.c), W=gC();
+  const here=df[u.r*W+u.c];
   if(here>0){
     // Prefer the free neighbour with the lowest field value (strictly downhill routes around walls).
     // Never step to a farther cell; when the downhill cell is blocked by a stationary ally, a lateral
     // (same-distance) slip is allowed to get past it — but stepping back onto the cell we just left is
     // penalised so two units never jitter A↔B forever.
     let best=null,bd=Infinity;
-    for(const p of opts){ const d=df[p.r*GCOLS+p.c]; if(d<0 || d>here) continue;   // unreachable or no progress
+    for(const p of opts){ const d=df[p.r*W+p.c]; if(d<0 || d>here) continue;   // unreachable or no progress
       const score=d + ((p.r===u.rr && p.c===u.cc) ? 0.5 : 0);
       if(score<bd){ bd=score; best=p; } }
     if(best) moveTo(u,best);                            // else hold — every option is blocked or uphill this tick
@@ -1436,7 +1450,7 @@ cvG.addEventListener("click", e=>{
   const px=(e.clientX-rect.left)/rect.width*CW, py=(e.clientY-rect.top)/rect.height*CH;
   const cam=state.cam||{x:0,y:0};                                     // roaming: the floor is scrolled under the viewport
   const c=Math.floor((px+cam.x-cx0g(0))/T), r=Math.floor((py+cam.y-cy0g(0))/T);
-  if(r<0||c<0||r>=gR()||c>=GCOLS||isBlocked(state.room,r,c)) return;   // any reachable floor cell
+  if(r<0||c<0||r>=gR()||c>=gC()||isBlocked(state.room,r,c)) return;   // any reachable floor cell
   state.rally={r,c};
 });
 
@@ -1530,42 +1544,37 @@ function render(dt){
 /* torch-lit fog: darken the viewport toward the edges, brightest on the party's position */
 function drawTorch(cam){
   const alive=party.filter(h=>h.alive);
+  const px=alive.length ? alive.reduce((s,h)=>s+uxS(h),0)/alive.length - cam.x : CW/2;
   const py=alive.length ? alive.reduce((s,h)=>s+uyS(h),0)/alive.length - cam.y : CH/2;
-  const grd=G.createRadialGradient(CW/2,py,40, CW/2,py,CH*0.62);
-  grd.addColorStop(0,"rgba(6,4,9,0)"); grd.addColorStop(.62,"rgba(6,4,9,.35)"); grd.addColorStop(1,"rgba(6,4,9,.82)");
+  const grd=G.createRadialGradient(px,py,44, px,py,CH*0.66);
+  grd.addColorStop(0,"rgba(6,4,9,0)"); grd.addColorStop(.6,"rgba(6,4,9,.32)"); grd.addColorStop(1,"rgba(6,4,9,.8)");
   G.fillStyle=grd; G.fillRect(0,0,CW,CH);
 }
-/* corner minimap: the whole tall floor scaled down, sub-rooms revealed as the party enters them,
-   with the party marker and remaining (woken) foes. */
+/* corner minimap: the whole 2D floor scaled to fit, sub-rooms revealed as the party enters them, with
+   the party marker, woken foes, and the camera window (which now pans in both axes). */
 function drawRoamMinimap(cam){
   const room=state.room, rects=room.roomRects; if(!rects) return;
   if(!room.seen) room.seen=new Set();
-  // reveal any room the party currently stands in (+ its immediate corridor neighbours stay hidden until entered)
   for(let i=0;i<rects.length;i++){ const rc=rects[i];
     if(party.some(h=>h.alive && h.r>=rc.r-1 && h.r<rc.r+rc.h+1 && h.c>=rc.c-1 && h.c<rc.c+rc.w+1)) room.seen.add(i); }
-  const mw=64, pad=8, mh=Math.round(mw*room.rows/GCOLS*0.5), x0=CW-mw-8, y0=8;
+  const boxW=80, boxH=72, pad=6, x0=CW-boxW-8, y0=8;
+  const sc=Math.min((boxW-pad*2)/room.cols, (boxH-pad*2)/room.rows);
+  const ox=x0+(boxW-room.cols*sc)/2, oy=y0+(boxH-room.rows*sc)/2;
   G.save();
-  G.fillStyle="rgba(10,8,18,.8)"; G.strokeStyle="#4a3d68"; G.lineWidth=1;
-  roundRect(G,x0-4,y0-4,mw+8,mh+8,6); G.fill(); G.stroke();
-  const sx=mw/GCOLS, sy=mh/room.rows;
-  for(let i=0;i<rects.length;i++){ const rc=rects[i];
-    const seen=room.seen.has(i), boss=i===rects.length-1;
-    G.fillStyle = !seen?"#221a30" : boss?"#5a2420":"#3a4a2c";
-    G.globalAlpha = seen?1:.5;
-    G.fillRect(x0+rc.c*sx, y0+rc.r*sy, rc.w*sx, rc.h*sy);
-    G.globalAlpha=1;
-  }
-  // remaining foes (only the ones that have woken, so unexplored packs stay hidden)
+  G.fillStyle="rgba(10,8,18,.82)"; G.strokeStyle="#4a3d68"; G.lineWidth=1;
+  roundRect(G,x0,y0,boxW,boxH,6); G.fill(); G.stroke();
+  for(let i=0;i<rects.length;i++){ const rc=rects[i], seen=room.seen.has(i), boss=i===rects.length-1;
+    G.fillStyle = !seen?"#221a30" : boss?"#5a2420":"#3a4a2c"; G.globalAlpha = seen?1:.5;
+    G.fillRect(ox+rc.c*sc, oy+rc.r*sc, Math.max(2,rc.w*sc), Math.max(2,rc.h*sc)); G.globalAlpha=1; }
   G.fillStyle="#e5637a";
-  for(const f of state.foes) if(f.alive && f.aggro) G.fillRect(x0+f.c*sx-0.5, y0+f.r*sy-0.5, 2, 2);
-  // party marker
+  for(const f of state.foes) if(f.alive && f.aggro) G.fillRect(ox+f.c*sc-0.6, oy+f.r*sc-0.6, 1.8, 1.8);
   const a=party.filter(h=>h.alive);
   if(a.length){ const pr=a.reduce((s,h)=>s+h.r,0)/a.length, pc=a.reduce((s,h)=>s+h.c,0)/a.length;
-    G.fillStyle="#f0c877"; G.beginPath(); G.arc(x0+pc*sx, y0+pr*sy, 2.4, 0, 7); G.fill(); }
-  // current camera window outline (cam.y is world px; convert to row units for the minimap scale)
-  const camTopRow=(cam.y-54)/44, camRows=CH/44;
-  G.strokeStyle="rgba(240,200,119,.4)"; G.lineWidth=1;
-  G.strokeRect(x0, y0+Math.max(0,camTopRow)*sy, mw, camRows*sy);
+    G.fillStyle="#f0c877"; G.beginPath(); G.arc(ox+pc*sc, oy+pr*sc, 2.2, 0, 7); G.fill(); }
+  // camera window (world px → tile units; OX=12, OY=54, T=44)
+  const camC=(cam.x-12)/44, camR=(cam.y-54)/44, camW=CW/44, camH=CH/44;
+  G.strokeStyle="rgba(240,200,119,.45)"; G.lineWidth=1;
+  G.strokeRect(ox+Math.max(0,camC)*sc, oy+Math.max(0,camR)*sc, camW*sc, camH*sc);
   G.restore();
 }
 function roundRect(g,x,y,w,h,r){ g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); }

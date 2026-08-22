@@ -184,14 +184,15 @@ function isBlocked(room,r,c){
   return !!room.blocked[r+","+c];
 }
 
-/* ---- Roaming Floor: one tall, larger-than-screen level of sub-rooms joined by corridors (dungeon 2).
-   Width is kept at GCOLS so the camera only scrolls vertically. `spec.rooms` are rectangles, `spec.links`
-   join them with 2-wide corridors. Returns the same room shape as buildGameRoom plus rows/cols/roaming
-   and roomRects (used to place enemies + draw the minimap). No animated tile-parts (bog = static deco). */
+/* ---- Roaming Floor: one 2D, larger-than-screen level of sub-rooms joined by corridors (dungeon 2).
+   `spec.cols`/`spec.rows` set the floor size (bigger than the 8×11 viewport in both axes → the camera
+   pans in X and Y). `spec.rooms` are rectangles, `spec.links` join them with 2-wide corridors. Returns
+   the same room shape as buildGameRoom plus rows/cols/roaming and roomRects (used to place enemies +
+   draw the minimap). No animated tile-parts (bog = static deco). */
 function buildRoamingFloor(seed, spec){
   setRoomGeom();
   seedRng(seed); setParts([]);
-  const FC=GCOLS, FR=spec.rows;
+  const FC=spec.cols||GCOLS, FR=spec.rows;
   const worldH=OY+FR*T+26, worldW=OX*2+FC*T;
   const base=document.createElement("canvas"); base.width=worldW*2; base.height=worldH*2;
   const g=base.getContext("2d"); g.scale(2,2);
