@@ -69,6 +69,7 @@ const state={ roomIdx:0, scene:"town", phase:"idle", room:null, foes:[], t:0, sp
   roamLevel:0, roamUnlocked:0, miniAlive:false, eliteRolls:0,   // Misty Wetlands: current level (0–2), deepest UNLOCKED level, mini-boss up?, elites spawned
   roamBossAt:[null,null,null],   // per-level champion respawn time (runtime): a slain mini-boss/boss returns after BOSS_RESPAWN
   roamObjective:null,   // {r,c} the living champion's room — the party marches here while it's up; cleared once the champion falls so the party mops up side rooms
+  roamFoeHP:0, roamProgressAt:0,   // stall-guard bookkeeping (runtime): total live-foe HP + last time it changed
   autoLevel:false,   // when true, companion level-ups resolve their own free roll (no popup, no silver)
   cam:{x:0,y:0},     // camera offset (logical px) for the roaming floor — follows the party
   rally:null };      // {r,c} flag heroes regroup on when no foe is engaged
@@ -1271,6 +1272,24 @@ function updateRoaming(){
   if(state.bossInWave && !state.foes.some(f=>f.alive&&f.finalboss)){
     state.bossInWave=false; state.roamObjective=null; state.roamUnlocked=lastRoamLevel(); state.roamBossAt[state.roamLevel]=state.t+BAL.BOSS_RESPAWN; onBossDown();
     log(`${iconImg("skull",14)} <span class="sys">${activeDungeon().boss.name} will return in ~${Math.round(BAL.BOSS_RESPAWN/60)} min.</span>`,"sys");
+  }
+  // Stall guard: the re-form below only fires when EVERY foe is dead, so a single straggler the party
+  // can't path to (an unreachable pocket, or heroes clustering/oscillating and never converging on the
+  // last foe) would hang the floor forever — no more respawns. Watch for combat progress (any change in
+  // total live-foe HP: a hit lowers it, a re-form raises it); if none for ROAM_STALL seconds while foes
+  // remain, drop the stuck stragglers so the normal re-form path runs. Foes the party genuinely can't
+  // reach are cleared at 1×; a reachable-but-unreached foe (mid-march) gets a 2× backstop first.
+  const foeHP=state.foes.reduce((s,f)=>f.alive?s+f.hp:s,0);
+  if(foeHP!==state.roamFoeHP){ state.roamFoeHP=foeHP; state.roamProgressAt=state.t; }
+  const aliveFoes=state.foes.filter(f=>f.alive);
+  // (a planted rally flag is a deliberate "hold here" order — don't re-form under a parked party)
+  if(aliveFoes.length && !state.rally && state.respawnAt===null && state.t-state.roamProgressAt>BAL.ROAM_STALL){
+    const heroes=liveHeroes(), W=gC();
+    const reachable=aliveFoes.some(f=>{ const df=distField(f.r,f.c); return heroes.some(h=>df[h.r*W+h.c]>=0); });
+    if(!reachable || state.t-state.roamProgressAt>BAL.ROAM_STALL*2){
+      log(`${iconImg("check",14)} <span class="sys">The lair stirs anew…</span>`,"sys");
+      state.foes=state.foes.filter(f=>!f.alive); state.roamProgressAt=state.t;   // → re-form fires next tick
+    }
   }
   // Endless: once the current level is fully cleared, re-form it after a beat so it stays farmable.
   if(!state.foes.some(f=>f.alive) && state.respawnAt===null){ state.respawnAt=state.t+BAL.RESPAWN_DELAY; healWave(); }

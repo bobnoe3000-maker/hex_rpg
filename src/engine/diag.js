@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-22p · The rally flag is now a real order: tap the floor and the whole party marches there and holds (striking anything in reach on the way, overriding auto-seek and the level objective); tap the flagged tile again to pull the flag and let them resume auto-seeking. Active skills grow with EVERY point, not just full stars (magnitude interpolates per point; a full star still lands on the ladder value), and the panel shows the live value + next-point preview. Roaming levels re-form NPCs in place after a champion falls (no teleport to the entrance)";
+export const APP_BUILD = "2026-08-22q · Fixed roaming floors that could stop respawning: a straggler the party couldn't path to (an unreachable pocket, or heroes clustering and never converging on the last foe) hung the level forever, since the re-form only fired when EVERY foe was dead. A stall guard now watches for combat progress and, if none for a spell while foes remain, clears the stuck stragglers so the floor re-forms in place (BAL.ROAM_STALL). The rally flag is a real 'gather here' order (tap again to pull it). Active skills grow with EVERY point, not just full stars";
 
 const BUF = [];
 const MAX = 400;

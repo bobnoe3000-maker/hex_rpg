@@ -32,6 +32,9 @@ export const BAL = {
   RESPAWN_DELAY: 1.6,     // seconds after a wave clears before the next spawns
   REVIVE_DELAY: 2.2,      // seconds after a wipe before the party revives
   BOSS_RESPAWN: 600,      // seconds the dungeon boss stays down before it returns (trash farms in between)
+  ROAM_STALL: 12,         // roaming floor: seconds with no foe damage before the stall guard re-forms the level
+                          //   (so a straggler the party can't path to never hangs the floor). Unreachable
+                          //   stragglers re-form at 1×; a reachable-but-unreached foe waits for the 2× backstop.
   DROP_CHANCE: 0.015,     // chance a normal enemy drops an item on death (bosses always drop) — kept low so the Loot Roll popup stays occasional
   // (per-component drop weights live in data/items/*; rarer components fall less often)
 
