@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-18 · Potions simplified to a single standard size (no more tiny/small/medium/large/giant) — one Buy button per brew; legacy stacks fold to the standard on load";
+export const APP_BUILD = "2026-08-18 · Skill tree redesigned as a talent grid of icon nodes — tap a node for a center-screen detail modal (rank ladder, stars, Learn) instead of the old list rows";
 
 const BUF = [];
 const MAX = 400;
