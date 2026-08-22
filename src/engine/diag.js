@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-22q · Fixed roaming floors that could stop respawning: a straggler the party couldn't path to (an unreachable pocket, or heroes clustering and never converging on the last foe) hung the level forever, since the re-form only fired when EVERY foe was dead. A stall guard now watches for combat progress and, if none for a spell while foes remain, clears the stuck stragglers so the floor re-forms in place (BAL.ROAM_STALL). The rally flag is a real 'gather here' order (tap again to pull it). Active skills grow with EVERY point, not just full stars";
+export const APP_BUILD = "2026-08-22r · Party bar fits three characters again — the cards now shrink to the screen instead of overflowing, so the third companion's stats/gear line is no longer clipped off the right edge. Roaming floors have a stall guard so a straggler the party can't path to can't stop the floor respawning. The rally flag is a real 'gather here' order (tap again to pull it). Active skills grow with EVERY point, not just full stars";
 
 const BUF = [];
 const MAX = 400;

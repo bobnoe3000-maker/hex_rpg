@@ -81,8 +81,8 @@
 
   /* --- party at BOTTOM --- */
   #party{flex:0 0 auto;display:flex;gap:6px;margin-top:6px}
-  .card{flex:1;display:flex;gap:6px;background:linear-gradient(#241b38,#1a1328);border:1px solid var(--line);
-    border-radius:8px;padding:5px;font-size:9.5px;line-height:1.35}
+  .card{flex:1;min-width:0;display:flex;gap:6px;background:linear-gradient(#241b38,#1a1328);border:1px solid var(--line);
+    border-radius:8px;padding:5px;font-size:9.5px;line-height:1.35}   /* min-width:0 lets 3 cards shrink to fit instead of overflowing (the last card was being clipped) */
   .card .picwrap{position:relative;flex:0 0 auto;width:36px;height:36px}
   .card .pic{width:36px;height:36px;border-radius:6px;border:1px solid #6e5a2a;display:block}
   .card .skull{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
