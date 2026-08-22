@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-22b · Character panel: the Reset/Confirm row is now always reserved (dimmed until you allocate a point), so adding a stat point no longer resizes the panel. Dungeon 2's roaming floor is the 2D Drowned Warren — sub-rooms branch east/west as well as up, the camera pans on both axes, with torch fog + fog-of-war minimap and a boss-clear re-form";
+export const APP_BUILD = "2026-08-22c · Character panel: both point-spend footers now hold a fixed size — the Stats Reset/Confirm row and the skill modal's undo + Discard/Confirm bar are reserved (dimmed until active), so allocating a stat point or learning a skill rank no longer resizes the window. Dungeon 2's roaming floor is the 2D Drowned Warren — sub-rooms branch east/west as well as up, the camera pans on both axes, with torch fog + fog-of-war minimap and a boss-clear re-form";
 
 const BUF = [];
 const MAX = 400;

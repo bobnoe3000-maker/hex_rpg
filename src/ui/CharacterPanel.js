@@ -276,7 +276,8 @@ function injectCss() {
   .skm-learn.no{background:#221733;color:#6f6486;box-shadow:none;border:1px solid var(--line);cursor:default}
   .skm-undo{width:100%;margin-top:7px;font-family:inherit;font-size:11.5px;color:#9a8fb8;background:none;
     border:1px solid var(--line2);border-radius:8px;padding:8px;cursor:pointer}
-  .skm-undo:active{transform:translateY(1px)}
+  .skm-undo:active:not(:disabled){transform:translateY(1px)}
+  .skm-undo.ghost{visibility:hidden}   /* reserve the row so learning doesn't grow the modal */
   .skm-lock{display:flex;align-items:center;gap:7px;justify-content:center;text-align:center;font-size:11.5px;color:var(--gold);
     background:rgba(216,162,74,.08);border:1px solid rgba(216,162,74,.25);border-radius:9px;padding:10px}
   .skm-lock b{color:#f0c877}.skm-lock span{color:#8a7fae}
@@ -289,7 +290,9 @@ function injectCss() {
   .skm-disc,.skm-conf{font-family:inherit;font-weight:bold;font-size:11.5px;border:0;border-radius:7px;padding:7px 12px;cursor:pointer}
   .skm-disc{background:#2a2342;color:#b7abd2}
   .skm-conf{background:linear-gradient(#e0b063,#a8722a);color:#241606;box-shadow:0 2px 0 #6e4a14}
-  .skm-disc:active,.skm-conf:active{transform:translateY(1px)}
+  .skm-disc:active:not(:disabled),.skm-conf:active:not(:disabled){transform:translateY(1px)}
+  .skm-draft.ghost{opacity:.45}   /* no pending draft: dim in place, keeping the footer height fixed */
+  .skm-draft.ghost button{cursor:default;box-shadow:none;filter:grayscale(.5)}
   .cp-kit{padding:6px 9px;border-radius:8px;background:#1c1630;border:1px solid var(--line);margin-bottom:5px;cursor:pointer}
   .cp-kit.off{border-left:2px solid #ff8a5a}.cp-kit.def{border-left:2px solid #79c7e6}
   .cp-kit.open{background:#231b3a;border-color:var(--line2)}
@@ -488,7 +491,8 @@ export function openCharacter(hero, ctx) {
         : skCommittedTotal > 0
           ? `<div class="cp-pts-act" style="margin-top:8px"><button class="cp-respec ${skillResetArm ? "arm" : ""}" data-sk-reset ${canReset ? "" : "disabled"}>
              ${skillResetArm ? `Tap again to reset · ${iconImg("coin", 11)} ${cost}` : `Reset tree · ${iconImg("coin", 11)} ${cost}`}</button></div>`
-          : "";
+          // fresh tree, nothing learned yet: reserve the footer row so the first Learn doesn't grow the tab
+          : `<div class="cp-pts-act" style="margin-top:8px;visibility:hidden" aria-hidden="true"><button class="cp-confirm">Confirm</button></div>`;
 
       return `<div class="cp-pts" style="margin-bottom:11px"><div class="cp-pts-h"><span>Skill points</span><span class="av ${avail ? "" : "none"}">${avail}</span></div>
         <div class="skhint">Tap a skill to read it and learn a rank · resetting the tree costs silver</div></div>
@@ -521,11 +525,13 @@ export function openCharacter(hero, ctx) {
         action = `<button class="skm-learn ${canAdd ? "" : "no"}" data-sk-inc="${s.id}" ${canAdd ? "" : "disabled"}>
           ${canAdd ? "Learn" : "No points to spend"}${canAdd && nextTxt ? ` <small>+1 pt → ${nextTxt}</small>` : ""}</button>`;
       }
-      const undo = skDraftN(s.id) > 0 ? `<button class="skm-undo" data-sk-dec="${s.id}">− Undo pending point</button>` : "";
+      // Undo + draft bar are always rendered so tapping Learn reveals them in place instead of
+      // growing the modal — hidden (space reserved) until there is something pending.
+      const hasUndo = skDraftN(s.id) > 0;
+      const undo = `<button class="skm-undo${hasUndo ? "" : " ghost"}" data-sk-dec="${s.id}" ${hasUndo ? "" : "disabled"}>− Undo pending point</button>`;
       const dirty = skDraftSum() > 0;
-      const draftBar = dirty
-        ? `<div class="skm-draft"><span>${skDraftSum()} pt${skDraftSum() > 1 ? "s" : ""} pending</span>
-             <span class="skm-dbtns"><button class="skm-disc" data-sk-discard>Discard</button><button class="skm-conf" data-sk-commit>Confirm</button></span></div>` : "";
+      const draftBar = `<div class="skm-draft${dirty ? "" : " ghost"}"><span>${dirty ? `${skDraftSum()} pt${skDraftSum() > 1 ? "s" : ""} pending` : "No points pending"}</span>
+             <span class="skm-dbtns"><button class="skm-disc" data-sk-discard ${dirty ? "" : "disabled"}>Discard</button><button class="skm-conf" data-sk-commit ${dirty ? "" : "disabled"}>Confirm</button></span></div>`;
       return `<div class="skm-back" data-skm-back>
         <div class="skm ${br}" role="dialog" aria-modal="true">
           <button class="skm-x" data-skm-close aria-label="Close">✕</button>
