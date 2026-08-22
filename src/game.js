@@ -29,7 +29,6 @@ import { startOnboarding } from './ui/Onboarding.js';
 import { makeCompanion, makeEnemy } from './models/units.js';
 import { openDungeonSelect } from './ui/DungeonSelect.js';
 import { openCompanionRoll } from './ui/CompanionLevelUp.js';
-import { FLOOR, floorReachable, floorNeighbors, renderFloorMap, floorProgress } from './ui/FloorMap.js';
 import { POTION_BY_ID, POTION_CAP, STD_SIZE, potionEffect, potionCost, potionSell, rollLootPotion } from './data/potions.js';
 import { potionTileChip, ensurePotChipCss, setPotRing, flashPotBox } from './ui/potionChip.js';
 import { readSlot, writeSlot, SAVE_VERSION } from './state/save.js';
@@ -56,8 +55,7 @@ const logEl=document.getElementById("log"), partyEl=document.getElementById("par
       dheadEl=document.getElementById("dhead"),
       dtoastEl=document.getElementById("dtoast"), townEl=document.getElementById("town"),
       dmenufab=document.getElementById("dmenufab"), dlogov=document.getElementById("dlogov"),
-      dmenuEl=document.getElementById("dmenu"),
-      floormapEl=document.getElementById("floormap"), floormapfullEl=document.getElementById("floormapfull");
+      dmenuEl=document.getElementById("dmenu");
 /* combat log is a pop-up opened from the game menu (which itself opens from the floating ☰ button) */
 function openDLog(){ closeDMenu(); dlogov.classList.add("show"); logEl.scrollTop=logEl.scrollHeight; }
 function closeDLog(){ dlogov.classList.remove("show"); }
@@ -70,8 +68,8 @@ const state={ roomIdx:0, scene:"town", phase:"idle", room:null, foes:[], t:0, sp
   bossAt:null, bossInWave:false,       // when the boss may next appear (runtime) + is it on the field now
   roamLevel:0, roamUnlocked:0, miniAlive:false, eliteRolls:0,   // Misty Wetlands: current level (0–2), deepest UNLOCKED level, mini-boss up?, elites spawned
   roamBossAt:[null,null,null],   // per-level champion respawn time (runtime): a slain mini-boss/boss returns after BOSS_RESPAWN
+  roamObjective:null,   // {r,c} the champion's room — the party marches here so it always pushes toward the boss
   autoLevel:false,   // when true, companion level-ups resolve their own free roll (no popup, no silver)
-  fogbound:false, floor:null,   // opt-in Fogbound Floor traversal (dungeon 1 only): {cur, visited:[]}
   cam:{x:0,y:0},     // camera offset (logical px) for the roaming floor — follows the party
   rally:null };      // {r,c} flag heroes regroup on when no foe is engaged
 /* the dungeon the party is currently delving (falls back to the Emberdeep) */
@@ -109,7 +107,7 @@ function snapshotState(){
   return { v:SAVE_VERSION, party, bench:state.bench, silver:state.silver, gems:state.gems,
     inventory:state.inventory, potions:state.potions, roomIdx:state.roomIdx,
     dungeonId:state.dungeonId, cleared:state.cleared, roomMax:state.roomMax, autoLevel:state.autoLevel,
-    fogbound:state.fogbound, floor:state.floor, roamLevel:state.roamLevel, roamUnlocked:state.roamUnlocked,
+    roamLevel:state.roamLevel, roamUnlocked:state.roamUnlocked,
     savedAt:new Date().toISOString() };
 }
 function saveGame(){ if(activeSlot!==null) writeSlot(activeSlot, snapshotState()); }
@@ -132,9 +130,8 @@ function loadGame(save){
   state.cleared=Array.isArray(save.cleared)?save.cleared.slice():[];
   state.roomMax=Math.max(save.roomMax||0, state.roomIdx||0);   // reached rooms are jumpable on the minimap
   state.autoLevel=!!save.autoLevel;                            // per-save preference (off for older saves)
-  state.fogbound=!!save.fogbound; state.floor=save.floor||null;   // Fogbound Floor opt-in + progress (dungeon 1)
-  state.roamLevel=Math.max(0,Math.min(LAST_ROAM_LEVEL, save.roamLevel|0));   // Misty Wetlands descent progress
-  state.roamUnlocked=Math.max(state.roamLevel, Math.min(LAST_ROAM_LEVEL, save.roamUnlocked|0));   // deepest reachable level
+  state.roamLevel=Math.max(0,Math.min(lastRoamLevel(), save.roamLevel|0));   // Misty Wetlands descent progress
+  state.roamUnlocked=Math.max(state.roamLevel, Math.min(lastRoamLevel(), save.roamUnlocked|0));   // deepest reachable level
 }
 const partyClasses=()=>party.length?[...new Set(party.map(h=>h.cls))]:["fighter","mage","cleric","rogue"];
 let combatRng=Math.random;  // reseeded deterministically when a fight starts / area changes
@@ -343,14 +340,76 @@ const gC=()=>(state.room&&state.room.cols)||GCOLS;
    follows the party in BOTH axes as it roams and fights room to room. Reuses all combat — every pack
    is placed across the floor at once (with an aggro range so distant rooms wake as you approach). The
    eastern rooms form a loop, so there are two routes to the boss. ---------- */
-const ROAM_DUNGEON="frostmere";
-const roamingDungeon=id=>id===ROAM_DUNGEON;
-const roamingActive=()=>!!(state.room&&state.room.roaming);
-/* Three descending levels. Each is one larger-than-screen roaming floor of sub-rooms joined by
-   corridors; the last room holds that level's champion. Levels 1 & 2 end at a MINI-BOSS that GATES
-   the descent — you can't drop to the next level until it falls — and Level 3 ends at Mudmaw, the
-   floor boss (a full clear). Enemy levels ramp across the dungeon-2 band (Lv 11 → 20). */
-const FLOOR2_LEVELS=[
+/* A roaming dungeon is a STACK of descending levels. Each level is one larger-than-screen floor of
+   sub-rooms joined by corridors; the last room holds that level's champion. Levels below the last end
+   at a MINI-BOSS that GATES the descent (you unlock the next level only once it falls), and the final
+   level ends at the dungeon's boss (a full clear). Enemy levels ramp across the dungeon's band.
+   ROAM_FLOORS is keyed by dungeon id — add an entry (or generate one) to make any dungeon roaming. */
+const EMBERDEEP_LEVELS=[
+  { // ---- Level 1 · Lv 1–3 · a small, gentle intro floor; mini-boss Thornjaw ----
+    cols:23, rows:20,
+    rooms:[
+      {r:16,c:9,h:3,w:5},   // 0 entrance
+      {r:11,c:8,h:4,w:6},   // 1 hub
+      {r:11,c:1,h:3,w:5},   // 2 west cache
+      {r:5, c:8,h:4,w:6},   // 3 mini-boss
+    ],
+    links:[[0,1],[1,2],[1,3]], entry:0,
+    names:["Camp Trailhead","Fernshade Clearing","Hollow Log","Thornjaw's Thicket"],
+    miniboss:{ fig:"spider", name:"Thornjaw, the Bramble Beast" },
+    packs:[
+      { room:1, lvl:1, comp:["rat","spider"] },
+      { room:2, lvl:2, comp:["goblin","rat","slime"], treasure:true },
+      { room:3, lvl:3, comp:["MINIBOSS","rat","goblin"] },
+    ],
+  },
+  { // ---- Level 2 · Lv 4–6 · a branching hub; mini-boss Old Grum ----
+    cols:23, rows:20,
+    rooms:[
+      {r:16,c:9, h:3,w:5},  // 0 entrance
+      {r:12,c:9, h:4,w:6},  // 1 hub
+      {r:12,c:1, h:3,w:5},  // 2 west cache
+      {r:12,c:17,h:3,w:5},  // 3 east
+      {r:6, c:9, h:4,w:6},  // 4
+      {r:1, c:9, h:4,w:6},  // 5 mini-boss
+    ],
+    links:[[0,1],[1,2],[1,3],[1,4],[4,5]], entry:0,
+    names:["Mossford","Bramble Hollow","West Bramble","East Bramble","Old Cairn Steps","Grum's Grove"],
+    miniboss:{ fig:"golem", name:"Old Grum, the Grove Warden" },
+    packs:[
+      { room:1, lvl:4, comp:["goblin","kobold","rat"] },
+      { room:2, lvl:4, comp:["slime","spider"], treasure:true },
+      { room:3, lvl:5, comp:["goblin","skeleton","harpy"] },
+      { room:4, lvl:5, comp:["skeleton","goblin","slime"] },
+      { room:5, lvl:6, comp:["MINIBOSS","goblin","skeleton"] },
+    ],
+  },
+  { // ---- Level 3 · Lv 7–10 · the full ridge, ending at Mosstooth, the Hill Troll (boss) ----
+    cols:23, rows:20,
+    rooms:[
+      {r:16,c:9, h:3,w:5},  // 0 entrance
+      {r:11,c:8, h:4,w:6},  // 1 hub
+      {r:12,c:1, h:3,w:5},  // 2 west detour
+      {r:12,c:17,h:3,w:5},  // 3 east
+      {r:6, c:8, h:4,w:6},  // 4
+      {r:6, c:1, h:3,w:4},  // 5 west den
+      {r:6, c:17,h:4,w:5},  // 6 east roost
+      {r:1, c:9, h:4,w:6},  // 7 boss
+    ],
+    links:[[0,1],[1,2],[1,3],[1,4],[4,5],[4,6],[4,7],[3,6]], entry:0,
+    names:["Ridge Path","Bramble Crossing","West Gully","East Gully","Windy Saddle","Fox Den","Shrike Roost","Mosstooth's Cairn"],
+    packs:[
+      { room:1, lvl:7,  comp:["goblin","spider","skeleton"] },
+      { room:2, lvl:7,  comp:["slime","skeleton"], treasure:true },
+      { room:3, lvl:8,  comp:["kobold","harpy","goblin"] },
+      { room:4, lvl:8,  comp:["skeleton","wight","slime"] },
+      { room:5, lvl:9,  comp:["spider","cutthroat"], treasure:true },
+      { room:6, lvl:9,  comp:["wight","harpy","skeleton"] },
+      { room:7, lvl:10, comp:["BOSS","skeleton","goblin"] },
+    ],
+  },
+];
+const FROSTMERE_LEVELS=[
   { // ---- Level 1 · Lv 11–15 · mini-boss Gribb guards the way down ----
     cols:23, rows:20,
     rooms:[
@@ -418,13 +477,22 @@ const FLOOR2_LEVELS=[
     ],
   },
 ];
-const LAST_ROAM_LEVEL=FLOOR2_LEVELS.length-1;
-const curFloor=()=>FLOOR2_LEVELS[state.roamLevel||0];
+// Which dungeons use the roaming design (id → its level stack). Flag a dungeon by adding an entry.
+const ROAM_FLOORS={ emberdeep:EMBERDEEP_LEVELS, frostmere:FROSTMERE_LEVELS };
+const roamingDungeon=id=>!!ROAM_FLOORS[id];
+const roamingActive=()=>!!(state.room&&state.room.roaming);
+const roamStack=()=>ROAM_FLOORS[state.dungeonId]||FROSTMERE_LEVELS;   // the active dungeon's level stack
+const roamLevelCount=()=>roamStack().length;
+const lastRoamLevel=()=>roamLevelCount()-1;
+const curFloor=()=>roamStack()[state.roamLevel||0];
 /* place every pack across the current level's sub-rooms (one big encounter the party roams through).
    The last room's pack carries a MINIBOSS (levels 1–2) or the final BOSS (level 3). */
 function spawnRoaming(){
   const d=activeDungeon(), fl=curFloor(), rects=state.room.roomRects;
   state.miniAlive=false; state.bossInWave=false;
+  // the party's march objective = the champion's room centre (last pack), so it always pushes to the boss
+  const champRect=rects[fl.packs[fl.packs.length-1].room];
+  state.roamObjective=champRect ? { r:Math.round(champRect.r+champRect.h/2), c:Math.round(champRect.c+champRect.w/2) } : null;
   // the level's champion (mini-boss/boss) only reforms once its respawn timer is up; until then its
   // room fields the pack's ordinary trash and a couple of farm foes so the level stays fightable
   const champAt=state.roamBossAt[state.roamLevel], champReady=(champAt==null || state.t>=champAt);
@@ -519,8 +587,6 @@ function spawnWave(){
     state.foes.push(f); figOf(f); });
 }
 function roomTitle(d,idx){
-  if(fogboundActive() && state.floor){ const n=FLOOR.nodes[state.floor.cur];
-    return `${d.name} — ${n.kind==="boss"?d.boss.name:n.name}`; }
   return idx===BOSS_ROOM ? `${d.name} — ${d.boss.name}` : `${d.name} — ${LAYOUTS[idx].roomName}`;
 }
 function loadRoom(){
@@ -531,8 +597,8 @@ function loadRoom(){
     state.cam={x:0,y:0};
     state.foes=[]; fxClear(); state.respawnAt=null; state.wipeAt=null; state.rally=null; state.bossInWave=false; state.miniAlive=false; state.eliteRolls=0;
     placeHeroes(); updateCamera(1); spawnWave();
-    const last=state.roamLevel>=LAST_ROAM_LEVEL;
-    log(`— <span class="sys">${d.name} · Level ${(state.roamLevel||0)+1}/${FLOOR2_LEVELS.length}</span> — ${last?"the fiend's lair looms":"the mire opens before you"} —`);
+    const last=state.roamLevel>=lastRoamLevel();
+    log(`— <span class="sys">${d.name} · Level ${(state.roamLevel||0)+1}/${roamLevelCount()}</span> — ${last?"the fiend's lair looms":"the mire opens before you"} —`);
     return;
   }
   const spec={ title:roomTitle(d,idx), shape:L.shape, blockers:L.blockers,
@@ -1122,6 +1188,15 @@ function act(u){
   const tg=nearest(u);
   if(tg){
     if(tryCast(u,tg)) return;                  // spend the action on a ready skill when one fits
+    // Roaming march: unless an AWAKE foe is within striking range, push toward the level objective (the
+    // champion's room). This wakes rooms en route, keeps the party advancing to the boss, and never lets
+    // a fleeing straggler or a cleared dead-end branch stall the delve. Awake foes that catch up get hit.
+    if(u.team===0 && roamingActive() && state.roamObjective){
+      const R=derive(u).rng;
+      const inFight=state.foes.some(f=>f.alive&&f.team===1&&f.aggro&&distU(u,f)<=R+1);
+      const atObj=u.r===state.roamObjective.r && u.c===state.roamObjective.c;
+      if(!inFight && !atObj){ stepToward(u,state.roamObjective); return; }
+    }
     // heroes fight in formation; foes (and heroes with no formation ctx) use the plain chase/kite
     if(u.team===0 && form){
       const role=roleOf(u);
@@ -1171,7 +1246,7 @@ function updateRoaming(){
   // FINAL boss death → the dungeon is cleared (first-clear reward, all levels stay unlocked); it too
   // returns on the respawn timer so the lair keeps farming trash in the meantime.
   if(state.bossInWave && !state.foes.some(f=>f.alive&&f.finalboss)){
-    state.bossInWave=false; state.roamUnlocked=LAST_ROAM_LEVEL; state.roamBossAt[state.roamLevel]=state.t+BAL.BOSS_RESPAWN; onBossDown();
+    state.bossInWave=false; state.roamUnlocked=lastRoamLevel(); state.roamBossAt[state.roamLevel]=state.t+BAL.BOSS_RESPAWN; onBossDown();
     log(`${iconImg("skull",14)} <span class="sys">${activeDungeon().boss.name} will return in ~${Math.round(BAL.BOSS_RESPAWN/60)} min.</span>`,"sys");
   }
   // Endless: once the current level is fully cleared, re-form it after a beat so it stays farmable.
@@ -1187,7 +1262,7 @@ function maybeSpawnElite(){
    level's floor, reforms the party at its entrance, and fights on. */
 function goToRoamLevel(n){
   if(!roamingActive()) return;
-  n=Math.max(0, Math.min(LAST_ROAM_LEVEL, n|0));
+  n=Math.max(0, Math.min(lastRoamLevel(), n|0));
   if(n>(state.roamUnlocked||0) || n===state.roamLevel) return;   // locked, or already here
   state.roamLevel=n; state.respawnAt=null;
   loadRoom(); seedBattle(); state.phase="fight";
@@ -1347,7 +1422,7 @@ function enterTown(fromWipe=false){
   if(fromWipe){ state.phase="idle"; loadRoom(); }
   renderParty();
   dheadEl.classList.remove("show");   // hide the dungeon header + delve controls while at the Keep
-  dmenufab.classList.remove("show"); floormapEl.classList.remove("show"); closeFloorFull(); closeDLog(); closeDMenu();
+  dmenufab.classList.remove("show"); closeDLog(); closeDMenu();
   openTownScreen();
   saveGame();          // persist the run whenever you're back at the Keep (loot, revives, etc.)
   diag("scene", `keep${fromWipe?" · wipe":""} · party ${party.filter(h=>h.alive).length}/${party.length}`);
@@ -1377,8 +1452,7 @@ function openPartyScreen(){
 function startDungeon(id){
   state.dungeonId=dungeonById(id).id; state.roomIdx=0; state.roomMax=0; state.phase="idle";
   state.bossAt=null; state.bossInWave=false;      // boss is ready the first time you reach its room
-  state.roamLevel=0; state.roamUnlocked=0; state.roamBossAt=[null,null,null];   // Misty Wetlands: fresh delve, all champions ready
-  if(fogboundActive()) initFloor(); else state.floor=null;   // Fogbound Floor starts at its entrance
+  state.roamLevel=0; state.roamUnlocked=0; state.roamBossAt=[null,null,null];   // roaming: fresh delve, all champions ready
   loadRoom(); saveGame(); enterDungeon();
 }
 function openDungeonBoard(){
@@ -1549,82 +1623,25 @@ function goToRoom(idx){
   renderParty(); renderDungeonHeader(); saveGame();
 }
 
-/* ---------- Fogbound Floor (opt-in alternate traversal, The Shaded Foothills only) ---------- */
-const fogboundActive = () => state.fogbound && state.dungeonId==="emberdeep";
-const floorNode = () => state.floor && FLOOR.nodes[state.floor.cur];
-/* begin a fresh floor at its entrance (also sets roomIdx to the entrance's layout for loadRoom) */
-function initFloor(){
-  state.floor={ cur:FLOOR.start, visited:[FLOOR.start] };
-  state.roomIdx=FLOOR.nodes[FLOOR.start].layout;
-}
-/* travel to a floor node — reachable = any visited node (backtrack) or a sensed frontier node */
-function goToFloorNode(id){
-  if(!fogboundActive() || !state.floor) return;
-  const n=FLOOR.nodes[id]; if(!n || id===state.floor.cur) return;
-  if(!floorReachable(state.floor.visited).has(id)) return;      // must be adjacent to something seen
-  const firstVisit=!state.floor.visited.includes(id);
-  state.floor.cur=id; if(firstVisit) state.floor.visited.push(id);
-  state.roomIdx=n.layout;
-  loadRoom(); seedBattle();
-  state.phase="fight";   // the delve auto-runs — travelling never parks it at "Press Fight"
-  if(firstVisit && n.kind==="treasure"){ state.gems++;          // side-rooms pay a small toll for the detour
-    log(`${iconImg("gem",14)} <b>${n.name}</b> — a hidden cache yields a <span class="sys">Runic Gem</span>.`,"sys"); }
-  closeFloorFull(); renderParty(); renderDungeonHeader(); saveGame();
-}
-/* the corner glance-map (tap to expand) */
-function renderFloorMapUI(){
-  if(!fogboundActive() || !state.floor || state.scene!=="dungeon"){ floormapEl.classList.remove("show"); return; }
-  floormapEl.classList.add("show");
-  floormapEl.innerHTML=`<div class="fm-h"><b>Floor</b><span class="c">${floorProgress(state.floor.visited)}</span></div>${renderFloorMap(state.floor,{expanded:false})}`;
-  floormapEl.onclick=openFloorFull;
-}
-function openFloorFull(){
-  if(!fogboundActive() || !state.floor) return;
-  floormapfullEl.innerHTML=`<div class="fmf">
-      <div class="fmf-h"><div><b>The Shaded Foothills</b><br><span class="sub">${floorProgress(state.floor.visited)} rooms explored</span></div><span class="x" data-fclose>✕</span></div>
-      <div class="fmf-map">${renderFloorMap(state.floor,{expanded:true})}</div>
-      <div class="fmf-lg"><span><i style="background:#f0c877"></i>here</span><span><i style="background:#3f5030"></i>cleared</span><span><i style="background:#7a5a1e"></i>treasure</span><span><i style="background:#5a2420"></i>boss</span><span><i style="background:#2a2440;border:1px dashed #8a7fae"></i>unentered</span></div>
-      <div class="fmf-hint">Tap a lit or ringed room to travel there</div></div>`;
-  floormapfullEl.classList.add("show");
-  floormapfullEl.querySelectorAll("[data-fclose]").forEach(x=>x.onclick=closeFloorFull);
-  floormapfullEl.onclick=e=>{ if(e.target===floormapfullEl) closeFloorFull(); };
-  floormapfullEl.querySelectorAll("[data-fnode]").forEach(g=>g.onclick=()=>goToFloorNode(g.getAttribute("data-fnode")));
-}
-function closeFloorFull(){ floormapfullEl.classList.remove("show"); }
-/* flip between Classic (linear rooms) and Fogbound Floor traversal — restarts the delve at the start
-   so the two can be A/B playtested. Only meaningful in The Shaded Foothills (guarded by the menu row). */
-function toggleFogbound(){
-  state.fogbound=!state.fogbound;
-  if(fogboundActive()) initFloor(); else { state.floor=null; state.roomIdx=0; state.roomMax=0; }
-  state.bossAt=null; state.bossInWave=false;
-  loadRoom(); seedBattle(); state.phase="fight";   // restart the delve running, not parked (loadRoom places the party)
-  closeFloorFull(); renderParty(); renderDungeonHeader(); saveGame();
-  dtoast(state.fogbound?"Fogbound Floor — explore the map to descend":"Classic traversal restored");
-}
-
 /* the slim dungeon header: [☰ menu] title · currency  /  tappable minimap · speed · boss timer */
 function renderDungeonHeader(){
-  if(state.scene!=="dungeon" || !state.room){ dheadEl.classList.remove("show"); dmenufab.classList.remove("show"); floormapEl.classList.remove("show"); closeFloorFull(); return; }
+  if(state.scene!=="dungeon" || !state.room){ dheadEl.classList.remove("show"); dmenufab.classList.remove("show"); return; }
   dheadEl.classList.add("show"); dmenufab.classList.add("show");
   const d=activeDungeon(), idx=state.roomIdx, max=state.roomMax||0, reach=Math.min(BOSS_ROOM,max+1);
   const roam=roamingActive();
-  const fog=fogboundActive()&&state.floor;
-  const roomName = roam ? `${d.sub||"The Mire"} · Level ${(state.roamLevel||0)+1}/${FLOOR2_LEVELS.length}`
-                 : fog ? (FLOOR.nodes[state.floor.cur].kind==="boss"?d.boss.name:FLOOR.nodes[state.floor.cur].name)
+  const roomName = roam ? `${d.sub||"The Trail"} · Level ${(state.roamLevel||0)+1}/${roamLevelCount()}`
                        : (idx===BOSS_ROOM ? d.boss.name : LAYOUTS[idx].roomName);
   let mini;
   if(roam){ const left=state.foes.filter(f=>f.alive).length, unlocked=state.roamUnlocked||0, lvl=state.roamLevel||0;
     // level selector: tap an UNLOCKED level to travel there; the current level's mini-boss unlocks the next
     let nodes="";
-    for(let i=0;i<FLOOR2_LEVELS.length;i++){
-      const boss=i===LAST_ROAM_LEVEL, cur=i===lvl, locked=i>unlocked, done=i<lvl;
+    for(let i=0;i<roamLevelCount();i++){
+      const boss=i===lastRoamLevel(), cur=i===lvl, locked=i>unlocked, done=i<lvl;
       const cls = cur?"cur": locked?"lock": done?"done":"next";
       const glyph = boss?"☠":(i+1);
       nodes+=`<button class="dh-node ${cls} ${boss?"boss":""}" title="Level ${i+1}${locked?" · locked":""}" ${(!locked&&!cur)?`data-level="${i}"`:""}><span class="dot">${glyph}</span></button>`;
     }
     mini=`<div class="dh-mini">${nodes}</div><span class="dh-foes">☠ ${left}</span>`; }
-  else if(fog){ const mapicon=`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14"/></svg>`;
-    mini=`<button class="dh-fmap" data-openmap>${mapicon} Floor · ${floorProgress(state.floor.visited)}</button>`; }
   else {
     let nodes="";
     for(let i=0;i<ROOM_COUNT;i++){
@@ -1638,7 +1655,7 @@ function renderDungeonHeader(){
   let bossPill="";
   if(roam){
     // the current level's champion (mini-boss on Lv1–2, boss on Lv3) and its respawn countdown
-    const lbl=(state.roamLevel>=LAST_ROAM_LEVEL)?"BOSS":"MINI", at=state.roamBossAt[state.roamLevel];
+    const lbl=(state.roamLevel>=lastRoamLevel())?"BOSS":"MINI", at=state.roamBossAt[state.roamLevel];
     const onCd=at!==null&&state.t<at, rem=onCd?Math.max(0,at-state.t):0;
     const txt=onCd?`${lbl} ${Math.floor(rem/60)}:${String(Math.floor(rem%60)).padStart(2,"0")}`:`${lbl} ✦ READY`;
     bossPill=`<span class="dh-boss ${onCd?"":"ready"}" data-roamboss>${txt}</span>`;
@@ -1653,10 +1670,8 @@ function renderDungeonHeader(){
     <div class="dh-r2">${mini}<span class="dh-spd" data-spd>${state.speed}×</span>${bossPill}</div>`;
   dheadEl.querySelectorAll("[data-room]").forEach(b=>b.onclick=()=>goToRoom(+b.getAttribute("data-room")));
   dheadEl.querySelectorAll("[data-level]").forEach(b=>b.onclick=()=>goToRoamLevel(+b.getAttribute("data-level")));
-  const om=dheadEl.querySelector("[data-openmap]"); if(om) om.onclick=openFloorFull;
   dheadEl.querySelector("[data-spd]").onclick=()=>{ state.speed=state.speed===1?2:1; renderDungeonHeader(); };
   updateHud();
-  renderFloorMapUI();
 }
 /* live boss-timer text (cheap; only touches the DOM when the displayed value changes) */
 function tickDungeonHeader(){
@@ -1665,7 +1680,7 @@ function tickDungeonHeader(){
     const el=dheadEl.querySelector(".dh-foes");
     if(el){ const left=state.foes.filter(f=>f.alive).length, txt=`☠ ${left}`; if(el.textContent!==txt) el.textContent=txt; }
     const bp=dheadEl.querySelector("[data-roamboss]");
-    if(bp){ const lbl=(state.roamLevel>=LAST_ROAM_LEVEL)?"BOSS":"MINI", at=state.roamBossAt[state.roamLevel];
+    if(bp){ const lbl=(state.roamLevel>=lastRoamLevel())?"BOSS":"MINI", at=state.roamBossAt[state.roamLevel];
       const onCd=at!==null&&state.t<at, rem=onCd?Math.max(0,at-state.t):0;
       const txt=onCd?`${lbl} ${Math.floor(rem/60)}:${String(Math.floor(rem%60)).padStart(2,"0")}`:`${lbl} ✦ READY`;
       if(bp.textContent!==txt){ bp.textContent=txt; bp.classList.toggle("ready",!onCd); } }
@@ -1703,7 +1718,6 @@ function openDMenu(){
       <div class="dmrow" data-mact="arena">${MENU_ICONS.arena}<span>Arena</span></div>
       <div class="dmrow" data-mact="speed">${MENU_ICONS.speed}<span>Speed ${state.speed}×</span></div>
       <div class="dmrow wide ${state.autoLevel?"on":""}" data-mact="autolvl">${MENU_ICONS.level}<span>Auto-level companions</span><span class="dm-tag">${state.autoLevel?"On":"Off"}</span></div>
-      ${state.dungeonId==="emberdeep"?`<div class="dmrow wide ${state.fogbound?"on":""}" data-mact="fogbound">${MENU_ICONS.fog}<span>Traversal · Fogbound Floor <small style="opacity:.6">(playtest)</small></span><span class="dm-tag">${state.fogbound?"On":"Off"}</span></div>`:""}
       <div class="dmrow wide" data-mact="log">${MENU_ICONS.log}<span>Combat log</span></div>
       <div class="dmrow wide" data-mact="diag">${MENU_ICONS.diag}<span>Diagnostics &amp; log export</span></div>
     </div></div>`;
@@ -1715,7 +1729,6 @@ function closeDMenu(){ dmenuEl.classList.remove("show"); }
 function menuAct(a){
   if(a==="speed"){ state.speed=state.speed===1?2:1; renderDungeonHeader(); openDMenu(); return; }   // stay open; reflect new speed
   if(a==="autolvl"){ toggleAutoLevel(); openDMenu(); return; }   // stay open; reflect On/Off + apply any backlog
-  if(a==="fogbound"){ toggleFogbound(); openDMenu(); return; }   // switch traversal mode; restarts the floor
   if(a==="log") return openDLog();   // openDLog swaps the menu sheet for the log pop-up
   closeDMenu();
   if(state.scene!=="dungeon") return;

@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-22l · Bag redesign: gear is sorted upgrades-first and shown through a filter — Upgrades (upgrades + empty-slot fits) by default, All, or By slot — as tight one-line rows (icon · name · stats · a net-power tag · Equip); tap a row to expand the full compare. Party cards align on fixed-height rows; potion belt Equip All + ×10; Loot Roll hides the name until the reels settle; Misty Wetlands 3-level descent";
+export const APP_BUILD = "2026-08-22m · The Shaded Foothills (dungeon 1) is now a roaming 3-level descent too — camera follows the party, mini-bosses Thornjaw and Old Grum gate the way down, and the ridge ends at Mosstooth. Roaming floors are now per-dungeon data (any dungeon can convert). The party marches to the level objective so it never stalls on a straggler. The old Fogbound playtest mode is retired. Bag sorted upgrades-first with a filter; diagnostics export full per-character stats";
 
 const BUF = [];
 const MAX = 400;
