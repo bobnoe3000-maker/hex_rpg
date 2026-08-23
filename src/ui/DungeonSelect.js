@@ -6,7 +6,7 @@
 "use strict";
 
 import { ensureTownCss } from "./TownScreen.js";
-import { isUnlocked, prevDungeon, ROOM_COUNT } from "../data/dungeons.js";
+import { isUnlocked, prevDungeon } from "../data/dungeons.js";
 import { iconImg } from "../engine/icons.js";
 
 const FLOOR_LABEL = { plain: "Plain+", fine: "Fine+", rare: "Rare+", epic: "Epic+" };
@@ -143,7 +143,7 @@ export function openDungeonSelect(ctx) {
       const prev = prevDungeon(d);
       cta = `<button class="dm-btn lock">${iconImg("skull", 12)} Defeat ${prev ? prev.boss.name : "the prior boss"} to unlock</button>`;
     } else if (resumeHere) {
-      cta = `<button class="dm-btn go" data-resume>${iconImg("sword", 14)} Resume · Room ${Math.min(ROOM_COUNT, ctx.roomIdx + 1)}/${ROOM_COUNT}</button>`;
+      cta = `<button class="dm-btn go" data-resume>${iconImg("sword", 14)} Resume Descent</button>`;
     } else if (st === "cleared") {
       cta = `<button class="dm-btn farm" data-go="${d.id}">${iconImg("sword", 14)} Descend · Farm</button>`;
     } else {

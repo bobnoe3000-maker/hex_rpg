@@ -137,6 +137,22 @@ export const DUNGEONS = [
     { palette: [["#63587a","#443c58","#2a243a"],["#67597e","#48405c","#2c263c"]], tiles: ["crystal","rune","ember","bones","ash"] }),
 ];
 
+/* Two named mini-bosses per dungeon — they gate levels 1 & 2 of its roaming descent (level 3 ends at the
+   dungeon's boss). `fig` is a roster archetype (the visual body; stats come from BAL.MINIBOSS_BASE, scaled
+   to the level). The Shaded Foothills (emberdeep) and Misty Wetlands (frostmere) carry their own inside
+   their hand-authored roaming stacks, so they're not listed here. */
+const ROAM_MINIS = {
+  vael:      [{ fig:"golem",    name:"Boulderjaw, the Rockslide" },   { fig:"wyvern",   name:"Skreel, the Cliff Tyrant" }],
+  thornwild: [{ fig:"spider",   name:"Gollnest, the Brood Mother" },  { fig:"golem",    name:"Grindstone, the Tunnel Warden" }],
+  foundry:   [{ fig:"skeleton", name:"Ossaric, the Bone Marshal" },   { fig:"wight",    name:"Grettha, the Barrow Queen" }],
+  shadowfen: [{ fig:"slime",    name:"Pulpheart, the Rot Mound" },    { fig:"troll",    name:"Snarlbark, the Twisted" }],
+  skyreach:  [{ fig:"golem",    name:"Slagfist, the Molten" },        { fig:"wyvern",   name:"Cinderwing, the Ash Reaver" }],
+  wastes:    [{ fig:"wight",    name:"Sir Vallund, the Fallen Warden" },{ fig:"golem",   name:"Gatebreaker, the Siege Engine" }],
+  rimeheart: [{ fig:"lich",     name:"Yssix, the Star-Eater" },       { fig:"wight",    name:"Nullgast, the Hollow King" }],
+  apex:      [{ fig:"wight",    name:"Vornag, the Doom Herald" },     { fig:"lich",     name:"Malgrith, the Void Cardinal" }],
+};
+for (const d of DUNGEONS) if (ROAM_MINIS[d.id]) d.minis = ROAM_MINIS[d.id];
+
 /* ---- ladder helpers ---- */
 export const dungeonById = id => DUNGEONS.find(d => d.id === id) || DUNGEONS[0];
 export const dungeonByTier = tier => DUNGEONS.find(d => d.tier === tier) || null;
