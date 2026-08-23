@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-22u · Every dungeon is a roaming 3-level descent, and each of dungeons 3–10 now has its OWN hand-authored layout (a switchback climb, branching caverns, a symmetric crypt, scattered groves, wide wastes, a fortress, a converging chasm, and a grand many-looped spire) — skinned with its roster, band, boss and two named mini-bosses. All 24 levels verified for connectivity. Offline progress (10% rate, capped 8h) with a Welcome Back card. Party bar fits three characters; roaming stall guard; rally flag order; active skills grow with EVERY point";
+export const APP_BUILD = "2026-08-22v · Skill ranks are clearer and smoother: the rank you're filling now unfolds into its five point-values (e.g. Firebolt 124·128·132·136·140% with your point highlighted), so the bonus BETWEEN stars is spelled out. And the per-point curve is smoothed — the first star no longer ramps from zero, so each point adds a steady amount (learned skills start stronger) while every star milestone stays exactly where it was. Every dungeon is a roaming descent with its own layout; offline progress; party bar fits three; roaming stall guard; rally flag order";
 
 const BUF = [];
 const MAX = 400;

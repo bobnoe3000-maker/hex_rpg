@@ -6,7 +6,7 @@
 import { derive } from "../systems/StatEngine.js";
 import { canEquip, equip, unequip, compareToEquipped } from "../systems/Equipment.js";
 import { STAT_STEP, ASSIGNABLE, stepFor } from "../systems/Leveling.js";
-import { heroKit, starTier, skillDef, skillEffectNow } from "../systems/Skills.js";
+import { heroKit, starTier, skillDef, skillEffectNow, skillPip } from "../systems/Skills.js";
 import { starsHtml, starLabel } from "./stars.js";
 import { SLOTS } from "../data/items/gearTypes.js";
 import { POTION_BY_ID, potionName, potionEffectText } from "../data/potions.js";
@@ -291,6 +291,17 @@ function injectCss() {
   .skm-rung.cur{background:linear-gradient(90deg,rgba(216,162,74,.16),transparent);box-shadow:inset 2px 0 0 var(--gold)}
   .skm-rung.cur .rk{color:#f0c877}.skm-rung.cur .rx{color:#fff;font-weight:bold}
   .skm-rung.next{background:rgba(255,255,255,.03)}.skm-rung.next .rk{color:var(--parchment)}
+  /* current rank unfolded into its five point-values */
+  .skm-rung.pipr{display:block;padding:7px 8px 8px}
+  .skm-rung.pipr .pipr-h{display:flex;align-items:center;gap:9px;margin-bottom:6px}
+  .skm-rung.pipr .pipr-h .rx{color:#fff;font-weight:bold;font-family:Georgia,serif;font-size:12px}
+  .skm-pips{display:flex;gap:4px}
+  .skm-pip{flex:1;text-align:center;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;color:#9a8fb8;
+    background:#140e22;border:1px solid var(--line);border-radius:6px;padding:5px 1px 4px;min-width:0}
+  .skm-pip.done{color:var(--parchment);border-color:#3a2f52}
+  .skm-pip.you{color:#241606;font-weight:bold;background:linear-gradient(#f0c877,#c99433);border-color:#f0c877;
+    box-shadow:0 0 10px -2px #f0c877}
+  .skm-pip .pp{display:block;font-size:8px;letter-spacing:.3px;opacity:.65;margin-bottom:1px}
   .skm-ft{padding:12px 16px 16px;border-top:1px solid var(--line);position:sticky;bottom:0;
     background:linear-gradient(180deg,rgba(23,16,41,0),#171029 30%)}
   .skm-learn{width:100%;display:flex;align-items:center;justify-content:center;gap:7px;padding:12px;border-radius:10px;
@@ -570,8 +581,19 @@ export function openCharacter(hero, ctx) {
       const bname = sk.tree[br].name;
       const committed = skCommitted(s.id), r = skRank(s.id), pend = r - committed, rank = r > 0 ? starTier(r) : 0;
       const un = skUnlocked(br, s.tier), maxed = r >= sk.maxRank;
+      // The rank you're currently filling unfolds into its five points, each labelled with the value that
+      // point yields (interpolated) — so the bonus BETWEEN stars is spelled out, with your point highlighted.
+      const PPS = 5;
       const ladder = s.text.map((tx, i) => { const rk = i + 1;
         const cls = rk < rank ? "done" : rk === rank ? "cur" : rk === rank + 1 ? "next" : "";
+        if (rk === rank && r > 0 && skillPip(s, r)) {
+          const base = (rank - 1) * PPS, at = r - base;   // at = 1..5, which point of this rank you're on
+          const pips = Array.from({ length: PPS }, (_, j) => { const p = base + j + 1;
+            const st = (j + 1) === at ? "you" : (j + 1) < at ? "done" : "";
+            return `<span class="skm-pip ${st}"><span class="pp">${p}</span>${skillPip(s, p)}</span>`;
+          }).join("");
+          return `<div class="skm-rung cur pipr"><div class="pipr-h"><span class="rk">${rk}★</span><span class="rx">${tx || "—"}</span></div><div class="skm-pips">${pips}</div></div>`;
+        }
         return `<div class="skm-rung ${cls}"><span class="rk">${rk}★</span><span class="rx">${tx || "—"}</span></div>`;
       }).join("");
       let action;

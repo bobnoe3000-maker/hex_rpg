@@ -22,7 +22,13 @@ export function fxNum(arr, pts) {
   if (!arr || !arr.length) return 0;
   const x = Math.max(0, pts | 0) / PTS_PER_STAR;      // 0 … 5
   const i = Math.floor(x);
-  const lo = i === 0 ? 0 : (arr[Math.min(i - 1, arr.length - 1)] || 0);
+  // Smooth first star: instead of ramping from 0 (which made the first star's points worth far more than
+  // later ones), continue the star-1→star-2 slope backward. Every star MILESTONE still lands exactly on
+  // its anchor (pts 5/10/15/20/25 → arr[0..4]); only the partial first star (pts 1–4) is lifted so each
+  // point adds a similar amount. For anchors that already ramp linearly from 0 (most flat-stat passives)
+  // this changes nothing. Clamp so a big first step can't push a low-point value negative.
+  const lo = i === 0 ? Math.max(0, 2 * arr[0] - (arr.length > 1 ? arr[1] : arr[0]))
+                     : (arr[Math.min(i - 1, arr.length - 1)] || 0);
   const hi = arr[Math.min(i, arr.length - 1)] || 0;
   return lo + (hi - lo) * (x - i);
 }
@@ -66,6 +72,38 @@ export function skillEffectNow(s, pts) {
   if (fx.momentum) return `+${_pct(fxNum(fx.momentum.pct, P))} per kill`;
   if (fx.cleave) return `${_pct(fxNum(fx.cleave.pct, P))} ATK splash`;
   if (fx.lastst) return `heal ${_pct(fxNum(fx.lastst.heal, P))}`;
+  return "";
+}
+/* Compact per-point value (no unit word) for the rank-ladder point pips — e.g. "132%", "+12", "9%".
+   Returns "" for pure-utility skills that have no single headline number. Mirrors skillEffectNow's
+   type detection so the pip value always matches the "now" readout at the same point count. */
+export function skillPip(s, pts) {
+  const P = Math.max(0, pts | 0); if (!P || !s || !s.fx) return "";
+  const fx = s.fx, a = fx.active;
+  if (a) {
+    if (Array.isArray(a.dmg)) return _pct(fxNum(a.dmg, P));
+    if (a.kind === "heal" && Array.isArray(a.pct)) return _pct(fxNum(a.pct, P));
+    if (Array.isArray(a.shield)) return _pct(fxNum(a.shield, P));
+    if (Array.isArray(a.buff)) return `+${_pct(fxNum(a.buff, P))}`;
+    if (a.kind === "buff" && Array.isArray(a.v)) { const v = fxNum(a.v, P); return a.flat ? `+${Math.round(v)}` : `+${_pct(v)}`; }
+    if (Array.isArray(a.def)) return `+${_pct(fxNum(a.def, P))}`;
+    if (typeof a.dmg === "number") return _pct(a.dmg);
+    return "";
+  }
+  if (fx.flat) { for (const k in fx.flat) { const v = fxNum(fx.flat[k], P);
+    return `${v >= 0 ? "+" : "−"}${k === "aspd" ? Math.round(Math.abs(v) * 100) / 100 : Math.round(Math.abs(v))}`; } }
+  if (fx.mult) return `+${_pct(fxNum(fx.mult.pct, P))}`;
+  if (fx.lifesteal) return _pct(fxNum(fx.lifesteal, P));
+  if (fx.exec) return `+${_pct(fxNum(fx.exec.pct, P))}`;
+  if (fx.critDefIgnore) return _pct(fxNum(fx.critDefIgnore, P));
+  if (fx.critDmgReduce) return `−${_pct(fxNum(fx.critDmgReduce, P))}`;
+  if (fx.reflect) return _pct(fxNum(fx.reflect, P));
+  if (fx.waveheal) return _pct(fxNum(fx.waveheal, P));
+  if (fx.guardian) return _pct(fxNum(fx.guardian, P));
+  if (fx.rend) return _pct(fxNum(fx.rend.pct, P));
+  if (fx.momentum) return `+${_pct(fxNum(fx.momentum.pct, P))}`;
+  if (fx.cleave) return _pct(fxNum(fx.cleave.pct, P));
+  if (fx.lastst) return _pct(fxNum(fx.lastst.heal, P));
   return "";
 }
 
