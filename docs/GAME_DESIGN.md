@@ -3,7 +3,7 @@
 > **Working title:** Dungeon Pals (v2 lineage)
 > **Genre:** Party auto-battler / theorycraft RPG with idle & PvP layers
 > **Platform:** Mobile-first web (portrait), zero-install, later PWA
-> **Status:** Living design doc. Confirmed decisions are marked ✅; open items are marked 🔶.
+> **Status:** Living design doc, **synced to the code 2026-08-23**. Confirmed & built = ✅; designed-but-not-built or undecided = 🔶. Two features the earlier draft marked ✅ are in fact **not built** — player-set **skill priority** (Feature 3, §4/§8.4) and **PvP** (Feature 4, §9) — and all dungeons are now **roaming multi-level descents** (§8.3/§8.5), not the old 7-room chain. See §14.1 for the gap list.
 
 ---
 
@@ -47,7 +47,7 @@ This mirrors how **Defense** already works (`x/(x+…)` diminishing returns), so
 
 ### 2.2 Action economy
 - **Combat is continuous, not turn-based.** There are no discrete global rounds — the battle flows in real time and every unit acts **independently on its own attack-speed cadence**. A high-`aspd` unit simply acts more often. This is the whole reason Attack Speed is a stat, and it keeps the fight visually continuous rather than a stop-start exchange.
-- Combat is a **fixed-timestep simulation** on a grid (inherits the prototype's 8×11 board and Manhattan movement).
+- Combat is a **fixed-timestep simulation** on a grid with Manhattan movement. Fights now play out on the **larger-than-screen roaming floors** (§8.5) — a 2D field of sub-rooms the camera follows — with BFS pathing that routes units around walls.
 - Each unit has an **action timer**; interval = `BASE_INTERVAL / aspd`. When it fires, the unit takes **one action** — timers run in parallel, so actions interleave smoothly.
 - An action = resolve the unit's **skill priority list** (§4): fire the first eligible skill, else a **basic attack**.
 - Ranged units act at range; melee units path toward the nearest valid target first.
@@ -89,16 +89,14 @@ Four base classes. Each defines: base stats, per-level growth, allowed gear type
 
 ---
 
-## 4. Skills & Priority Rotation ✅ (cooldown + priority list, no mana)
+## 4. Skills & Rotation ✅ auto-cast · 🔶 player-ordered priority
 
-- Every hero has a **basic attack** (always available) + up to **4 skill slots**.
-- Each skill has: `id, name, class, targetRule, condition, cooldown, effect, scalingStat, upgradeLevel`.
-  - **targetRule:** nearest enemy, lowest-HP enemy, lowest-HP% ally, self, all enemies, all allies, random enemy…
-  - **condition:** gate for firing — e.g. `always`, `ally.hp% < 50`, `enemies >= 3`, `self.hp% < 30`, `target.hasDebuff(x)`.
-  - **effect:** damage (mult of scaling stat), heal, buff, debuff, DoT, shield, AoE, summon (future 🔶).
-- **Priority list:** the player **orders** their skills. On each action the engine walks the list top→down and fires the **first skill whose cooldown is ready and condition is met**; if none, basic attack. (Feature 3.)
-- **Upgrades:** skills level up (stronger effect / lower cooldown / added rider) via **skill points** (from leveling) and/or materials. Diminishing per level. (Features 1 & 2.)
-- No mana/energy — the knobs are **cooldown, condition, and order**. This is the heart of the theorycraft.
+- Every hero has a **basic attack** (always available) + a kit of tree skills (§4.1).
+- Each active skill carries: `id, name, class, tier, cooldown, kind`, and per-rank `fx.active` params (damage mult, buff/heal/shield magnitude, control riders).
+- **Auto-cast (implemented).** On each action the battle AI (`Skills.activeSkills` → the game's `tryCast`) walks the hero's owned actives **highest-tier first** and fires the **first whose cooldown is ready and whose trigger fits** — a heal only when a pal is hurt, an AoE only with foes in the blast, a bolt/melee strike only with a target in reach, buffs/shields on cooldown. If none fit, it basic-attacks. No mana/energy — the knob is **cooldown**.
+- 🔶 **Player-ordered priority + per-skill conditions (Feature 3) is NOT built yet.** The design intent — the player **orders** the rotation and sets firing conditions (`always`, `ally.hp% < 50`, `enemies >= 3`, `target.hasDebuff(x)` …) — is the game's theorycraft centrepiece and still ahead; today the ordering is automatic (by tier) and the conditions are the fixed per-archetype triggers above. See §8.4.
+- **Effects in play:** damage (mult of ATK), heal (self/party), buff & shield (self/party), and control riders — slow, stun, armor-shred, burn/bleed. **Summon** is future 🔶.
+- **Upgrades:** skills rank 1→5 via **skill points** from leveling; magnitudes now scale **per point** (§4.1), not just per star.
 
 ### 4.1 Skill Trees & Specialization ✅ (all four classes shipped)
 
@@ -106,7 +104,7 @@ Each class owns a **skill tree**: a branching set of skills and passives the mai
 
 - **Two branches per class**, one **offensive** and one **defensive**, of **13 skills each** (5 tiers: 3·3·3·3 + a capstone). 4 classes → 104 skills.
 - **Active or passive.** Passives fold into `StatEngine.derive` (flat + missing-HP multipliers) and per-hit `combatMods` (Executioner, Crushing Blows, Bulwark, Bloodthirst). Actives are cast by the battle AI on cooldown when their trigger fits (`Skills.activeSkills` + the game's `tryCast`) — Cleave, Sunder, Whirlwind, Rampage, Guard, Taunt, Shield Bash, Rallying Cry, and the capstones, all driven through a unified **timed-buff system** (shields, stuns, DEF shred, party auras, immunity, bleeds).
-- **Ranks 1→5**, breakpoints at 3 and 5. **1 skill point per level** (separate from stat points, from level 2). **Tier gates** (0·2·6·12·20 points-in-branch) make deep investment a real cost.
+- **Ranks 1→5**, breakpoints at 3 and 5. **1 skill point per level** (separate from stat points, from level 2). **Tier gates** (0·2·6·12·20 points-in-branch) make deep investment a real cost. Each rank now holds **5 points** (25 total = 5 full stars), and a skill's **magnitude scales with every point, not just at a full star** (`Skills.fxNum` interpolates between the per-star anchors) — so a partly-filled rank is proportionally stronger. The first star is smoothed (no ramp-from-zero) so each point adds a steady amount while the star milestones stay put; discrete riders (added burn/stun, cleave targets, extra uses) still switch on at their star. The rank ladder in the character panel **unfolds the rank you're filling into its five point-values** with your point highlighted, so the between-star bonus is explicit.
 - **Draft → Confirm.** Allocating points is a pending draft (add/remove freely, live preview); **Confirm** commits and saves. Committed ranks can't be pulled back for free — **resetting the tree costs silver** (`BAL.SKILL_RESPEC`: base + per-point) and refunds every point, so respec is a deliberate, priced choice.
 - **Companion loadouts ✅ (Phase 3).** Every auto-generated companion ships a **seed-rolled, class-appropriate kit of exactly 2 active + 3 passive skills** (`Skills.rollCompanionSkills`), drawn from the tiers their level can plausibly reach and set to a level-scaled rank. Because it's seeded, re-rolling the Tavern is a real hunt for the loadout you want — recruiting is a build choice. The kit auto-casts in battle through the same `tryCast`/timed-buff path as the main hero (no combat code is companion-specific), and is surfaced read-only in the **Tavern** recruit rows and the character panel (`Skills.heroKit`). Companion kits are fixed (no point spend) — only the main hero allocates.
 
@@ -123,7 +121,7 @@ The same pattern applies to every class (e.g. Fighter: *Guardian* tank vs *Berse
 ## 5. Progression
 
 - **XP & Levels:** kills grant shared party XP (split among the living). **No level cap** — the XP curve is formula-driven (`engine/combat.js`: `xpToReach(L) = 10·(L²−1)`, keeping the classic early pacing L2=30, L3=80 and scaling forever). **Implemented.**
-- **On level-up (main hero):** **no automatic stat growth** — each level grants **assignable stat points**, starting at **level 2** (a fresh level-1 hero has none). Rate (`BAL.POINTS`): **3/level up to L50, 2 up to L100, then 1**. The player spends them in the character panel's **Stats tab** (add/remove with a live preview, then **Confirm**); one point = **+4 HP** or **+1** to any other stat (`STAT_STEP`). Points live on the hero as `pts{}` and feed `StatEngine.derive`; the available pool is `earnedPoints(level) − spent` (summed from L2). `systems/Leveling.js` (pure). **Implemented.**
+- **On level-up (main hero):** **no automatic stat growth** — each level grants **assignable stat points**, starting at **level 2** (a fresh level-1 hero has none). Rate (`BAL.POINTS`): **3/level up to L50, 2 up to L100, then 1**. The player spends them in the character panel's **Stats tab** (add/remove with a live preview, then **Confirm**); the base step is one point = **+4 HP** or **+1** to any other stat (`STAT_STEP`). **Per-class affinity (`POINTS.CLASS_STEP`)** adds to a point spent on the class's signature stats, so a point leans into the class identity: **Fighter** +1 HP & +1 DEF (→ +5 HP / +2 DEF per point), **Mage** +2 ATK (→ +3), **Rogue** +1 Crit & +1 Dodge (→ +2 each), **Cleric** +1 DEF & +1 ATK (→ +2 each). This affinity applies to both the main hero's point-buy **and** companion stat rolls. Points live on the hero as `pts{}` and feed `StatEngine.derive`; the available pool is `earnedPoints(level) − spent` (summed from L2). `systems/Leveling.js` (pure). **Implemented.**
 - **On level-up (companions):** keep the **fixed per-class growth block** in `data/classes.js` (no point allocation) — they auto-scale so the player only micromanages the main hero. **Implemented.**
 - **Skill points:** spent to unlock/upgrade skills.
 - **Main hero** is created by the player — **implemented**: splash → guest login → pick class → **roll stats** (seeded, re-rollable) → **roll portrait** → name. (Feature 1; skills come with Phase 3.)
@@ -144,7 +142,7 @@ Every item is composed of **Prefix + Material + Gear Type + Upgrade Level**, and
 ```
 
 ### 6.1 The three component tables (each grants exactly one stat) ✅ (implemented)
-> Live in `data/items/{prefixes,materials,gearTypes}.js`; `systems/LootGenerator.js` composes them into drops. Names read `[Prefix] [Material] [Type]` (e.g. *Sturdy Meteoric Wand*), class-restricted, colour-graded by the rarest component. The `lifesteal` proc is wired; `+N` upgrade levels and more procs are still ahead.
+> Live in `data/items/{prefixes,materials,gearTypes}.js`; `systems/LootGenerator.js` composes them into drops. Names read `[Prefix] [Material] [Type]` (e.g. *Sturdy Meteoric Wand*), class-restricted, colour-graded by the rarest component. **`+N` upgrade levels are implemented** (the Forge, §6.3). **Procs are only partly wired:** just the `vampiric → lifesteal` prefix carries a live proc today; the fiery/burn, icy/slow and other elemental prefixes exist as flavour but are still `proc: null` — the status-effect proc pass is 🔶 ahead.
 
 - **Gear Type** — defines the **slot**, the **class** it serves, one stat bonus, and (weapons) a **range**.
   - *Weapon types:* sword, greatsword (fighter, melee); wand, staff (mage, **ranged**); mace, scepter (cleric, melee); dagger, kris (rogue, melee), shortbow (rogue, **ranged**).
@@ -221,40 +219,41 @@ Keep-level upgrades (unlock/boost services) are 🔶 future.
 - **Full inventory screen:** grid management, sort, side-by-side compare, sell — still ahead.
 
 ### 8.3 The Dungeons board & tiered descent ✅ (Features 11, 12) — implemented
-The Keep's **Dungeons** button (was "Descend") opens the **Dungeons board** (`ui/DungeonSelect.js`) — a scrollable **ladder of ten tiered dungeons** climbing from the **Emberdeep** (Lv 1–10) to **Draconis Apex** (Lv 90–100). A **Continue** banner up top resumes the active delve in one tap; each rung shows its **level band**, **boss**, **loot floor**, and **recommended level**, with a status flag (**Cleared ✓ / In Progress / ✦ New / Locked**).
+The Keep's **Dungeons** button opens the **Dungeons board** (`ui/DungeonSelect.js`) — a **world-map ladder of ten tiered dungeons** climbing from **The Shaded Foothills** (Lv 1–10) to **The Nether Citadel** (Lv 91–100). Tapping a node opens a detail sheet showing its **level band**, **boss**, and **loot floor**, with a status flag (**Cleared ✓ / In Progress / ✦ New / Locked**) and a **Descend** CTA.
 
-- **The ladder** (`data/dungeons.js`): 10 dungeons, each a 10-level band, each capped by a themed boss (Ashwing the Young, Malketh the Cold Lich, the Drowned King … Vurmalax the Elder Wyrm). All reuse the **seven shared room LAYOUTS** (shape / exits / blockers + an enemy composition of archetype figures) and re-skin them with a themed **roster** (each of the six figures renamed per theme), a **boss**, an accent colour, a **palette + tileset**, and a loot **power** — so we get ten distinct dungeons with no new floor geometry.
+- **The ladder** (`data/dungeons.js`): 10 dungeons, each a 10-level band, each capped by a themed boss (Mosstooth the Hill Troll · Mudmaw the Bog Fiend · … · Vurmalax the Dread Lord). Each dungeon carries a themed **roster** (all 13 archetype figures renamed per theme), a **boss**, two named **mini-bosses** (`d.minis`, gating its descent — see §8.5), an accent colour, a **palette + tileset**, and a loot **power**.
+- **Every dungeon is a roaming multi-level descent** (§8.5), not a linear room chain. Each is a **stack of 3 levels**, each level a larger-than-screen 2D floor of sub-rooms joined by corridors. **Dungeons 1–2 are hand-authored** (`EMBERDEEP_LEVELS` / `FROSTMERE_LEVELS` in `game.js`); **dungeons 3–10 each have their own hand-authored geometry template** (`data/roamLayouts.js`) — a distinct shape per dungeon (a switchback climb, branching caverns, a symmetric crypt, scattered groves, wide wastes, a fortress, a converging chasm, a grand many-looped spire) — skinned with that dungeon's band, roster, mini-bosses and boss by `genRoamStack`. All 24 levels are connectivity-verified. The old shared 7-room `LAYOUTS` / `spawnWave` path still exists in code as a fallback but no dungeon uses it.
 - **Distinct look per theme.** Each dungeon carries its own **floor-stone palette** and **decorative tileset** (`data/dungeons.js` → `dungeon.palette` / `dungeon.tiles`, threaded through `buildGameRoom` and the exit walls). Warm ember-brown Emberdeep, cold blue Frostmere, teal drowned Vael, olive Thornwild, rust Foundry/Wastes, pale Skyreach, white Rimeheart, violet-crystal Apex. Two new decorative tiles back this — **frost** (icy shards) and **crystal** (glowing gem shards) — alongside the existing ember/rune/bones/moss/mushroom/ash set.
-- **Enemies scale to Lv 100.** Each dungeon carries a `baseLevel`; foes spawn at **baseLevel + room depth**, the boss at the band's top. `models/units.scaleEnemy` grows the six archetype baselines by `base·(1 + rate·(level−1))` (rates in `BAL.ENEMY_SCALE`), so the tile **level badge** drives real stats — a Lv 95 pack is a genuine wall while the Emberdeep stays a Lv 1 tutorial.
-- **Bosses are normalized.** Every boss spawns from a single tuned block (`BAL.BOSS_BASE`) scaled to the band top, **not** from its figure's archetype — so a boss's difficulty is consistent across dungeons and the heavy dragon figure can't make a tier unwinnable.
-- **Loot keeps pace.** A dungeon's tier feeds a **power** into `LootGenerator.generate`: rolled stat values scale up (`BAL.LOOT_POWER_STEP`), the **grade floor** rises (plain → fine → rare → epic as you climb), and drop rates bump per tier. Clearing a boss the **first time** grants a **guaranteed tier-appropriate drop** (floor lifted one grade) — the carrot for descending.
-- **Balance pass.** `ENEMY_SCALE`, `LOOT_POWER_STEP`, and `BOSS_BASE` were tuned with a real combat simulator (`tests/balance.sim.mjs`, using the actual `derive`/`resolveAttack`) that pits a representative leveled-and-geared party against every tier. The curve is a gentle ramp — a fair fight that stays winnable but costly from Lv 1 to Lv 100, with the party keeping pace via level-up points + tier-scaled loot. Re-run it after any combat-math change: `node tests/balance.sim.mjs`.
-- **Boss-clear gating.** A rung unlocks only once the **previous boss is defeated** (`isUnlocked` against `state.cleared`); tier 1 is always open. Cleared dungeons stay open to farm.
-- **Save-compatible (v2).** `state.dungeonId` + `state.cleared[]` are additive; older saves default to the Emberdeep with an empty cleared set.
+- **Enemies scale to Lv 100.** Each foe pack carries a level within the dungeon's band (levels ramp across the 3-level descent); the boss sits at the band's top. `models/units.scaleEnemy` grows the archetype baselines by `base·(1 + rate·(level−1))` (rates in `BAL.ENEMY_SCALE`), so the tile **level badge** drives real stats — a Lv 95 pack is a genuine wall while The Shaded Foothills stays a Lv 1 tutorial.
+- **Bosses & mini-bosses are normalized.** The boss spawns from a single tuned block (`BAL.BOSS_BASE`) scaled to the band top, and mini-bosses from `BAL.MINIBOSS_BASE` scaled to their level — **not** from their figure's archetype — so champion difficulty is consistent across dungeons and the heavy figures can't make a tier unwinnable.
+- **Loot keeps pace, and champions gate it.** A dungeon's tier feeds a **power** into `LootGenerator.generate`: rolled stat values scale up (`BAL.LOOT_POWER_STEP`), the **grade floor** rises (plain → fine → rare → epic as you climb), and drop rates bump per tier. On the roaming floors **gear drops only from champions & elites, by tier** (`BAL.ROAM_GEAR`): elite **25%**, mini-boss **50%**, final boss **100%** — ordinary trash drops only gold or the occasional potion. Clearing a boss the **first time** grants a **guaranteed tier-appropriate drop** (floor lifted one grade) — the carrot for descending.
+- **Balance pass.** `ENEMY_SCALE`, `LOOT_POWER_STEP`, and `BOSS_BASE` were tuned with a real combat simulator (`tests/balance.sim.mjs`, using the actual `derive`/`resolveAttack`) that pits a representative leveled-and-geared party against every tier. Re-run it after any combat-math change: `node tests/balance.sim.mjs`.
+- **Boss-clear gating.** A dungeon unlocks only once the **previous dungeon's boss is defeated** (`isUnlocked` against `state.cleared`); tier 1 is always open. Cleared dungeons stay open to farm.
+- **Save-compatible.** `state.dungeonId` + `state.cleared[]` + the roaming progress (`state.roamLevel` / `state.roamUnlocked`) are additive; older saves default to The Shaded Foothills with an empty cleared set.
 
-### 8.4 Skill Priority screen ✅ (Feature 3)
-Drag-to-order each hero's skill rotation; set per-skill conditions.
+### 8.4 Skill priority & conditions 🔶 (Feature 3 — NOT built)
+The design intent is a screen to **drag-to-order** each hero's skill rotation and **set per-skill firing conditions** — the heart of the theorycraft pillar. **This is not implemented.** Today actives auto-cast highest-tier-first on cooldown when their built-in trigger fits (§4), with no player ordering or condition editing. This is the single largest gap against the doc's core vision.
 
-### 8.5 Map loop — endless farm + optional advance ✅ (implemented)
-The battle map is a **continuous farm**, not a one-shot room clear:
-- **Open-floor rooms.** Each room is an irregular **island of stone over the void** — no bounding walls; the edge itself is the boundary, drawn with a **tight half-width fade** to the dark. Five shape generators (`dungeon.js` SHAPES: full / broken-ring / causeway / cavern / cross) give every room a different footprint, and outer rings can crumble to void. The **walkable area is guaranteed fully connected** (flood-fill prune + blockers only placed where they can't strand a tile), so there's never an unreachable cell. Walkable tile variety: crack, moss, grate, puddle, **ember, rune, bones, rubble, mushroom, ash**.
-- **Walls, reused two ways.** The old extruded wall art returns as (a) **impassable obstacle blocks** dropped inside rooms — sometimes in short **runs of 2–3** — alongside pit/column/firepit (`pWallBlock`, a `wall` blocker kind), and (b) **exit architecture**: every exit is a wall segment at the floor's edge with an opening cut through it (`pExitWall`), keyed by kind — **arch** (onward/vault, gold), **framed doorway** (shrine, blue), **stairs up** (descent/daylight, green). Everywhere else the perimeter is blank void.
-- **Rune Compass.** A corner dial shows the descent — **ROOM x / 7**, current room glowing, cleared rooms filled, the boss node ringed. A run is **seven rooms** (the shared `LAYOUTS`), each with its own shape, tile theme, and wave, ending in the dungeon's **boss room**.
-- **Stay as long as you like — the boss is a farmable timed spawn.** Every room, the boss room included, respawns a cleared wave after a short delay, so you can farm indefinitely and the fight never pulls you back to the Keep on its own. The **boss** joins the wave only when its **respawn timer** is up (`BAL.BOSS_RESPAWN`, 10 min for now); between kills the boss room fields a deep-level **trash pack** so there's always something to fight. Slaying the boss puts it back on the timer, and the **first** kill in a dungeon marks it cleared, unlocks the next rung, and grants a guaranteed first-clear drop (every kill after just drops the boss's normal loot). The Rune Compass shows a **BOSS m:ss** countdown (or **BOSS ✦ READY**) below the dial.
-- **Enemies spawn on random reachable floor cells** each wave (never in the void), and each carries a **level badge** (bottom-right of its tile) that **scales with the dungeon's band** (§8.3) — deeper dungeons field far tougher foes.
-- **Loot drops into your bag mid-combat.** Slain foes have a drop chance (bosses always drop); items fall straight into a shared **inventory** (no more "pick 1 of 3" gate). Better materials/procs drop less often (§6.2).
-- **Rally flag.** Tap the floor to plant a rally point; pals with **no foe engaged** regroup on it — a light-touch way to steer positioning between waves. (Full formation/command control is a later pass.)
-- **Tap a hero** to open a stats + gear panel; equipping/unequipping is done here. Opening any panel **fully freezes** the dungeon — combat, movement, and effects — and closing it resumes exactly where you left off. This freeze is **independent of the manual Fight/Pause button** (opening a panel no longer flips it), so theorycrafting never disturbs the run state.
-- **Area →** advances to the next room (The Threshold → Gallery → Causeway → Hollow → Vault → Approach → the boss's Inner Sanctum) when *you* choose, stopping at the boss room; the Rune Compass tracks where you are. Branch-choice at portals (shrine vs. vault) is a later pass — the exits already render their kind.
-- **On a party wipe** you're returned to **the Keep**: the **main hero auto-revives for free** at partial HP, while **fallen companions stay dead** until raised at the **Temple** for a level-scaled fee (§7.1). The roguelite item-loss penalty (§7.1) activates once the **Bank** exists to hold death-safe valuables.
+### 8.5 Map loop — roaming multi-level descent ✅ (implemented)
+Each dungeon is a **3-level roaming descent** you farm, not a one-shot room clear (`buildRoamingFloor`, `spawnRoaming`, `updateRoaming` in `game.js`):
+- **A roaming floor, camera-followed.** Each level is a **larger-than-screen 2D floor** of sub-rooms joined by 2-wide corridors; the **camera glides to keep the party centred** (`updateCamera`) and a **mini-map** shows the whole floor. The party **auto-roams and auto-fights** — it isn't a stop-start room chain. Floors keep the same open-floor art (islands of stone over the void, walkable tiles: crack/moss/grate/puddle/ember/rune/bones/rubble/mushroom/ash) and per-dungeon palette/tileset.
+- **March to the objective.** Heroes push toward the level's **champion room** (`state.roamObjective`) unless an awake foe is in reach, so the party reliably advances through the floor instead of stalling on a lone straggler; once the champion falls the objective clears and the party mops up any bypassed side rooms.
+- **Formation AI.** The party fights in formation: **tanks hold the front, ranged/support classes hang back** for protection, and the **main hero takes front-centre** (`computeFormation`, `roleOf`, `frontAct`/`backlineAct`/`midAct`; leash + back-standoff in `BAL`).
+- **Mini-boss gates + manual descent.** Levels **1 & 2 each end at a named mini-boss** that **gates the descent** — you can't move down until it falls. The **final level ends at the dungeon's boss** (a full clear that unlocks the next dungeon). You descend when *you* choose via the **level selector in the header** (1 — 2 — 3); the game never auto-advances. Mini-bosses also carry a **10-min countdown** shown in the header (`MINI m:ss` / `MINI ✦ READY`).
+- **Endless farm that re-forms in place.** Fully clearing a level **re-forms it where the party stands** — NPCs respawn in their rooms and the party auto-seeks from wherever it is (**no teleport back to the entrance**; `reformRoaming`). Slain champions go on a **respawn timer** (`BAL.BOSS_RESPAWN`, 10 min); while a champion is down its room fields farm trash so there's always something to fight. A **stall guard** (`BAL.ROAM_STALL`) re-forms the floor if the party ever can't path to a remaining foe, so a level never hangs.
+- **Elites prowl in.** As you clear rooms, **elite foes** occasionally appear (more likely the deeper the dungeon; `maybeSpawnElite`). Elites and champions are the **only gear-droppers** (tiered rates, §8.3); trash drops gold or the odd potion.
+- **Loot drops into your bag mid-combat.** Slain foes drop straight into the shared **inventory** (no "pick 1 of 3" gate). Champion/elite gear opens a slot-roll popup (§6); better materials/procs drop less often (§6.2).
+- **Rally flag = a "gather here" order.** Tap the floor and the **whole party marches there and holds** — striking anything in reach on the way, overriding auto-seek and the level objective; **tap the flagged tile again to pull the flag** and let them resume. (Full multi-command control is still a later pass.)
+- **Combat runs behind overlays.** Tapping a hero opens a stats + gear panel over a see-through scrim; the battle **keeps running** (an idle-battler never pauses just for an open window) — only the **manual Pause** stops it. A **speed toggle (1× / 2×)** rides in the header.
+- **On a party wipe** you're returned to **the Keep**: the **main hero auto-revives for free** at partial HP, while **fallen companions stay dead** until raised at the **Temple** for a level-scaled fee (§7.1). The roguelite item-loss penalty (§7.1) activates once the **Bank** exists to hold death-safe valuables — **not yet in effect**.
 
 ---
 
-## 9. Multiplayer ✅ (async PvP first; local-first seam)
+## 9. Multiplayer 🔶 (designed, NOT built)
 
-- **PvP Arena (async snapshot):** the player's party — stats, gear, and skill priorities — serializes into a **battle snapshot**. Matchmaking pairs snapshots; the **deterministic sim** (§2.4) runs both parties head-to-head. Client-side now (local "ghost" opponents from generated snapshots), **server-authoritative later**. Ladder/ELO + rewards. (Feature 4.)
+- 🔶 **PvP Arena (Feature 4) is NOT implemented** — it's a "coming soon" stub. The Arena button in the Keep/menu just toasts *"PvP challenges open soon."* No snapshot serialization, matchmaking, or ghost battles are wired yet. The determinism the sim needs (§2.4) is in place, so the **design** is: serialize the party (stats, gear, skill priorities) into a **battle snapshot**, pair snapshots, run the **deterministic sim** head-to-head; client-side "ghost" opponents first, **server-authoritative later**, with ladder/ELO + rewards.
 - **Co-op dungeons:** 🔶 future.
-- All net access is behind a **`NetService`** interface — mocked locally today, swapped for a real backend with **no gameplay rewrites**.
+- The intended seam is a **`NetService`** interface (mocked locally, swapped for a real backend with no gameplay rewrites) — **not yet stubbed in code**.
 
 ---
 
@@ -264,10 +263,11 @@ The battle map is a **continuous farm**, not a one-shot room clear:
 - Multiple **game slots** = independent profiles (separate parties/progress). 1–2 free; more **paid** (monetization).
 - All state serializes to JSON behind a **`SaveService`** (localStorage now → cloud later).
 
-### 10.2 Offline progression ✅ (Feature 7)
-- On load, compute elapsed time since last save, **capped at 8h** (free). Simulate idle rewards (runs/resources) over that window and present an **offline earnings** summary.
-- Extended caps (**24h / 48h**) are a monetization hook.
-- ⚠️ Client-side offline sim is **clock-exploitable** — acceptable for MVP; **server-authoritative time** closes it later (`TimeService` seam).
+### 10.2 Offline progression ✅ (Feature 7) — implemented
+- While delving, the game tracks a **decaying moving average of your live yield** (silver, gems, XP, potions per second; `state.farm`, `BAL.OFFLINE.TAU`) — a self-balancing rate that reflects the dungeon+level you're on and freezes when you stop.
+- On resume, if you **left mid-delve** (the save records the scene — no progress if you closed the app from town), it grants **10% of that rate over the time away** (`BAL.OFFLINE.RATE`), **capped at 8h** (`BAL.OFFLINE.MAX_HOURS`), and shows a **"Welcome back" card** tallying the silver, gems, XP/levels and potions. Gated by a minimum established rate and a minimum away-time so a quick app-switch pays nothing. The run is saved on `visibilitychange`/`pagehide` so the away-time is measured from when you actually left.
+- Extended caps (**24h / 48h**) are a monetization hook 🔶.
+- ⚠️ The offline calc is **client-side and clock-exploitable** — acceptable for MVP; **server-authoritative time** closes it later (`TimeService` seam, 🔶).
 
 ---
 
@@ -296,8 +296,8 @@ Keep the prototype's **procedural, seeded, hand-inked engine** (portraits, creat
 |---|---|---|---|
 | 1 | Main character: name, stats, skills, upgrades | §3–5 | ✅ |
 | 2 | Hire/equip/upgrade random companions | §7 | ✅ |
-| 3 | Skill priority ordering | §4, §8.4 | ✅ |
-| 4 | Multiplayer PvP arenas (co-op later) | §9 | ✅ async / 🔶 co-op |
+| 3 | Skill priority ordering (player-set order + conditions) | §4, §8.4 | 🔶 **not built** (actives auto-cast by tier) |
+| 4 | Multiplayer PvP arenas (co-op later) | §9 | 🔶 **not built** (stub / "coming soon") |
 | 5 | Multiple game slots (monetization) | §10.1 | ✅ |
 | 6 | Keep/Town hub with services | §8.1 | ✅ |
 | 7 | Offline progression (8h; 24/48h paid) | §10.2 | ✅ |
@@ -319,11 +319,19 @@ Keep the prototype's **procedural, seeded, hand-inked engine** (portraits, creat
 2. ~~Crit as a stat vs proc-only~~ — **resolved:** Crit is a first-class stat (§2.1).
 3. ~~Rarity tiers~~ — **resolved:** no tiers; random drops, better components drop less often, power via components + upgrade level (§6.2).
 4. ~~Permadeath~~ — **resolved:** party wipe strips all carried items but keeps XP/stats/skills; Bank is death-safe (§7.1).
-5. **Damage-formula constants** — needs a balance pass (placeholders in `balance.js`).
-6. **Live PvP / co-op** — async only for now; realtime is a later backend decision.
-7. **Skill-tree respec cost** — free experimentation vs silver/material sink (§4.1).
-8. **On-wipe silver** — keep silver carried on hand, or only banked silver? (default: keep on-hand; §7.1).
+5. **Damage-formula constants** — ongoing balance tuning (`balance.js`); the combat sim (§8.3) is the guide.
+6. **Live PvP / co-op** — even async PvP isn't built yet (§9); realtime is a later backend decision.
+7. ~~Skill-tree respec cost~~ — **resolved:** priced silver reset (`BAL.SKILL_RESPEC`, base + per-point), refunds every point (§4.1).
+8. **On-wipe silver** — keep silver carried on hand, or only banked silver? (default: keep on-hand; §7.1). Moot until the Bank + item-loss penalty ship.
 9. **Energy/stamina** gating on dungeon runs? (Not in the feature list — omitted unless desired.)
-10. **Consumables** (potions, scrolls) — in scope? Implied by Shop; needs a small spec.
+10. ~~Consumables~~ — **resolved:** the **potion belt** is live (§8.2) — 7 brews, auto-quaffed in battle, bought/sold in the Shop, dropped by foes.
+
+### 14.1 Biggest remaining gaps (implemented status, at a glance)
+- **Skill priority ordering + conditions** (Feature 3) — the core theorycraft pillar; still auto-cast only (§4, §8.4).
+- **Bank** — stubbed; it gates the roguelite **item-loss-on-wipe** penalty, so the game's death stakes (§7.1) aren't active yet.
+- **PvP Arena** (Feature 4) — stubbed (§9).
+- **Gear procs beyond lifesteal** — only `vampiric` is wired; elemental/DoT procs on gear are ahead (§6.1).
+- **Full inventory screen** — bag lives in the character panel; a dedicated grid/sort/bulk-sell screen is ahead (§8.2).
+- **Deferred by design (🔶):** co-op, Keep-level upgrades, branch-choice portals & full formation command, summon effect, server-authoritative time/PvP, PWA, monetization hooks (§11).
 
 See `docs/ARCHITECTURE.md` for the technical realization and the phased build roadmap.
