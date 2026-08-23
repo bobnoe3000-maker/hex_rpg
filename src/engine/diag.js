@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-22r · Party bar fits three characters again — the cards now shrink to the screen instead of overflowing, so the third companion's stats/gear line is no longer clipped off the right edge. Roaming floors have a stall guard so a straggler the party can't path to can't stop the floor respawning. The rally flag is a real 'gather here' order (tap again to pull it). Active skills grow with EVERY point, not just full stars";
+export const APP_BUILD = "2026-08-22s · Offline progress: while the app is closed the party keeps farming the dungeon+level you left it on and earns 10% of your live rate, capped at 8h — a Welcome Back card tallies the silver, gems, XP/levels and potions when you return (no progress if you stepped out from town). Party bar fits three characters. Roaming floors have a stall guard so a stuck straggler can't stop respawns. The rally flag is a real 'gather here' order. Active skills grow with EVERY point, not just full stars";
 
 const BUF = [];
 const MAX = 400;

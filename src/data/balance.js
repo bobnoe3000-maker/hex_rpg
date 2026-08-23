@@ -35,6 +35,16 @@ export const BAL = {
   ROAM_STALL: 12,         // roaming floor: seconds with no foe damage before the stall guard re-forms the level
                           //   (so a straggler the party can't path to never hangs the floor). Unreachable
                           //   stragglers re-form at 1×; a reachable-but-unreached foe waits for the 2× backstop.
+
+  // Offline progress: while the app is closed, the party "keeps farming" the dungeon+level you left it
+  // on and earns a fraction of your live rate. Only pays out if you exited mid-delve (never from town).
+  OFFLINE: {
+    MAX_HOURS: 8,     // cap on how long the party keeps earning while you're away
+    RATE: 0.10,       // offline yield = this fraction of your live farming rate (10%)
+    TAU: 240,         // seconds — window of the live farm-rate moving average (recent activity dominates)
+    MIN_SAMPLE: 45,   // need this much established rate (accumulated farm-seconds) before offline pays out
+    MIN_AWAY: 120,    // ignore gaps shorter than this (seconds) — no popup for a quick app-switch
+  },
   DROP_CHANCE: 0.015,     // chance a normal enemy drops an item on death (bosses always drop) — kept low so the Loot Roll popup stays occasional
   // (per-component drop weights live in data/items/*; rarer components fall less often)
 

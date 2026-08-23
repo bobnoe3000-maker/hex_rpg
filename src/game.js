@@ -70,6 +70,7 @@ const state={ roomIdx:0, scene:"town", phase:"idle", room:null, foes:[], t:0, sp
   roamBossAt:[null,null,null],   // per-level champion respawn time (runtime): a slain mini-boss/boss returns after BOSS_RESPAWN
   roamObjective:null,   // {r,c} the living champion's room — the party marches here while it's up; cleared once the champion falls so the party mops up side rooms
   roamFoeHP:0, roamProgressAt:0,   // stall-guard bookkeeping (runtime): total live-foe HP + last time it changed
+  farm:{ secs:0, silver:0, gems:0, xp:0, potions:0 },   // decaying moving average of live farming yield → drives offline progress
   autoLevel:false,   // when true, companion level-ups resolve their own free roll (no popup, no silver)
   cam:{x:0,y:0},     // camera offset (logical px) for the roaming floor — follows the party
   rally:null };      // {r,c} flag heroes regroup on when no foe is engaged
@@ -109,6 +110,7 @@ function snapshotState(){
     inventory:state.inventory, potions:state.potions, roomIdx:state.roomIdx,
     dungeonId:state.dungeonId, cleared:state.cleared, roomMax:state.roomMax, autoLevel:state.autoLevel,
     roamLevel:state.roamLevel, roamUnlocked:state.roamUnlocked,
+    scene:state.scene, farm:state.farm,   // offline progress: whether you left mid-delve + your live farm-rate
     savedAt:new Date().toISOString() };
 }
 function saveGame(){ if(activeSlot!==null) writeSlot(activeSlot, snapshotState()); }
@@ -133,6 +135,8 @@ function loadGame(save){
   state.autoLevel=!!save.autoLevel;                            // per-save preference (off for older saves)
   state.roamLevel=Math.max(0,Math.min(lastRoamLevel(), save.roamLevel|0));   // Misty Wetlands descent progress
   state.roamUnlocked=Math.max(state.roamLevel, Math.min(lastRoamLevel(), save.roamUnlocked|0));   // deepest reachable level
+  const f=save.farm||{};   // restore the live farm-rate accumulator (drives offline progress)
+  state.farm={ secs:+f.secs||0, silver:+f.silver||0, gems:+f.gems||0, xp:+f.xp||0, potions:+f.potions||0 };
 }
 const partyClasses=()=>party.length?[...new Set(party.map(h=>h.cls))]:["fighter","mage","cleric","rogue"];
 let combatRng=Math.random;  // reseeded deterministically when a fight starts / area changes
@@ -889,6 +893,7 @@ function hurt(u,dmg,src,opt){
     fxDissolve(f,uxS(u),uyS(u)+4,S,S,u.team===0?"#9ad1ff":"#c98a8a");
     if(u.team===1&&src&&src.team===0){
       awardXP(u.xp);
+      state.farm.xp+=u.xp;   // offline-rate sample: XP earned this kill
       const d=activeDungeon(), roam=roamingActive();
       const dropChance=Math.min(BAL.DROP_CHANCE_MAX, BAL.DROP_CHANCE + BAL.DROP_CHANCE_PER_TIER*(d.power-1));
       // On the Misty Wetlands roaming floor, GEAR drops only from champions, by tier: final boss 100%,
@@ -905,15 +910,15 @@ function hurt(u,dmg,src,opt){
           queueDrop({classes:partyClasses(), power:d.power, floor:d.dropFloor}, u.name);   // opens the slot-roll popup
         }
       }
-      if(combatRng()<(u.boss?BAL.GEM_CHANCE_BOSS:BAL.GEM_CHANCE)){ state.gems++;
+      if(combatRng()<(u.boss?BAL.GEM_CHANCE_BOSS:BAL.GEM_CHANCE)){ state.gems++; state.farm.gems++;
         log(`${iconImg("gem",14)} <b>${u.name}</b> drops a <span class="sys">Runic Gem</span> <span style="opacity:.6">(${state.gems})</span>`,"sys");
         fxText(uxS(u),uyS(u)-46,"gem","#9ad1ff"); }
       if(u.boss||combatRng()<BAL.POTION_DROP_CHANCE){    // potions drop into the shared stash
-        const pd=rollLootPotion(d.power, combatRng); addPotion(pd.type,pd.size,pd.qty);
+        const pd=rollLootPotion(d.power, combatRng); addPotion(pd.type,pd.size,pd.qty); state.farm.potions+=pd.qty;
         log(`${iconImg("chest",14)} <b>${u.name}</b> drops a <span class="sys">${POTION_BY_ID[pd.type].name}</span>`,"sys");
         fxText(uxS(u),uyS(u)-58,"potion",POTION_BY_ID[pd.type].color); saveGame(); }
       const sv=Math.max(1,Math.round(u.xp*(BAL.SILVER_MULT+combatRng()*BAL.SILVER_JITTER)));
-      state.silver+=sv;
+      state.silver+=sv; state.farm.silver+=sv;
       if(combatRng()<0.5) fxText(uxS(u),uyS(u)-14,"+"+sv,"#d8c47a");
       updateHud();
     }
@@ -1924,7 +1929,9 @@ function roundRect(g,x,y,w,h,r){ g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x
 /* ---------- main loop ---------- */
 let last=performance.now();
 function loop(now){
-  let dt=Math.min(0.05,(now-last)/1000); last=now; dt*=state.speed;
+  let dt=Math.min(0.05,(now-last)/1000); last=now;
+  const wallDt=dt;                 // real seconds this frame (before the speed multiplier) — for the farm rate
+  dt*=state.speed;
   // A per-frame exception must never break the animation-frame chain (that's a hard freeze).
   // Catch, log once, and keep requesting frames so the game recovers on the next tick.
   try{
@@ -1953,6 +1960,11 @@ function loop(now){
         if(state.wipeAt!==null && state.t>=state.wipeAt){ state.wipeAt=null; enterTown(true); }
         // prune slain FOES only (heroes are never pruned — they live in `party`, dead or alive)
         state.foes=state.foes.filter(f=>f.alive);
+        // offline-progress rate: a decaying moving average of yield WHILE actively farming. Kill rewards
+        // add into F (below, at the kill); here we age it by wall-time so F.<x>/F.secs ≈ recent per-second
+        // yield for the level you're on. It freezes when you stop delving, so it captures the rate you left.
+        const dk=Math.exp(-wallDt/BAL.OFFLINE.TAU), F=state.farm;
+        F.secs=F.secs*dk+wallDt; F.silver*=dk; F.gems*=dk; F.xp*=dk; F.potions*=dk;
       }
       // advance grid-slide interpolation for every live unit
       for(const u of liveUnits()){ if(u.moveT!==undefined&&u.moveT<1)
@@ -2019,6 +2031,110 @@ function buildDiagnostics(){
 }
 /* boot: splash → login → pick a save slot → (new) create a hero, or (continue) load the slot */
 let loopStarted=false;
+/* ---------- offline progress ---------- */
+/* While the app is closed, the party keeps farming the dungeon+level you left it on and earns a FRACTION
+   (BAL.OFFLINE.RATE) of your live rate, capped at MAX_HOURS. Only pays out if you exited mid-delve — the
+   saved `scene` gates out anyone who closed the app from town. The rate is state.farm (a decaying average
+   of real yield) captured at save time; we extrapolate it over the away-time. Returns a summary (already
+   applied) for the welcome-back card, or null when nothing accrues. */
+function computeOffline(save){
+  const O=BAL.OFFLINE;
+  if(!save || save.scene!=="dungeon") return null;                 // no progress unless you left mid-delve
+  const F=state.farm; if(!F || F.secs<O.MIN_SAMPLE) return null;    // need an established farm rate first
+  const t0=Date.parse(save.savedAt||""); if(!t0) return null;
+  let away=(Date.now()-t0)/1000;
+  if(!(away>=O.MIN_AWAY)) return null;                              // ignore a quick app-switch
+  const capped=away>O.MAX_HOURS*3600; away=Math.min(away,O.MAX_HOURS*3600);
+  const k=(away/F.secs)*O.RATE;                                    // extrapolate the rate, then take the 10%
+  const silver=Math.round(F.silver*k), gems=Math.round(F.gems*k),
+        xp=Math.round(F.xp*k), potions=Math.round(F.potions*k);
+  if(silver<=0 && gems<=0 && xp<=0 && potions<=0) return null;
+  state.silver+=silver; state.gems+=gems;
+  const levels=applyOfflineXP(xp);
+  let potGranted=0;
+  if(potions>0){ const cur=(state.potions.find(s=>s.type==="heal"&&s.size===STD_SIZE)||{}).qty||0;
+    potGranted=Math.max(0,Math.min(potions,POTION_CAP-cur)); addPotion("heal",STD_SIZE,potions); }   // staple Healing Draught (stash caps at 99)
+  const dName=dungeonById(save.dungeonId).name;
+  const where=roamingDungeon(save.dungeonId) ? `${dName} · Level ${(save.roamLevel|0)+1}` : dName;
+  return { away, capped, silver, gems, xp, potions:potGranted, levels, where };
+}
+/* Apply a lump of offline XP to the living party WITHOUT combat fx/log (main hero gains levels → spendable
+   points automatically; companions bank a level-up roll each). Returns total levels gained across the party. */
+function applyOfflineXP(totalXP){
+  if(totalXP<=0) return 0;
+  const alive=party.filter(p=>p.alive), share=Math.ceil(totalXP/Math.max(1,alive.length));
+  let levels=0;
+  for(const h of party){ if(!h.alive)continue; const isMain=h===party[0];
+    h.xp=(h.xp||0)+share;
+    while(h.xp>=xpToReach(h.level+1)){ h.level++; levels++;
+      if(!isMain) h.pendRolls=(h.pendRolls||0)+1; }   // companion level-up rolls wait at their portrait
+  }
+  renderParty();
+  return levels;
+}
+function fmtAway(secs){
+  const h=Math.floor(secs/3600), m=Math.floor((secs%3600)/60);
+  return h>0 ? `${h}h ${m}m` : m>0 ? `${m}m` : "just now";
+}
+function ensureOfflineCss(){
+  if(document.getElementById("offline-style")) return;
+  const s=document.createElement("style"); s.id="offline-style";
+  s.textContent=`
+  .ob-back{position:fixed;inset:0;z-index:60;display:grid;place-items:center;padding:20px;
+    background:rgba(8,5,16,.72);backdrop-filter:blur(3px);animation:ob-fade .2s ease}
+  @keyframes ob-fade{from{opacity:0}to{opacity:1}}
+  .ob{width:min(340px,92vw);background:linear-gradient(#211838,#171029);border:1px solid #4a3d68;
+    border-radius:16px;padding:20px 18px 16px;box-shadow:0 20px 60px -20px #000, 0 0 0 1px rgba(216,162,74,.15) inset;
+    text-align:center;animation:ob-pop .25s cubic-bezier(.2,.9,.3,1.2)}
+  @keyframes ob-pop{from{transform:translateY(10px) scale(.96);opacity:0}to{transform:none;opacity:1}}
+  .ob-hd{font-family:Georgia,serif;font-size:20px;font-weight:bold;color:var(--gold,#e0b063)}
+  .ob-sub{font-size:11.5px;color:#9a8fb8;margin-top:3px;line-height:1.4}
+  .ob-sub b{color:#cdbff0}
+  .ob-note{font-size:10px;color:#6f6486;margin-top:2px}
+  .ob-rows{display:flex;flex-direction:column;gap:7px;margin:15px 0 6px;text-align:left}
+  .ob-row{display:flex;align-items:center;gap:9px;background:#191026;border:1px solid var(--line,#33284d);
+    border-radius:10px;padding:9px 11px}
+  .ob-row .rl{flex:1;font-size:12px;color:#c9bde6}
+  .ob-row .rv{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:bold;font-size:13px;color:#f0c877}
+  .ob-row.sub .rv{color:#8fd39a}
+  .ob-row img,.ob-row svg{width:16px;height:16px;flex:0 0 auto}
+  .ob-btn{width:100%;margin-top:12px;padding:12px;border:0;border-radius:11px;cursor:pointer;
+    font-family:inherit;font-weight:bold;font-size:14px;color:#241606;
+    background:linear-gradient(#e0b063,#a8722a);box-shadow:0 3px 0 #6e4a14}
+  .ob-btn:active{transform:translateY(2px);box-shadow:0 1px 0 #6e4a14}`;
+  document.head.appendChild(s);
+}
+/* The welcome-back card: shows how long you were away and what the party brought home. */
+function showOfflineModal(g){
+  ensureOfflineCss();
+  const row=(icon,label,val,sub)=>val>0 ? `<div class="ob-row${sub?" sub":""}">${iconImg(icon,16)}<span class="rl">${label}</span><span class="rv">+${val.toLocaleString()}</span></div>` : "";
+  const lvl = g.levels>0 ? `<div class="ob-row sub">${iconImg("spark",16)}<span class="rl">Levels gained</span><span class="rv">+${g.levels}</span></div>` : "";
+  const back=document.createElement("div"); back.className="ob-back";
+  back.innerHTML=`<div class="ob" role="dialog" aria-modal="true">
+    <div class="ob-hd">Welcome back</div>
+    <div class="ob-sub">Your party kept delving <b>${g.where}</b> for <b>${fmtAway(g.away)}</b>.</div>
+    ${g.capped?`<div class="ob-note">Offline earnings cap at ${BAL.OFFLINE.MAX_HOURS}h.</div>`:""}
+    <div class="ob-rows">
+      ${row("coin","Silver",g.silver)}
+      ${row("gem","Runic Gems",g.gems)}
+      ${row("spark","Experience",g.xp)}
+      ${lvl}
+      ${row("chest","Healing Draughts",g.potions)}
+    </div>
+    <button class="ob-btn" data-ob-collect>Collect</button>
+  </div>`;
+  const close=()=>{ back.remove(); updateHud(); saveGame(); };
+  back.querySelector("[data-ob-collect]").onclick=close;
+  back.onclick=e=>{ if(e.target===back) close(); };
+  document.body.appendChild(back);
+}
+/* Persist the run when the app is backgrounded or closed, so the save's timestamp + `scene` reflect the
+   moment you actually left — that's what offline progress measures against. */
+if(typeof document!=="undefined"){
+  const bgSave=()=>{ try{ if(activeSlot!==null) saveGame(); }catch{} };
+  document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="hidden") bgSave(); });
+  window.addEventListener("pagehide",bgSave);
+}
 function beginRun(){
   loadRoom(); renderParty(); updateHud();
   saveGame();           // persist the freshly created/loaded state
@@ -2045,10 +2161,13 @@ const ONBOARD_CB = {
     beginRun();
   },
   onContinue:(slot)=>{
-    activeSlot=slot; loadGame(readSlot(slot)||{});
+    const save=readSlot(slot)||{};
+    activeSlot=slot; loadGame(save);
+    const offline=computeOffline(save);   // grant "kept farming while away" rewards (only if you left mid-delve)
     const m=party[0];
     log(`Welcome back to <span class="sys">The Emberdeep</span>${m?`, <b>${m.name}</b>`:""}.`,"sys");
     beginRun();
+    if(offline) showOfflineModal(offline);
   },
 };
 startOnboarding(ONBOARD_CB);
