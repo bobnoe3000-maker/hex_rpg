@@ -124,9 +124,16 @@ export const BAL = {
     LADDER_SIZE: 60,             // number of ghost teams on the board
     LADDER_SEED: 0x5eed4a2b,     // fixed master seed → the same ladder every session
     TOP_RATING: 2180, BOT_RATING: 840,   // the ghost ladder's rating span (player can pass the top)
-    LEVEL_BASE: 1, LEVEL_PER: 0.03,      // ghost team level = round(BASE + rating*PER): 1000→31, 2000→61
-    ELO_K: 32,                  // rating swing per match (slice 3)
-    DAILY_RANKED: 10,           // ranked battles per day (slice 3)
+    LEVEL_BASE: 1, LEVEL_PER: 0.03,      // absolute rating→level fallback: round(BASE + rating*PER)
+    LEVEL_REL: 45,              // a rival scales to your level ±1 per this much rating difference…
+    LEVEL_WINDOW: 6,            // …capped to ±this many levels, so every match is winnable (not hopeless/trivial)
+    ELO_K: 32,                  // rating swing per match
+    DAILY_RANKED: 10,           // ranked battles per day (unranked "practice" is unlimited)
+    // battle rewards. Ranked wins pay the full purse (scaled by the rival's tier), a loss a small
+    // consolation; practice pays a token amount. Valor is the arena currency (banked for a future vendor).
+    REWARD: { WIN_VALOR: 40, WIN_SILVER: 60, WIN_GEM_CHANCE: 0.5,
+              LOSS_VALOR: 10, LOSS_SILVER: 12,
+              PRACTICE_VALOR: 3, TIER_BONUS: 0.14 },   // +TIER_BONUS × tierIndex to the win purse
     // named tiers: [name, minRating, color]; a tier band is split into three divisions (III low → I high)
     TIERS: [
       ["Bronze", 0, "#b08d57"], ["Iron", 1100, "#8a8f99"], ["Steel", 1300, "#9fb0c3"],

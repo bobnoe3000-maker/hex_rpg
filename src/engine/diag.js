@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-23a · PvP Arena — The Proving Grounds (part 1): a rated ladder of seeded 'ghost' rival teams plus you, kept in your save (ELO rating + win/loss record). Open it from the Keep's Arena tab: a rank shield (Bronze→Champion, three divisions), three challengers near your rating (one Hard, one Even, one Favoured) you can Scout-reroll, a full Leaderboard (Top / Near me, medals, your row pinned), and View Team to inspect any rival's roster — class, level, stats, top skills and gear. Ranked battles land in the next update. Prior: skill ranks clearer/smoother; every dungeon a roaming descent; offline progress; party bar fits three; rally flag order";
+export const APP_BUILD = "2026-08-23b · PvP Arena — The Proving Grounds (complete): fight the ghost ladder for real. From the Keep's Arena tab, take on rivals near your rating on the deterministic combat sim — your live party vs a seeded ghost team. Ranked battles (a daily allotment) move your ELO rating, pay Valor + silver (and the odd gem), and track streaks/promotions; a full result screen shows the rating swing and rewards, and every fight records a scrubbable Replay (play/pause, 0.5–4× speed, seek). Plus the rank shield (Bronze→Champion), Scout-reroll of Hard/Even/Favoured rivals, the Leaderboard, and View Team. Prior: skill ranks clearer/smoother; every dungeon a roaming descent; offline progress; party bar fits three; rally flag order";
 
 const BUF = [];
 const MAX = 400;

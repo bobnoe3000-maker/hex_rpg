@@ -31,9 +31,21 @@ export function tierOf(rating) {
   return { name, color, div, label: `${name} ${ROMAN[div]}` };
 }
 
-/* rating → team level (a linear map: 1000 ≈ 31, 2000 ≈ 61) */
+/* absolute rating → level (the ladder's own power curve; used only as a fallback) */
 export function ratingToLevel(rating) {
   return Math.max(1, Math.round(A.LEVEL_BASE + rating * A.LEVEL_PER));
+}
+
+/* Level a rival's roster is built at FOR A GIVEN PLAYER. So the arena is always a real contest, a
+   rival is scaled around the player's own party level, nudged by how its rating compares to yours:
+   an Even rival ≈ your level, a Hard one a couple above, a Favoured one a couple below — capped to a
+   ±window so a far-off-ladder ghost is a stretch, never hopeless (or trivial). Rating still drives
+   the ladder order & rewards; this keeps every matchup winnable so ELO can find your true level. */
+export function rivalLevel(rivalRating, playerRating, playerLevel) {
+  const L = Math.max(1, playerLevel | 0);
+  const rel = Math.round((rivalRating - playerRating) / A.LEVEL_REL);   // ~1 level per LEVEL_REL rating
+  const w = A.LEVEL_WINDOW;
+  return Math.max(1, Math.min(L + w, Math.max(L - w, L + rel)));
 }
 
 /* ---------- procedural rival names ---------- */
@@ -79,25 +91,25 @@ export function makeRival(seed, rating) {
   };
 }
 
-/* Build (and cache) a rival's roster: `size` companions seeded off the rival's seed, all grown to
-   the rating's level. The first is the team leader. Deterministic → View Team and a future battle
-   see the identical squad. */
-export function rivalMembers(team) {
-  if (team._members) return team._members;
-  const level = ratingToLevel(team.rating);
+/* Build (and cache) a rival's roster at `level`: `size` companions seeded off the rival's seed. The
+   first is the team leader. Deterministic per (seed, level) → View Team and the battle see the
+   identical squad. Cached by level so re-rendering at the same scale is free. */
+export function rivalMembers(team, level = ratingToLevel(team.rating)) {
+  const L = Math.max(1, level | 0);
+  if (team._members && team._level === L) return team._members;
   const list = [];
   for (let i = 0; i < team.size; i++) {
-    const h = makeCompanion((team.seed * 2654435761 + i * 40503) >>> 0, level);
+    const h = makeCompanion((team.seed * 2654435761 + i * 40503) >>> 0, L);
     h.team = 1;                                      // rival side
     list.push(h);
   }
-  team._members = list;
+  team._members = list; team._level = L;
   return list;
 }
 
 /* summed effective power of a team's roster (a quick strength gauge for cards) */
-export function teamPower(team) {
-  return rivalMembers(team).reduce((sum, h) => {
+export function teamPower(team, level) {
+  return rivalMembers(team, level).reduce((sum, h) => {
     const d = derive(h);
     return sum + d.maxhp + (d.atk + d.def) * 6;
   }, 0);

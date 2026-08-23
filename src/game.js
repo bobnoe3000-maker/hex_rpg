@@ -26,6 +26,8 @@ import { openTavern } from './ui/TavernScreen.js';
 import { openTemple } from './ui/TempleScreen.js';
 import { openForge } from './ui/ForgeScreen.js';
 import { openArena } from './ui/ArenaScreen.js';
+import { rivalLevel, rivalMembers, eloResult, tierOf } from './systems/Arena.js';
+import { simulateBattle } from './systems/ArenaBattle.js';
 import { openDiag } from './ui/DiagScreen.js';
 import { startOnboarding } from './ui/Onboarding.js';
 import { makeCompanion, makeEnemy } from './models/units.js';
@@ -73,7 +75,8 @@ const state={ roomIdx:0, scene:"town", phase:"idle", room:null, foes:[], t:0, sp
   roamObjective:null,   // {r,c} the living champion's room — the party marches here while it's up; cleared once the champion falls so the party mops up side rooms
   roamFoeHP:0, roamProgressAt:0,   // stall-guard bookkeeping (runtime): total live-foe HP + last time it changed
   farm:{ secs:0, silver:0, gems:0, xp:0, potions:0 },   // decaying moving average of live farming yield → drives offline progress
-  arena:{ rating:BAL.ARENA.START_RATING, wins:0, losses:0, streak:0, best:BAL.ARENA.START_RATING },   // PvP ladder: your ELO rating + record (ghost rivals live in systems/Arena.js)
+  arena:{ rating:BAL.ARENA.START_RATING, wins:0, losses:0, streak:0, best:BAL.ARENA.START_RATING,
+    valor:0, day:"", ranked:0 },   // PvP ladder: ELO rating + record + Valor purse + daily ranked-battle counter
   autoLevel:false,   // when true, companion level-ups resolve their own free roll (no popup, no silver)
   cam:{x:0,y:0},     // camera offset (logical px) for the roaming floor — follows the party
   rally:null };      // {r,c} flag heroes regroup on when no foe is engaged
@@ -143,7 +146,8 @@ function loadGame(save){
   state.farm={ secs:+f.secs||0, silver:+f.silver||0, gems:+f.gems||0, xp:+f.xp||0, potions:+f.potions||0 };
   const ar=save.arena||{}, R=BAL.ARENA.START_RATING;   // restore PvP ladder rating + record (defaults for older saves)
   state.arena={ rating:ar.rating!=null?+ar.rating:R, wins:+ar.wins||0, losses:+ar.losses||0,
-    streak:+ar.streak||0, best:ar.best!=null?+ar.best:(ar.rating!=null?+ar.rating:R) };
+    streak:+ar.streak||0, best:ar.best!=null?+ar.best:(ar.rating!=null?+ar.rating:R),
+    valor:+ar.valor||0, day:ar.day||"", ranked:+ar.ranked||0 };
 }
 const partyClasses=()=>party.length?[...new Set(party.map(h=>h.cls))]:["fighter","mage","cleric","rogue"];
 let combatRng=Math.random;  // reseeded deterministically when a fight starts / area changes
@@ -1543,9 +1547,51 @@ function openDungeonBoard(){
 }
 function openDiagScreen(){ townRefresh=openDiagScreen; openDiag({ text:buildDiagnostics, back:openTownScreen }); }
 /* ---------- arena: PvP ladder of ghost rivals (town service) ---------- */
+/* daily ranked-battle allotment: reset the counter when the calendar day rolls over */
+function arenaToday(){ try{ return new Date().toISOString().slice(0,10); }catch{ return "day"; } }
+function ensureArenaDay(){ const t=arenaToday(); if(state.arena.day!==t){ state.arena.day=t; state.arena.ranked=0; } }
+function arenaRankedLeft(){ ensureArenaDay(); return Math.max(0, BAL.ARENA.DAILY_RANKED - state.arena.ranked); }
+/* Resolve one arena battle: your live party vs a ghost rival, on the deterministic sim. Ranked
+   battles move your ELO rating + record and pay the full purse (a daily allotment); practice is
+   unlimited and unrated. Returns everything the result + replay screens need (incl. the frame log). */
+function arenaFight(team, ranked){
+  const a=state.arena, alive=party.filter(h=>h.alive);
+  if(!alive.length) return null;                 // no one able to fight
+  ensureArenaDay();
+  if(ranked && arenaRankedLeft()<=0) ranked=false;   // out of ranked battles → fall back to practice
+  const pLevel=party[0]?party[0].level:1;
+  const level=rivalLevel(team.rating, a.rating, pLevel);
+  const members=rivalMembers(team, level);
+  const attempt=a.wins+a.losses+a.ranked+1;
+  const seed=((team.seed>>>0) ^ Math.imul(a.rating,2654435761) ^ Math.imul(attempt,40503)) >>>0;
+  const res=simulateBattle(alive, members, seed);
+  const won=res.won, before=a.rating, tierBefore=tierOf(before);
+  let delta=0;
+  if(ranked){
+    const e=eloResult(a.rating, team.rating, won); delta=e.delta; a.rating=e.next;
+    if(won){ a.wins++; a.streak=Math.max(1,(a.streak||0)+1); } else { a.losses++; a.streak=Math.min(-1,(a.streak||0)-1); }
+    a.best=Math.max(a.best||before, a.rating); a.ranked++;
+  }
+  // rewards (silver/gems are the live currencies; Valor banks for a future arena vendor)
+  const RW=BAL.ARENA.REWARD, tIdx=Math.max(0,BAL.ARENA.TIERS.findIndex(t=>t[0]===tierOf(team.rating).name));
+  let valor=0, silver=0, gems=0;
+  if(!ranked){ valor=RW.PRACTICE_VALOR; }
+  else if(won){ const bonus=1+RW.TIER_BONUS*tIdx; valor=Math.round(RW.WIN_VALOR*bonus); silver=Math.round(RW.WIN_SILVER*bonus);
+    gems=mulberry32((res.seed^0xA5)>>>0)()<RW.WIN_GEM_CHANCE?1:0; }
+  else { valor=RW.LOSS_VALOR; silver=RW.LOSS_SILVER; }
+  state.silver+=silver; state.gems+=gems; a.valor=(a.valor||0)+valor;
+  const tierAfter=tierOf(a.rating);
+  saveGame(); updateHud();
+  return { won, ranked, before, after:a.rating, delta, rewards:{valor,silver,gems},
+    streak:a.streak, tierBefore, tierAfter, promoted:won&&tierAfter.label!==tierBefore.label,
+    rivalName:team.name, duration:res.duration, survivors:res.survivors, units:res.units, frames:res.frames };
+}
 function openArenaScreen(){
   townRefresh=openArenaScreen;
-  openArena({ arena:()=>state.arena, party:()=>party, portrait:h=>heroPortrait(h), back:openTownScreen });
+  openArena({ arena:()=>state.arena, party:()=>party, portrait:h=>heroPortrait(h), back:openTownScreen,
+    playerLevel:()=>(party[0]?party[0].level:1),
+    ranked:()=>({ left:arenaRankedLeft(), cap:BAL.ARENA.DAILY_RANKED }),
+    fight:(team,rk)=>arenaFight(team,rk) });
 }
 /* ---------- forge: spend gems to upgrade gear (town service) ---------- */
 /* every gear item across the party's equipped slots + the shared bag, tagged with its owner/slot
