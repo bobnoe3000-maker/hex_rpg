@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-23b · PvP Arena — The Proving Grounds (complete): fight the ghost ladder for real. From the Keep's Arena tab, take on rivals near your rating on the deterministic combat sim — your live party vs a seeded ghost team. Ranked battles (a daily allotment) move your ELO rating, pay Valor + silver (and the odd gem), and track streaks/promotions; a full result screen shows the rating swing and rewards, and every fight records a scrubbable Replay (play/pause, 0.5–4× speed, seek). Plus the rank shield (Bronze→Champion), Scout-reroll of Hard/Even/Favoured rivals, the Leaderboard, and View Team. Prior: skill ranks clearer/smoother; every dungeon a roaming descent; offline progress; party bar fits three; rally flag order";
+export const APP_BUILD = "2026-08-23c · PvP Arena — now you WATCH the fight. Choosing a rival drops you onto a real dungeon floor and runs a live auto-battle — your party (gold) vs the rival team (blue), hero vs hero, cast for cast — on the very same engine as a delve, with a You/Foe counter, a 1×/2× speed toggle and Forfeit. When one side falls, VICTORY/DEFEAT shows and the result screen opens with your ELO swing, Valor + silver rewards and streak/promotion. The arena is consequence-free (your roster is healed after). Plus the rank shield (Bronze→Champion), Scout-reroll of Hard/Even/Favoured rivals, Leaderboard, and View Team. Prior: skill ranks clearer/smoother; every dungeon a roaming descent; offline progress; party bar fits three; rally flag order";
 
 const BUF = [];
 const MAX = 400;

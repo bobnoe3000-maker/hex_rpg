@@ -27,7 +27,6 @@ import { openTemple } from './ui/TempleScreen.js';
 import { openForge } from './ui/ForgeScreen.js';
 import { openArena } from './ui/ArenaScreen.js';
 import { rivalLevel, rivalMembers, eloResult, tierOf } from './systems/Arena.js';
-import { simulateBattle } from './systems/ArenaBattle.js';
 import { openDiag } from './ui/DiagScreen.js';
 import { startOnboarding } from './ui/Onboarding.js';
 import { makeCompanion, makeEnemy } from './models/units.js';
@@ -79,6 +78,7 @@ const state={ roomIdx:0, scene:"town", phase:"idle", room:null, foes:[], t:0, sp
     valor:0, day:"", ranked:0 },   // PvP ladder: ELO rating + record + Valor purse + daily ranked-battle counter
   autoLevel:false,   // when true, companion level-ups resolve their own free roll (no popup, no silver)
   cam:{x:0,y:0},     // camera offset (logical px) for the roaming floor — follows the party
+  arenaBattle:null,  // when set, a live PvP arena bout is running on the dungeon canvas (isolates it from delving)
   rally:null };      // {r,c} flag heroes regroup on when no foe is engaged
 /* the dungeon the party is currently delving (falls back to the Emberdeep) */
 const activeDungeon=()=>dungeonById(state.dungeonId);
@@ -739,10 +739,15 @@ function addBuff(u,b){ (u.buffs||(u.buffs=[])).push(b); }
 function resetCombat(u){ u.buffs=[]; u.cd={}; u.mLast=0; u.potCd=0; }
 function adjFoes(u){ return livingFoes(u.team).filter(f=>distU(f,u)<=1); }
 function foesInRange(u,rad){ return livingFoes(u.team).filter(f=>distU(f,u)<=rad); }
+/* a unit's OWN team — heroes are `party`, the other side lives in `state.foes`. Party-wide skill
+   effects (Rally, Wrath, party Heal/Buff) resolve over THIS, so in a hero-vs-hero arena a rival's
+   support buffs its own side, not yours. In the dungeon foes have no such actives, so this is a
+   behaviour-preserving generalisation of the old party-only lookups. */
+function alliesOf(u){ return (u.team===0?party:state.foes).filter(h=>h.alive); }
 function lowestHurtAlly(u,thr){ let best=null,bf=2;
-  for(const h of party){ if(!h.alive)continue; const f=h.hp/Math.max(1,derive(h).maxhp); if(f<bf){bf=f;best=h;} }
+  for(const h of alliesOf(u)){ const f=h.hp/Math.max(1,derive(h).maxhp); if(f<bf){bf=f;best=h;} }
   return (best && bf<(thr==null?0.999:thr))?best:null; }
-function guardianNear(u){ for(const h of party){ if(h===u||!h.alive)continue;
+function guardianNear(u){ for(const h of alliesOf(u)){ if(h===u)continue;
   if(guardianFrac(h)>0 && distU(h,u)<=1) return h; } return null; }
 function applyBleed(target,src,bl){
   const dps=Math.max(1, derive(src).atk*bl.pct);
@@ -843,13 +848,13 @@ function castActive(u,s,tg){
     case "rampage":{ say("RAMPAGE","#ff9a5c"); for(let i=0;i<a.hits;i++) hit(tg,atk*mag(a.dmg)); break; }
     case "wrath":{ say("WARLORD'S WRATH","#ffdf6b"); fxRing(uxS(u),uyS(u)+6,"#ffdf6b");
       adjFoes(u).forEach(f=>hit(f,atk*a.dmg));
-      const bf=mag(a.buff); party.forEach(h=>{ if(h.alive) addBuff(h,{k:"wrath",mult:true,stat:"atk",v:bf,until:state.t+a.dur}); }); break; }
+      const bf=mag(a.buff); alliesOf(u).forEach(h=>addBuff(h,{k:"wrath",mult:true,stat:"atk",v:bf,until:state.t+a.dur})); break; }
     case "guard":{ say("GUARD","#9ad1ff"); addBuff(u,{k:"guard",mult:true,stat:"def",v:mag(a.def),until:state.t+a.dur}); fxBlock(uxS(u),uyS(u)-18); break; }
     case "taunt":{ say("TAUNT","#9ad1ff"); const dur=a.dur[r-1]; addBuff(u,{k:"taunt",until:state.t+dur});
       if(a.defBuff[r-1]>0) addBuff(u,{k:"taunt",mult:true,stat:"def",v:mag(a.defBuff),until:state.t+dur}); break; }
     case "bash":{ say("SHIELD BASH","#9ad1ff"); hit(tg,def*a.dmg); if(tg.alive){ addBuff(tg,{k:"stun",until:state.t+a.stun[r-1]}); fxText(uxS(tg),uyS(tg)-30,"stun","#9ad1ff"); } break; }
     case "rally":{ say("RALLYING CRY","#9ad1ff"); const sh=Math.round(derive(u).maxhp*mag(a.shield));
-      party.forEach(h=>{ if(h.alive){ addBuff(h,{k:"shield",v:sh,until:state.t+12}); fxText(uxS(h),uyS(h)-30,"shield","#9ad1ff"); } }); break; }
+      alliesOf(u).forEach(h=>{ addBuff(h,{k:"shield",v:sh,until:state.t+12}); fxText(uxS(h),uyS(h)-30,"shield","#9ad1ff"); }); break; }
     case "unbreak":{ say("UNBREAKABLE","#ffdf6b"); const dur=a.dur[r-1];
       addBuff(u,{k:"immune",until:state.t+dur}); addBuff(u,{k:"taunt",until:state.t+dur});
       const heal=Math.round(derive(u).maxhp*mag(a.heal)); u.hp=Math.min(derive(u).maxhp,u.hp+heal);
@@ -867,11 +872,11 @@ function castActive(u,s,tg){
         if(a.slow&&a.slow[r-1]>0) addBuff(f,{k:"slow",mult:true,stat:"aspd",v:-mag(a.slow),until:state.t+3});
         if(a.stun&&a.stun[r-1]>0) addBuff(f,{k:"stun",until:state.t+a.stun[r-1]}); }); break; }
     case "heal":{ say("HEAL","#7ee787"); const imm=Array.isArray(a.immune)?a.immune[r-1]:0;
-      const targets=a.party?party.filter(h=>h.alive):[lowestHurtAlly(u)].filter(Boolean);
+      const targets=a.party?alliesOf(u):[lowestHurtAlly(u)].filter(Boolean);
       targets.forEach(t=>{ const mh=derive(t).maxhp, amt=Math.round(mh*mag(a.pct)); t.hp=Math.min(mh,t.hp+amt);
         fxText(uxS(t),uyS(t)-30,"+"+amt,"#7ee787"); if(imm) addBuff(t,{k:"immune",until:state.t+imm}); }); break; }
     case "buff":{ say(s.name.toUpperCase().slice(0,10),"#9ad1ff"); const dur=Array.isArray(a.dur)?a.dur[r-1]:(a.dur||6);
-      const targets=a.party?party.filter(h=>h.alive):[u];
+      const targets=a.party?alliesOf(u):[u];
       targets.forEach(t=>{
         if(a.stat) addBuff(t,{k:"sbuff",mult:!a.flat,flat:!!a.flat,stat:a.stat,v:mag(a.v),until:state.t+dur});
         if(a.shield){ const sh=Math.round(derive(u).maxhp*mag(a.shield)); addBuff(t,{k:"shield",v:sh,until:state.t+12}); fxText(uxS(t),uyS(t)-30,"shield","#9ad1ff"); } });
@@ -904,8 +909,8 @@ function hurt(u,dmg,src,opt){
   if(!u.alive) return;
   opt=opt||{};
   if(hasBuff(u,"immune")){ fxText(uxS(u),uyS(u)-30,"immune","#9ad1ff"); return; }   // Unbreakable
-  // Guardian — an adjacent ally soaks part of the blow
-  if(!opt.noGuard && u.team===0){ const g=guardianNear(u); if(g){ const gd=Math.max(1,Math.round(dmg*guardianFrac(g)));
+  // Guardian — an adjacent ally soaks part of the blow (either team, so rival tanks guard their own)
+  if(!opt.noGuard){ const g=guardianNear(u); if(g){ const gd=Math.max(1,Math.round(dmg*guardianFrac(g)));
     dmg-=gd; hurt(g,gd,src,{noGuard:true,noReflect:true}); } }
   // Shield (Rallying Cry) absorbs before HP
   if(dmg>0 && u.buffs){ for(const b of u.buffs){ if(b.k==="shield"&&b.v>0){ const a=Math.min(b.v,dmg); b.v-=a; dmg-=a;
@@ -926,7 +931,7 @@ function hurt(u,dmg,src,opt){
     log(`${iconImg("skull",14)} <b>${u.name}</b> falls!`, u.team===0?"crit":"sys");
     const f=figOf(u), S=u.boss?76:54;
     fxDissolve(f,uxS(u),uyS(u)+4,S,S,u.team===0?"#9ad1ff":"#c98a8a");
-    if(u.team===1&&src&&src.team===0){
+    if(u.team===1&&src&&src.team===0&&!state.arenaBattle){   // dungeon kill rewards (never in the arena)
       awardXP(u.xp);
       state.farm.xp+=u.xp;   // offline-rate sample: XP earned this kill
       const d=activeDungeon(), roam=roamingActive();
@@ -1551,47 +1556,157 @@ function openDiagScreen(){ townRefresh=openDiagScreen; openDiag({ text:buildDiag
 function arenaToday(){ try{ return new Date().toISOString().slice(0,10); }catch{ return "day"; } }
 function ensureArenaDay(){ const t=arenaToday(); if(state.arena.day!==t){ state.arena.day=t; state.arena.ranked=0; } }
 function arenaRankedLeft(){ ensureArenaDay(); return Math.max(0, BAL.ARENA.DAILY_RANKED - state.arena.ranked); }
-/* Resolve one arena battle: your live party vs a ghost rival, on the deterministic sim. Ranked
-   battles move your ELO rating + record and pay the full purse (a daily allotment); practice is
-   unlimited and unrated. Returns everything the result + replay screens need (incl. the frame log). */
-function arenaFight(team, ranked){
-  const a=state.arena, alive=party.filter(h=>h.alive);
-  if(!alive.length) return null;                 // no one able to fight
-  ensureArenaDay();
-  if(ranked && arenaRankedLeft()<=0) ranked=false;   // out of ranked battles → fall back to practice
-  const pLevel=party[0]?party[0].level:1;
-  const level=rivalLevel(team.rating, a.rating, pLevel);
-  const members=rivalMembers(team, level);
-  const attempt=a.wins+a.losses+a.ranked+1;
-  const seed=((team.seed>>>0) ^ Math.imul(a.rating,2654435761) ^ Math.imul(attempt,40503)) >>>0;
-  const res=simulateBattle(alive, members, seed);
-  const won=res.won, before=a.rating, tierBefore=tierOf(before);
+/* ===== live arena battle — a real hero-vs-hero auto-battle on a dungeon floor, watched live =====
+   Clicking Fight drops you into the dungeon canvas with your party (team 0) vs the ghost rival's
+   roster (team 1) on a random floor, run by the SAME engine as a delve (isolated via state.arenaBattle
+   so no waves/loot/XP/wipe apply). When one side falls the result screen opens with the ELO swing +
+   rewards. The arena is consequence-free: your roster is healed and any fallen pals rise afterwards. */
+const ARENA_TIME_CAP=75;    // seconds before a stalemate is settled on remaining HP fraction
+let arenaPending=null;      // one-shot battle result, shown when the arena screen re-opens after a bout
+
+/* a fresh combatant copy (full HP, no carried buffs/cooldowns) — never mutates the cached roster */
+function cloneCombatant(src, team){
+  const c={ ...src, team, buffs:[], cd:{}, mLast:0, potCd:0, alive:true, lunge:null, flash:0, moveT:1 };
+  c.hp=derive(c).maxhp; return c;
+}
+/* build a single-screen arena from a RANDOM dungeon's look (a classic room, not a roaming floor) */
+function buildArenaRoom(){
+  const dl=DUNGEONS[Math.floor(Math.random()*DUNGEONS.length)]||DUNGEONS[0];
+  const li=Math.max(0,Math.min(BOSS_ROOM-1, 1+Math.floor(Math.random()*Math.max(1,ROOM_COUNT-2))));
+  const L=LAYOUTS[li]||LAYOUTS[0];
+  const spec={ title:`Arena — ${dl.name}`, shape:L.shape, blockers:L.blockers, blockerKinds:L.blockerKinds,
+    tiles:dl.tiles||L.tiles, exits:L.exits, palette:dl.palette };
+  state.room=buildGameRoom((Date.now()&0x7fffffff)|0, spec);
+  state.cam={x:0,y:0};
+}
+/* line the rival team up along the FAR side of the room (lowest rows), spread across columns */
+function placeArenaFoes(foes){
+  const cells=((state.room&&state.room.floorCells)||[]).slice()
+    .filter(([r,c])=>!isBlocked(state.room,r,c)).sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
+  const used=new Set();
+  foes.forEach((f,i)=>{
+    let cell=null;
+    for(const rc of cells){ const k=rc[0]+","+rc[1]; if(used.has(k)||occupied(rc[0],rc[1])) continue; cell=rc; used.add(k); break; }
+    if(!cell) cell=cells[i%(cells.length||1)]||[1,4];
+    f.r=cell[0]; f.c=cell[1]; f.rr=f.r; f.cc=f.c; f.moveT=1; f.next=state.t+0.6+0.2*i; resetCombat(f);
+    state.foes.push(f); figOf(f);
+  });
+}
+/* the arena's own header: live You/Foe counts, a speed toggle, and a Forfeit */
+function renderArenaHeader(){
+  const ab=state.arenaBattle; if(!ab){ dheadEl.classList.remove("show"); return; }
+  dheadEl.classList.add("show");
+  const youUp=liveHeroes().length, foesUp=state.foes.filter(f=>f.alive).length;
+  dheadEl.innerHTML=`<div class="dh-r1">
+      <div class="dh-title"><b>Arena</b> <span>· vs ${ab.team.name}</span></div>
+      <span class="dh-cur"></span></div>
+    <div class="dh-r2" style="align-items:center;gap:10px">
+      <span class="dh-foes" data-aryou style="color:#8fd39a;font-weight:bold">You ${youUp}</span>
+      <span class="dh-foes" data-arfoe style="color:#e6748a;font-weight:bold">Foe ${foesUp}</span>
+      <span class="dh-spd" data-arspd>${state.speed}×</span>
+      <span class="dh-boss" data-arleave style="cursor:pointer">Forfeit</span>
+    </div>`;
+  const spd=dheadEl.querySelector("[data-arspd]"); if(spd) spd.onclick=()=>{ state.speed=state.speed===1?2:1; renderArenaHeader(); };
+  const lv=dheadEl.querySelector("[data-arleave]"); if(lv) lv.onclick=()=>leaveArena();
+  updateHud();
+}
+/* draw the VICTORY / DEFEAT banner over the final frozen frame */
+function drawArenaBanner(won){
+  G.save();
+  G.fillStyle="rgba(6,4,10,.45)"; G.fillRect(0,0,CW,CH);
+  G.textAlign="center"; G.font="bold 40px Georgia,serif";
+  G.fillStyle=won?"#8fd39a":"#e6748a"; G.shadowColor="rgba(0,0,0,.8)"; G.shadowBlur=12;
+  G.fillText(won?"VICTORY":"DEFEAT",CW/2,CH/2);
+  G.shadowBlur=0; G.font="12px Georgia,serif"; G.fillStyle="#cdbff0";
+  G.fillText("tallying the result…",CW/2,CH/2+26);
+  G.restore();
+}
+/* per-frame arena bookkeeping (called from the loop): refresh counts, detect a decided battle */
+function updateArenaBattle(){
+  const ab=state.arenaBattle; if(!ab||ab.done) return;   // (the post-battle hold/return runs from the loop)
+  const youUp=liveHeroes().length, foesUp=state.foes.filter(f=>f.alive).length;
+  const ye=dheadEl.querySelector("[data-aryou]"); if(ye && ye.textContent!==`You ${youUp}`) ye.textContent=`You ${youUp}`;
+  const fe=dheadEl.querySelector("[data-arfoe]"); if(fe && fe.textContent!==`Foe ${foesUp}`) fe.textContent=`Foe ${foesUp}`;
+  const timeout=(state.t-ab.startT)>ARENA_TIME_CAP;
+  if(youUp>0 && foesUp>0 && !timeout) return;
+  let won;
+  if(youUp<=0) won=false;
+  else if(foesUp<=0) won=true;
+  else { const frac=arr=>{ const a=arr.filter(x=>x.alive); return a.length?a.reduce((s,x)=>s+x.hp/Math.max(1,derive(x).maxhp),0)/a.length:0; };
+    won=frac(party)>=frac(state.foes); }
+  finishArenaBattle(won);
+}
+/* apply ELO + rewards for a decided bout and return the result descriptor */
+function applyArenaResult(team, ranked, won){
+  const a=state.arena, before=a.rating, tierBefore=tierOf(before);
   let delta=0;
   if(ranked){
     const e=eloResult(a.rating, team.rating, won); delta=e.delta; a.rating=e.next;
     if(won){ a.wins++; a.streak=Math.max(1,(a.streak||0)+1); } else { a.losses++; a.streak=Math.min(-1,(a.streak||0)-1); }
     a.best=Math.max(a.best||before, a.rating); a.ranked++;
   }
-  // rewards (silver/gems are the live currencies; Valor banks for a future arena vendor)
   const RW=BAL.ARENA.REWARD, tIdx=Math.max(0,BAL.ARENA.TIERS.findIndex(t=>t[0]===tierOf(team.rating).name));
-  let valor=0, silver=0, gems=0;
+  let valor=0,silver=0,gems=0;
   if(!ranked){ valor=RW.PRACTICE_VALOR; }
   else if(won){ const bonus=1+RW.TIER_BONUS*tIdx; valor=Math.round(RW.WIN_VALOR*bonus); silver=Math.round(RW.WIN_SILVER*bonus);
-    gems=mulberry32((res.seed^0xA5)>>>0)()<RW.WIN_GEM_CHANCE?1:0; }
+    gems=Math.random()<RW.WIN_GEM_CHANCE?1:0; }
   else { valor=RW.LOSS_VALOR; silver=RW.LOSS_SILVER; }
   state.silver+=silver; state.gems+=gems; a.valor=(a.valor||0)+valor;
   const tierAfter=tierOf(a.rating);
   saveGame(); updateHud();
   return { won, ranked, before, after:a.rating, delta, rewards:{valor,silver,gems},
     streak:a.streak, tierBefore, tierAfter, promoted:won&&tierAfter.label!==tierBefore.label,
-    rivalName:team.name, duration:res.duration, survivors:res.survivors, units:res.units, frames:res.frames };
+    rivalName:team.name, rivalSeed:team.seed };
+}
+/* freeze the bout, bank the result, and hold the final frame for a beat before the result screen */
+function finishArenaBattle(won){
+  const ab=state.arenaBattle; if(!ab||ab.done) return;
+  ab.done=true; ab.won=won; state.phase="idle";
+  ab.result=applyArenaResult(ab.team, ab.ranked, won);
+  ab.endAt=state.t+2.0;
+  renderArenaHeader();
+}
+/* leave the arena scene → back to town + the arena screen showing the result */
+function returnFromArena(){
+  const ab=state.arenaBattle; const result=ab?ab.result:null;
+  for(const h of party){ h.alive=true; h.hp=derive(h).maxhp; h.buffs=[]; h.cd={}; h.mLast=0; h.flash=0; }   // consequence-free
+  state.arenaBattle=null; state.foes=[]; fxClear(); state.rally=null; state.phase="idle"; state.speed=1;
+  arenaPending=result;
+  state.scene="town"; townEl.classList.add("show");
+  dheadEl.classList.remove("show"); dmenufab.classList.remove("show"); closeDLog(); closeDMenu();
+  renderParty(); openArenaScreen(); saveGame();
+}
+/* forfeit an in-progress bout — counts as a loss */
+function leaveArena(){ const ab=state.arenaBattle; if(ab&&!ab.done) finishArenaBattle(false); }
+/* launch a live bout vs a ghost rival team; returns false if the party can't fight */
+function startArenaBattle(team, rankedWanted){
+  if(!party.some(h=>h.alive)) return false;
+  ensureArenaDay();
+  const ranked = !!rankedWanted && arenaRankedLeft()>0;
+  const pLevel=party[0]?party[0].level:1;
+  const level=rivalLevel(team.rating, state.arena.rating, pLevel);
+  const foes=rivalMembers(team, level).map(m=>cloneCombatant(m,1));
+  buildArenaRoom();
+  fxClear(); state.foes=[]; state.respawnAt=null; state.wipeAt=null; state.rally=null;
+  state.bossInWave=false; state.miniAlive=false;
+  placeHeroes(); placeArenaFoes(foes); seedBattle();
+  state.arenaBattle={ team, ranked, startT:state.t, done:false, endAt:0, result:null, won:false };
+  overlay.classList.remove("show"); overlay.innerHTML="";
+  townEl.classList.remove("show");
+  state.scene="dungeon"; state.phase="fight";
+  dmenufab.classList.remove("show"); closeDLog(); closeDMenu();
+  renderArenaHeader(); renderParty();
+  log(`— <span class="sys">Arena · your party vs ${team.name}${ranked?"":" · practice"}</span> —`);
+  return true;
 }
 function openArenaScreen(){
   townRefresh=openArenaScreen;
+  const pending=arenaPending; arenaPending=null;   // consume the one-shot post-battle result
   openArena({ arena:()=>state.arena, party:()=>party, portrait:h=>heroPortrait(h), back:openTownScreen,
     playerLevel:()=>(party[0]?party[0].level:1),
     ranked:()=>({ left:arenaRankedLeft(), cap:BAL.ARENA.DAILY_RANKED }),
-    fight:(team,rk)=>arenaFight(team,rk) });
+    fight:(team,rk)=>startArenaBattle(team,rk),
+    pendingResult:()=>pending });
 }
 /* ---------- forge: spend gems to upgrade gear (town service) ---------- */
 /* every gear item across the party's equipped slots + the shared bag, tagged with its owner/slot
@@ -1754,6 +1869,7 @@ function goToRoom(idx){
 
 /* the slim dungeon header: [☰ menu] title · currency  /  tappable minimap · speed · boss timer */
 function renderDungeonHeader(){
+  if(state.arenaBattle){ renderArenaHeader(); return; }   // the arena flies its own header
   if(state.scene!=="dungeon" || !state.room){ dheadEl.classList.remove("show"); dmenufab.classList.remove("show"); return; }
   dheadEl.classList.add("show"); dmenufab.classList.add("show");
   const d=activeDungeon(), idx=state.roomIdx, max=state.roomMax||0, reach=Math.min(BOSS_ROOM,max+1);
@@ -1804,6 +1920,7 @@ function renderDungeonHeader(){
 }
 /* live boss-timer text (cheap; only touches the DOM when the displayed value changes) */
 function tickDungeonHeader(){
+  if(state.arenaBattle) return;                // the arena header is static (no boss timers)
   if(state.scene!=="dungeon") return;
   if(roamingActive()){                         // roaming floor: keep the live foe count fresh
     const el=dheadEl.querySelector(".dh-foes");
@@ -1963,7 +2080,8 @@ function render(dt){
   fxUpdateDraw(G,dt);
   G.restore();
   if(roam){ drawTorch(cam); drawRoamMinimap(cam); }
-  if(state.phase==="idle"){
+  if(state.arenaBattle && state.arenaBattle.done){ drawArenaBanner(state.arenaBattle.won); }
+  else if(state.phase==="idle" && !state.arenaBattle){
     G.fillStyle="#e8dcc4"; G.font="bold 13px monospace"; G.textAlign="center";
     G.fillText("Press Fight! to begin",CW/2,CH-8);
   } else if(state.phase==="paused"){
@@ -2032,25 +2150,35 @@ function loop(now){
           tryQuaff(u);            // auto-quaff the equipped potion when it fits
           if(state.t>=u.next){ act(u); u.next=state.t+BAL.BASE_INTERVAL/derive(u).aspd+combatRng()*BAL.ASPD_JITTER; }
         }
-        updateWaves();
-        // endless map: respawn on the timer. Roaming re-forms the CURRENT level IN PLACE — NPCs respawn
-        // and the party keeps auto-seeking from where they stand (no jump back to the entrance); the player
-        // changes levels only via the header selector.
-        if(state.respawnAt!==null && state.t>=state.respawnAt){ state.respawnAt=null;
-          if(roamingActive()){ reformRoaming(); } else spawnWave(); }
-        // full wipe: pull back to the Keep (main revives free there; fallen pals need the Temple)
-        if(state.wipeAt!==null && state.t>=state.wipeAt){ state.wipeAt=null; enterTown(true); }
-        // prune slain FOES only (heroes are never pruned — they live in `party`, dead or alive)
-        state.foes=state.foes.filter(f=>f.alive);
-        // offline-progress rate: a decaying moving average of yield WHILE actively farming. Kill rewards
-        // add into F (below, at the kill); here we age it by wall-time so F.<x>/F.secs ≈ recent per-second
-        // yield for the level you're on. It freezes when you stop delving, so it captures the rate you left.
-        const dk=Math.exp(-wallDt/BAL.OFFLINE.TAU), F=state.farm;
-        F.secs=F.secs*dk+wallDt; F.silver*=dk; F.gems*=dk; F.xp*=dk; F.potions*=dk;
+        if(state.arenaBattle){
+          // Arena mode: a self-contained hero-vs-hero bout — no waves, respawns, loot, XP or farm-rate.
+          // Prune fallen rivals (heroes stay in `party`, dead or alive) and check for a decided battle.
+          state.foes=state.foes.filter(f=>f.alive);
+          updateArenaBattle();
+        } else {
+          updateWaves();
+          // endless map: respawn on the timer. Roaming re-forms the CURRENT level IN PLACE — NPCs respawn
+          // and the party keeps auto-seeking from where they stand (no jump back to the entrance); the player
+          // changes levels only via the header selector.
+          if(state.respawnAt!==null && state.t>=state.respawnAt){ state.respawnAt=null;
+            if(roamingActive()){ reformRoaming(); } else spawnWave(); }
+          // full wipe: pull back to the Keep (main revives free there; fallen pals need the Temple)
+          if(state.wipeAt!==null && state.t>=state.wipeAt){ state.wipeAt=null; enterTown(true); }
+          // prune slain FOES only (heroes are never pruned — they live in `party`, dead or alive)
+          state.foes=state.foes.filter(f=>f.alive);
+          // offline-progress rate: a decaying moving average of yield WHILE actively farming. Kill rewards
+          // add into F (below, at the kill); here we age it by wall-time so F.<x>/F.secs ≈ recent per-second
+          // yield for the level you're on. It freezes when you stop delving, so it captures the rate you left.
+          const dk=Math.exp(-wallDt/BAL.OFFLINE.TAU), F=state.farm;
+          F.secs=F.secs*dk+wallDt; F.silver*=dk; F.gems*=dk; F.xp*=dk; F.potions*=dk;
+        }
       }
       // advance grid-slide interpolation for every live unit
       for(const u of liveUnits()){ if(u.moveT!==undefined&&u.moveT<1)
         u.moveT=Math.min(1,u.moveT+dt*6.5); }
+      // arena: once a bout is decided the combat freezes (phase idle) while the banner holds — this
+      // return check lives OUTSIDE the fight block so the hold still resolves to the result screen.
+      if(state.arenaBattle && state.arenaBattle.done && state.t>=state.arenaBattle.endAt) returnFromArena();
     }
     render(frozen?0:dt);
     if(state.scene==="dungeon" && !frozen){ tickPotionBoxes(); tickDungeonHeader(); }   // live recharge rings + boss timer

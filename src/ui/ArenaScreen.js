@@ -1,7 +1,7 @@
 /* ============ UI :: ArenaScreen.js — The Proving Grounds (PvP arena) ============ */
 /* Renders into #town over the Keep. Screens: Battle (rank + rival browser), Leaderboard, View Team,
-   Battle Result, and a scrubbable Replay. Fighting runs the deterministic ArenaBattle sim (via
-   ctx.fight) and plays its recorded frame log back on the replay bar. */
+   and a Battle Result. Fighting hands off to the live engine (ctx.fight) — you watch the bout play
+   out on the dungeon canvas, hero vs hero — and the result screen re-opens here afterwards. */
 "use strict";
 
 import { ensureTownCss } from "./TownScreen.js";
@@ -16,7 +16,6 @@ import { iconImg } from "../engine/icons.js";
 const ACCENT = { fighter: "#ff8a5a", mage: "#b48bff", cleric: "#79c7e6", rogue: "#d8c088" };
 const accentCls = cls => ACCENT[cls] || "#8fb3d9";
 const kfmt = n => (n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1) + "k" : "" + n);
-const GLYPH = { fighter: "▲", mage: "✦", cleric: "✚", rogue: "◆" };   // geometric (render reliably in the app font)
 
 let arCssDone = false;
 function ensureArenaCss() {
@@ -118,7 +117,6 @@ function ensureArenaCss() {
   .ar-vt-act{margin-top:12px;display:flex;gap:8px}
   .ar-empty{color:var(--dim);font-style:italic;font-size:12px;text-align:center;padding:14px;border:1px dashed var(--line2);border-radius:11px}
 
-  /* result */
   .ar-res{padding:16px 6px 6px;text-align:center}
   .ar-banner{font-family:var(--serif);font-size:34px;font-weight:bold;letter-spacing:1px}
   .ar-banner.win{background:linear-gradient(var(--win),#4f9e63);-webkit-background-clip:text;background-clip:text;color:transparent}
@@ -133,35 +131,6 @@ function ensureArenaCss() {
   .ar-rw .rl{font-size:9.5px;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin-top:1px}
   .ar-note{font-size:11.5px;color:var(--muted);margin-top:12px}
   .ar-note b{color:var(--gold2)}
-
-  /* replay */
-  .ar-arena{position:relative;background:radial-gradient(120% 90% at 50% 0,#2a2036,#130d1f);border:1px solid var(--line);border-radius:12px;padding:14px 12px;overflow:hidden}
-  .ar-arena::before{content:"";position:absolute;inset:0;background:
-    repeating-linear-gradient(90deg,transparent 0 27px,rgba(255,255,255,.03) 27px 28px),
-    repeating-linear-gradient(0deg,transparent 0 27px,rgba(255,255,255,.03) 27px 28px)}
-  .ar-rowlab{position:relative;display:flex;justify-content:space-between;font-size:9.5px;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
-  .ar-rowlab .you{color:var(--gold2);font-weight:bold}.ar-rowlab .foe{color:var(--loss);font-weight:bold}
-  .ar-field{position:relative;display:flex;align-items:center;justify-content:space-between;padding:6px 2px 2px;gap:6px}
-  .ar-side{display:flex;gap:8px}
-  .ar-tok{width:34px;text-align:center}
-  .ar-tok .body{width:34px;height:34px;border-radius:9px;background:radial-gradient(circle at 40% 30%,#33283f,#181022);border:2px solid var(--c);display:grid;place-items:center;font-size:15px;position:relative;transition:box-shadow .12s,transform .12s}
-  .ar-tok.down .body{opacity:.3;filter:grayscale(1)}
-  .ar-tok.act .body{box-shadow:0 0 0 2px var(--gold2),0 0 12px var(--gold2);transform:translateY(-3px)}
-  .ar-tok .hp{height:4px;border-radius:3px;background:#3a1220;margin-top:4px;overflow:hidden}
-  .ar-tok .hp i{display:block;height:100%;background:linear-gradient(90deg,#ff7a70,#8fd39a);transition:width .12s}
-  .ar-vs{position:relative;font-family:var(--serif);font-weight:bold;color:var(--dim);font-size:13px;flex:0 0 auto}
-  .ar-astatus{position:relative;text-align:center;font-family:var(--mono);font-size:11px;color:var(--parch);margin-top:10px;min-height:15px}
-  .ar-astatus b{color:#fff}
-  .ar-timeline{display:flex;align-items:center;gap:9px;margin-top:12px}
-  .ar-tlbtn{width:36px;height:36px;flex:0 0 auto;border-radius:9px;background:linear-gradient(var(--gold),#a8722a);color:#241606;display:grid;place-items:center;font-size:14px;box-shadow:0 2px 0 #6e4a14;border:0;cursor:pointer}
-  .ar-tlbtn:active{transform:translateY(1px)}
-  .ar-track{flex:1;height:8px;border-radius:5px;background:#120c1e;border:1px solid var(--line);position:relative;cursor:pointer}
-  .ar-track .f{position:absolute;left:0;top:0;bottom:0;width:0;background:linear-gradient(90deg,#a8722a,var(--gold2));border-radius:5px 0 0 5px}
-  .ar-track .knob{position:absolute;left:0;top:50%;transform:translate(-50%,-50%);width:13px;height:13px;border-radius:50%;background:#fff;box-shadow:0 0 8px #fff}
-  .ar-tlt{font-family:var(--mono);font-size:10.5px;color:var(--muted);white-space:nowrap}
-  .ar-spd{display:flex;gap:5px;justify-content:center;margin-top:10px}
-  .ar-spdb{font-family:var(--mono);font-size:10.5px;padding:3px 10px;border-radius:16px;border:1px solid var(--line2);color:var(--muted);background:#191026;cursor:pointer}
-  .ar-spdb.on{color:var(--gold2);border-color:rgba(216,162,74,.4);background:rgba(216,162,74,.12);font-weight:bold}
   `;
   document.head.appendChild(s);
 }
@@ -185,20 +154,19 @@ function nextTierGap(rating) {
 }
 
 /* ctx = { arena:()=>{rating,wins,losses,streak,best,valor}, party:()=>[heroes], playerLevel:()=>n,
-           portrait:h=>canvas, ranked:()=>{left,cap}, fight:(team,ranked)=>result, back } */
+           portrait:h=>canvas, ranked:()=>{left,cap}, fight:(team,ranked)=>bool, pendingResult:()=>result, back } */
 export function openArena(ctx) {
   ensureTownCss(); ensureArenaCss();
   const el = document.getElementById("town");
   const ladder = buildLadder();
 
-  let mode = "home";             // home | team | result | replay
-  let tab = "battle";            // battle | board  (within home)
+  const pending = ctx.pendingResult ? ctx.pendingResult() : null;
+  let mode = pending ? "result" : "home";   // home | team | result
+  let tab = "battle";
   let lbFilter = "top";
   let nonce = 0;
-  let viewing = null;            // team being inspected
-  let result = null;            // last battle result (for result + replay)
-  let rp = null;                // replay playback state
-  let rpTimer = 0;
+  let viewing = null;
+  let result = pending || null;
 
   const A = () => ctx.arena();
   const pLevel = () => (ctx.playerLevel ? ctx.playerLevel() : 1);
@@ -206,11 +174,9 @@ export function openArena(ctx) {
 
   const playerTeam = () => {
     const a = A();
-    return { you: true, name: "Your Party", crest: "★", rating: a.rating, wins: a.wins, losses: a.losses,
-      _members: ctx.party() };
+    return { you: true, name: "Your Party", crest: "★", rating: a.rating, wins: a.wins, losses: a.losses, _members: ctx.party() };
   };
 
-  // ---------- rank shield ----------
   function rankHtml() {
     const a = A(), t = tierOf(a.rating), rank = playerRank(a.rating, ladder), total = ladder.length + 1;
     const nx = nextTierGap(a.rating);
@@ -236,7 +202,6 @@ export function openArena(ctx) {
     <div class="ar-cap">${capLine}</div>`;
   }
 
-  // ---------- battle tab ----------
   function battleHtml() {
     const a = A();
     const rivals = pickRivals(a.rating, nonce, ladder);
@@ -257,7 +222,6 @@ export function openArena(ctx) {
       <button class="ar-reroll" data-reroll>${iconImg("refresh", 12)} Scout new rivals · free</button>`;
   }
 
-  // ---------- leaderboard ----------
   function boardHtml() {
     const me = playerTeam();
     const all = [...ladder, me].sort((x, y) => y.rating - x.rating);
@@ -280,7 +244,6 @@ export function openArena(ctx) {
       ${rows.map(row).join("")}`;
   }
 
-  // ---------- view team ----------
   function viewTeamHtml(team) {
     const members = team.you ? team._members : rivalMembers(team, levelFor(team));
     const t = tierOf(team.rating);
@@ -303,7 +266,6 @@ export function openArena(ctx) {
       ${members.map(heroCard).join("")}${act}`;
   }
 
-  // ---------- result ----------
   function resultHtml(res) {
     const won = res.won;
     const rd = res.ranked
@@ -316,79 +278,20 @@ export function openArena(ctx) {
     let note = "";
     if (res.promoted) note = `<div class="ar-note">🏅 Promoted to <b>${res.tierAfter.label}</b>!</div>`;
     else if (won && res.streak >= 3) note = `<div class="ar-note">🔥 <b>${res.streak}-win streak</b> — keep climbing.</div>`;
-    else if (!won && res.ranked) note = `<div class="ar-note">A setback — study the replay and re-scout.</div>`;
+    else if (!won && res.ranked) note = `<div class="ar-note">A setback — re-scout and try a softer draw.</div>`;
+    const canRematch = ladder.some(x => String(x.seed) === String(res.rivalSeed));
     return `<div class="ar-res">
       <div class="ar-banner ${won ? "win" : "loss"}">${won ? "VICTORY" : "DEFEAT"}</div>
       <div class="ar-rd" style="font-size:12px;color:var(--muted)">vs ${res.rivalName}</div>
       ${rd}
       <div class="ar-rewards">${chips.join("")}</div>
       ${note}
-      <div class="ar-vt-act"><button class="ar-btn p wide" data-replay>${iconImg("sword", 13)} Watch replay</button>
+      <div class="ar-vt-act">${canRematch ? `<button class="ar-btn p wide" data-rematch="${res.rivalSeed}">${iconImg("sword", 13)} Rematch</button>` : ""}
         <button class="ar-btn g wide" data-continue>Continue</button></div>
     </div>`;
   }
 
-  // ---------- replay ----------
-  function replayHtml(res) {
-    const P = res.units.map((u, i) => ({ ...u, i })).filter(u => u.team === 0);
-    const Rv = res.units.map((u, i) => ({ ...u, i })).filter(u => u.team === 1);
-    const tok = u => `<div class="ar-tok" data-tok="${u.i}" style="--c:${accentCls(u.cls)}">
-      <div class="body">${GLYPH[u.cls] || "✦"}</div><div class="hp"><i style="width:100%"></i></div></div>`;
-    const pName = res.units.find(u => u.team === 0) ? "Your Party" : "You";
-    return `<div class="ar-vt-hd"><span class="ti">Replay</span>
-        <span class="rt" style="--tc:${res.won ? "var(--win)" : "var(--loss)"}">${res.won ? "You won" : "You lost"}</span></div>
-      <div class="ar-arena">
-        <div class="ar-rowlab"><span class="you">${pName}</span><span class="foe">${res.rivalName}</span></div>
-        <div class="ar-field"><div class="ar-side">${P.map(tok).join("")}</div><div class="ar-vs">VS</div><div class="ar-side">${Rv.map(tok).join("")}</div></div>
-        <div class="ar-astatus" data-status></div>
-      </div>
-      <div class="ar-timeline">
-        <button class="ar-tlbtn" data-play>❚❚</button>
-        <div class="ar-track" data-track><span class="f"></span><span class="knob"></span></div>
-        <span class="ar-tlt" data-clock>0.0 / ${res.duration.toFixed(1)}s</span>
-      </div>
-      <div class="ar-spd">${[0.5, 1, 2, 4].map(x => `<span class="ar-spdb ${x === 1 ? "on" : ""}" data-spd="${x}">${x}×</span>`).join("")}</div>
-      <div class="ar-cap" style="margin-top:12px">Stored as a <b>seed + both team snapshots</b> — the deterministic sim re-runs the exact battle. Scrub, pause, or change speed to study it.</div>`;
-  }
-
-  // paint one replay frame into the (already-rendered) replay DOM
-  function paintFrame(res, i) {
-    const f = res.frames[i]; if (!f) return;
-    el.querySelectorAll("[data-tok]").forEach(t => {
-      const idx = +t.getAttribute("data-tok"), hp = f.hp[idx], mh = res.units[idx].maxhp;
-      const frac = Math.max(0, Math.min(1, hp / Math.max(1, mh)));
-      t.querySelector(".hp i").style.width = (frac * 100) + "%";
-      t.classList.toggle("down", hp <= 0);
-      t.classList.toggle("act", idx === f.actor && f.actor >= 0);
-    });
-    const st = el.querySelector("[data-status]");
-    if (st) {
-      const pv = res.frames[i].hp.filter((h, k) => res.units[k].team === 0 && h > 0).length;
-      const rv2 = res.frames[i].hp.filter((h, k) => res.units[k].team === 1 && h > 0).length;
-      const note = f.note ? `<b>${f.note}</b>` : (f.kind === "hit" || f.kind === "crit" ? `${f.dmg} dmg` : "");
-      st.innerHTML = `${f.t.toFixed(1)}s — ${note} · You ${pv} vs Foe ${rv2}`;
-    }
-    const total = res.frames[res.frames.length - 1].t || res.duration || 1;
-    const pct = Math.max(0, Math.min(100, (f.t / total) * 100));
-    const fEl = el.querySelector(".ar-track .f"), kEl = el.querySelector(".ar-track .knob"), cEl = el.querySelector("[data-clock]");
-    if (fEl) fEl.style.width = pct + "%";
-    if (kEl) kEl.style.left = pct + "%";
-    if (cEl) cEl.textContent = `${f.t.toFixed(1)} / ${(res.duration || total).toFixed(1)}s`;
-  }
-  function stopReplayTimer() { if (rpTimer) { clearInterval(rpTimer); rpTimer = 0; } }
-  function startReplayTick() {
-    stopReplayTimer();
-    rpTimer = setInterval(() => {
-      if (!rp || !rp.playing) return;
-      if (rp.i >= result.frames.length - 1) { rp.playing = false; syncPlayBtn(); return; }
-      rp.i++; paintFrame(result, rp.i);
-    }, Math.max(90, 520 / rp.speed));
-  }
-  function syncPlayBtn() { const b = el.querySelector("[data-play]"); if (b) b.textContent = rp.playing ? "❚❚" : "▶"; }
-
-  // ---------- render ----------
   function render() {
-    stopReplayTimer();
     let backLabel, body;
     if (mode === "home") {
       backLabel = "Return to the Keep";
@@ -399,31 +302,23 @@ export function openArena(ctx) {
           <button class="ar-tab ${tab === "board" ? "on" : ""}" data-tab="board">${iconImg("crown", 13)} Leaderboard</button></div>
         ${tab === "battle" ? battleHtml() : boardHtml()}`;
     } else if (mode === "team") { backLabel = "Back to the Arena"; body = viewTeamHtml(viewing); }
-    else if (mode === "result") { backLabel = "Back to the Arena"; body = resultHtml(result); }
-    else { backLabel = "Back to the result"; body = replayHtml(result); }
+    else { backLabel = "Back to the Arena"; body = resultHtml(result); }
 
     const bIcon = mode === "home" ? "house" : "chevron";
     el.innerHTML = `<div class="tw-wrap ar-wrap">
       <button class="ar-return" data-back>${iconImg(bIcon, 16)} ${backLabel}</button>${body}</div>`;
 
-    // portraits for view-team
     if (mode === "team") {
       const members = viewing.you ? viewing._members : rivalMembers(viewing, levelFor(viewing));
       el.querySelectorAll(".ar-tcard canvas").forEach((cv, i) => { if (members[i]) cv.getContext("2d").drawImage(ctx.portrait(members[i]), 0, 0, 96, 96); });
     }
-    // replay bootstrap
-    if (mode === "replay") {
-      rp = { i: 0, playing: true, speed: 1 };
-      paintFrame(result, 0); syncPlayBtn(); startReplayTick();
-    }
-
     wire();
   }
 
-  function runFight(team) {
-    const res = ctx.fight ? ctx.fight(team, true) : null;
-    if (!res) { arToast("Your party can't fight — revive a fallen hero at the Temple first."); return; }
-    result = res; mode = "result"; render();
+  function launch(team) {
+    const ok = ctx.fight && ctx.fight(team, true);
+    if (!ok) arToast("Your party can't fight — revive a fallen hero at the Temple first.");
+    // on success the scene switches to the live battle; this screen is torn down.
   }
 
   function openTeamBySeed(seed) {
@@ -434,11 +329,8 @@ export function openArena(ctx) {
 
   function wire() {
     el.querySelector("[data-back]").onclick = () => {
-      stopReplayTimer();
       if (mode === "home") return ctx.back();
-      if (mode === "replay") { mode = "result"; return render(); }
-      if (mode === "result") { mode = "home"; return render(); }
-      mode = "home"; render();          // team → home
+      mode = "home"; render();               // team / result → home
     };
     el.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => { tab = b.getAttribute("data-tab"); render(); });
     const rr = el.querySelector("[data-reroll]"); if (rr) rr.onclick = () => { nonce++; render(); };
@@ -447,24 +339,14 @@ export function openArena(ctx) {
     el.querySelectorAll("[data-row]").forEach(r => r.onclick = () => openTeamBySeed(r.getAttribute("data-row")));
     el.querySelectorAll("[data-fight]").forEach(b => b.onclick = () => {
       const seed = b.getAttribute("data-fight");
-      const team = seed === "me" ? null : ladder.find(x => String(x.seed) === String(seed));
-      if (team) runFight(team);
+      const team = ladder.find(x => String(x.seed) === String(seed));
+      if (team) launch(team);
     });
-    const rep = el.querySelector("[data-replay]"); if (rep) rep.onclick = () => { mode = "replay"; render(); };
-    const cont = el.querySelector("[data-continue]"); if (cont) cont.onclick = () => { mode = "home"; tab = "battle"; render(); };
-    // replay controls
-    const pb = el.querySelector("[data-play]"); if (pb) pb.onclick = () => { if (rp.i >= result.frames.length - 1) rp.i = 0; rp.playing = !rp.playing; syncPlayBtn(); if (rp.playing) startReplayTick(); };
-    el.querySelectorAll("[data-spd]").forEach(s => s.onclick = () => {
-      rp.speed = +s.getAttribute("data-spd");
-      el.querySelectorAll("[data-spd]").forEach(x => x.classList.toggle("on", x === s));
-      if (rp.playing) startReplayTick();
-    });
-    const tr = el.querySelector("[data-track]"); if (tr) tr.onclick = e => {
-      const rect = tr.getBoundingClientRect(), frac = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-      const total = result.frames[result.frames.length - 1].t || 1;
-      let i = 0; while (i < result.frames.length - 1 && result.frames[i].t < frac * total) i++;
-      rp.i = i; rp.playing = false; syncPlayBtn(); paintFrame(result, i);
+    const rm = el.querySelector("[data-rematch]"); if (rm) rm.onclick = () => {
+      const team = ladder.find(x => String(x.seed) === String(rm.getAttribute("data-rematch")));
+      if (team) launch(team);
     };
+    const cont = el.querySelector("[data-continue]"); if (cont) cont.onclick = () => { mode = "home"; tab = "battle"; render(); };
   }
 
   render();
