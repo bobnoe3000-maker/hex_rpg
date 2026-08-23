@@ -25,6 +25,7 @@ import { openShop } from './ui/ShopScreen.js';
 import { openTavern } from './ui/TavernScreen.js';
 import { openTemple } from './ui/TempleScreen.js';
 import { openForge } from './ui/ForgeScreen.js';
+import { openArena } from './ui/ArenaScreen.js';
 import { openDiag } from './ui/DiagScreen.js';
 import { startOnboarding } from './ui/Onboarding.js';
 import { makeCompanion, makeEnemy } from './models/units.js';
@@ -72,6 +73,7 @@ const state={ roomIdx:0, scene:"town", phase:"idle", room:null, foes:[], t:0, sp
   roamObjective:null,   // {r,c} the living champion's room — the party marches here while it's up; cleared once the champion falls so the party mops up side rooms
   roamFoeHP:0, roamProgressAt:0,   // stall-guard bookkeeping (runtime): total live-foe HP + last time it changed
   farm:{ secs:0, silver:0, gems:0, xp:0, potions:0 },   // decaying moving average of live farming yield → drives offline progress
+  arena:{ rating:BAL.ARENA.START_RATING, wins:0, losses:0, streak:0, best:BAL.ARENA.START_RATING },   // PvP ladder: your ELO rating + record (ghost rivals live in systems/Arena.js)
   autoLevel:false,   // when true, companion level-ups resolve their own free roll (no popup, no silver)
   cam:{x:0,y:0},     // camera offset (logical px) for the roaming floor — follows the party
   rally:null };      // {r,c} flag heroes regroup on when no foe is engaged
@@ -112,6 +114,7 @@ function snapshotState(){
     dungeonId:state.dungeonId, cleared:state.cleared, roomMax:state.roomMax, autoLevel:state.autoLevel,
     roamLevel:state.roamLevel, roamUnlocked:state.roamUnlocked,
     scene:state.scene, farm:state.farm,   // offline progress: whether you left mid-delve + your live farm-rate
+    arena:state.arena,                    // PvP ladder rating + record
     savedAt:new Date().toISOString() };
 }
 function saveGame(){ if(activeSlot!==null) writeSlot(activeSlot, snapshotState()); }
@@ -138,6 +141,9 @@ function loadGame(save){
   state.roamUnlocked=Math.max(state.roamLevel, Math.min(lastRoamLevel(), save.roamUnlocked|0));   // deepest reachable level
   const f=save.farm||{};   // restore the live farm-rate accumulator (drives offline progress)
   state.farm={ secs:+f.secs||0, silver:+f.silver||0, gems:+f.gems||0, xp:+f.xp||0, potions:+f.potions||0 };
+  const ar=save.arena||{}, R=BAL.ARENA.START_RATING;   // restore PvP ladder rating + record (defaults for older saves)
+  state.arena={ rating:ar.rating!=null?+ar.rating:R, wins:+ar.wins||0, losses:+ar.losses||0,
+    streak:+ar.streak||0, best:ar.best!=null?+ar.best:(ar.rating!=null?+ar.rating:R) };
 }
 const partyClasses=()=>party.length?[...new Set(party.map(h=>h.cls))]:["fighter","mage","cleric","rogue"];
 let combatRng=Math.random;  // reseeded deterministically when a fight starts / area changes
@@ -1511,7 +1517,7 @@ function openTownScreen(){
   townRefresh=openTownScreen;
   openTown({ silver:()=>state.silver, gems:()=>state.gems, party, portrait:h=>heroPortrait(h),
     openHero, openParty:openPartyScreen, openShop:openShopScreen, openTavern:openTavernScreen, openTemple:openTempleScreen,
-    openForge:openForgeScreen, openDiag:openDiagScreen, openDungeons:openDungeonBoard,
+    openForge:openForgeScreen, openArena:openArenaScreen, openDiag:openDiagScreen, openDungeons:openDungeonBoard,
     exitToLogin:saveExitToLogin, autoLevel:{ on:()=>state.autoLevel, toggle:()=>toggleAutoLevel() },
     tileFlag:heroTileFlag, activeDungeon:()=>activeDungeon() });
 }
@@ -1536,6 +1542,11 @@ function openDungeonBoard(){
     select:id=>startDungeon(id), resume:()=>enterDungeon(), back:openTownScreen });
 }
 function openDiagScreen(){ townRefresh=openDiagScreen; openDiag({ text:buildDiagnostics, back:openTownScreen }); }
+/* ---------- arena: PvP ladder of ghost rivals (town service) ---------- */
+function openArenaScreen(){
+  townRefresh=openArenaScreen;
+  openArena({ arena:()=>state.arena, party:()=>party, portrait:h=>heroPortrait(h), back:openTownScreen });
+}
 /* ---------- forge: spend gems to upgrade gear (town service) ---------- */
 /* every gear item across the party's equipped slots + the shared bag, tagged with its owner/slot
    so the Forge can filter by character (and the bag) and by gear slot */

@@ -283,7 +283,7 @@ export function openTown(ctx) {
 
   const nav = {
     keep:   () => {},                                   // already home
-    arena:  () => toast("The Arena is being raised — PvP challenges open soon"),
+    arena:  () => (ctx.openArena ? ctx.openArena() : toast("The Arena is being raised — PvP challenges open soon")),
     depart: () => (ctx.openDungeons ? ctx.openDungeons() : ctx.enterDungeon && ctx.enterDungeon()),
     party:  () => (ctx.openParty ? ctx.openParty() : ctx.openHero(ctx.party[0])),
     menu:   () => { pop.hidden = !pop.hidden; },

@@ -118,6 +118,22 @@ export const BAL = {
   // Respec: wiping the skill tree refunds every point for silver — cost rises with how much is invested.
   SKILL_RESPEC: { BASE: 40, PER_POINT: 15 },
 
+  // PvP Arena (The Proving Grounds). A ladder of seeded "ghost" rival teams + you, ranked by ELO rating.
+  ARENA: {
+    START_RATING: 1000,
+    LADDER_SIZE: 60,             // number of ghost teams on the board
+    LADDER_SEED: 0x5eed4a2b,     // fixed master seed → the same ladder every session
+    TOP_RATING: 2180, BOT_RATING: 840,   // the ghost ladder's rating span (player can pass the top)
+    LEVEL_BASE: 1, LEVEL_PER: 0.03,      // ghost team level = round(BASE + rating*PER): 1000→31, 2000→61
+    ELO_K: 32,                  // rating swing per match (slice 3)
+    DAILY_RANKED: 10,           // ranked battles per day (slice 3)
+    // named tiers: [name, minRating, color]; a tier band is split into three divisions (III low → I high)
+    TIERS: [
+      ["Bronze", 0, "#b08d57"], ["Iron", 1100, "#8a8f99"], ["Steel", 1300, "#9fb0c3"],
+      ["Silver", 1500, "#cfd6e0"], ["Gold", 1650, "#e0b063"], ["Ember", 1850, "#ff8a5a"], ["Champion", 2050, "#c78aff"],
+    ],
+  },
+
   WIPE_DELAY: 1.6,        // seconds after a full wipe before you're pulled back to the Keep
 
   // Shop / economy (silver)

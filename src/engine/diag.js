@@ -6,7 +6,7 @@
 
 /* Bump on each meaningful deploy so a stale browser cache is visible at a glance
    (shown on the Diagnostics screen + in the export). */
-export const APP_BUILD = "2026-08-22v · Skill ranks are clearer and smoother: the rank you're filling now unfolds into its five point-values (e.g. Firebolt 124·128·132·136·140% with your point highlighted), so the bonus BETWEEN stars is spelled out. And the per-point curve is smoothed — the first star no longer ramps from zero, so each point adds a steady amount (learned skills start stronger) while every star milestone stays exactly where it was. Every dungeon is a roaming descent with its own layout; offline progress; party bar fits three; roaming stall guard; rally flag order";
+export const APP_BUILD = "2026-08-23a · PvP Arena — The Proving Grounds (part 1): a rated ladder of seeded 'ghost' rival teams plus you, kept in your save (ELO rating + win/loss record). Open it from the Keep's Arena tab: a rank shield (Bronze→Champion, three divisions), three challengers near your rating (one Hard, one Even, one Favoured) you can Scout-reroll, a full Leaderboard (Top / Near me, medals, your row pinned), and View Team to inspect any rival's roster — class, level, stats, top skills and gear. Ranked battles land in the next update. Prior: skill ranks clearer/smoother; every dungeon a roaming descent; offline progress; party bar fits three; rally flag order";
 
 const BUF = [];
 const MAX = 400;
