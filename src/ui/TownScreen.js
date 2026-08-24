@@ -165,6 +165,7 @@ const NAV_ICON = {
   keep:   `<path d="M4 21v-9l2.5-1.6M20 21v-9l-2.5-1.6M6.5 10.4V4.6l2 1.1 1.7-1.1 1.8 1.1 1.7-1.1 2 1.1v5.8M4 12h16M9.5 21v-4.2h5V21"/>`,
   arena:  `<path d="M5 4l9.5 9.5M4 8.5L8.5 4M15.5 15.5L20 20M15 19l4-4M19 4l-9.5 9.5M20 8.5L15.5 4M8.5 15.5L4 20M9 19l-4-4"/>`,
   party:  `<path d="M12 3.2l7 2.4v5.1c0 4.4-2.9 7.4-7 9.1-4.1-1.7-7-4.7-7-9.1V5.6l7-2.4Z"/><path d="M9.4 11.6l1.9 1.9 3.6-3.9"/>`,
+  atlas:  `<path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14"/>`,
   menu:   `<path d="M4 7h16M4 12h16M4 17h16"/>`,
   depart: `<path d="M12 3v13M8 12l4 4 4-4M6 20h12"/>`,
 };
@@ -222,7 +223,7 @@ export function openTown(ctx) {
       <button class="kh-tab on" data-nav="keep">${navSvg("keep")}Keep</button>
       <button class="kh-tab" data-nav="arena">${navSvg("arena")}Arena</button>
       <div class="kh-cta"><button data-nav="depart" title="Descend">${navSvg("depart",22)}<span>Depart</span></button></div>
-      <button class="kh-tab" data-nav="party">${navSvg("party")}Party${hasFlag ? `<span class="badge"></span>` : ""}</button>
+      <button class="kh-tab" data-nav="atlas">${navSvg("atlas")}World</button>
       <button class="kh-tab" data-nav="menu">${navSvg("menu")}Menu</button>
     </nav>
     <div class="kh-menuwrap" data-menupop hidden>
@@ -285,7 +286,7 @@ export function openTown(ctx) {
     keep:   () => {},                                   // already home
     arena:  () => (ctx.openArena ? ctx.openArena() : toast("The Arena is being raised — PvP challenges open soon")),
     depart: () => (ctx.openDungeons ? ctx.openDungeons() : ctx.enterDungeon && ctx.enterDungeon()),
-    party:  () => (ctx.openParty ? ctx.openParty() : ctx.openHero(ctx.party[0])),
+    atlas:  () => (ctx.openAtlas ? ctx.openAtlas() : ctx.openParty && ctx.openParty()),
     menu:   () => { pop.hidden = !pop.hidden; },
   };
   el.querySelectorAll("[data-nav]").forEach(b => b.onclick = e => {

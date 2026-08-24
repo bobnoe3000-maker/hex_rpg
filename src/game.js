@@ -27,6 +27,8 @@ import { openTemple } from './ui/TempleScreen.js';
 import { openForge } from './ui/ForgeScreen.js';
 import { openArena } from './ui/ArenaScreen.js';
 import { rivalLevel, rivalMembers, eloResult, tierOf } from './systems/Arena.js';
+import { openAtlas } from './ui/AtlasScreen.js';
+import { buildRegionFloor, REGIONS } from './systems/Overworld.js';
 import { openDiag } from './ui/DiagScreen.js';
 import { startOnboarding } from './ui/Onboarding.js';
 import { makeCompanion, makeEnemy } from './models/units.js';
@@ -79,6 +81,7 @@ const state={ roomIdx:0, scene:"town", phase:"idle", room:null, foes:[], t:0, sp
   autoLevel:false,   // when true, companion level-ups resolve their own free roll (no popup, no silver)
   cam:{x:0,y:0},     // camera offset (logical px) for the roaming floor — follows the party
   arenaBattle:null,  // when set, a live PvP arena bout is running on the dungeon canvas (isolates it from delving)
+  region:null,       // when set, the party is walking an overworld biome region floor ({id,portals,gates,busy})
   rally:null };      // {r,c} flag heroes regroup on when no foe is engaged
 /* the dungeon the party is currently delving (falls back to the Emberdeep) */
 const activeDungeon=()=>dungeonById(state.dungeonId);
@@ -599,7 +602,7 @@ function spawnElite(){
 }
 /* the camera glides to keep the party centred, panning in BOTH axes; clamped to the floor's extent. */
 function updateCamera(dt){
-  if(!roamingActive()){ state.cam.x=0; state.cam.y=0; return; }
+  if(!roamingActive() && !state.region){ state.cam.x=0; state.cam.y=0; return; }
   const alive=party.filter(h=>h.alive);
   let tx=state.cam.x, ty=state.cam.y;
   if(alive.length){ tx=alive.reduce((s,h)=>s+uxS(h),0)/alive.length - CW/2;
@@ -1526,7 +1529,7 @@ function openTownScreen(){
   townRefresh=openTownScreen;
   openTown({ silver:()=>state.silver, gems:()=>state.gems, party, portrait:h=>heroPortrait(h),
     openHero, openParty:openPartyScreen, openShop:openShopScreen, openTavern:openTavernScreen, openTemple:openTempleScreen,
-    openForge:openForgeScreen, openArena:openArenaScreen, openDiag:openDiagScreen, openDungeons:openDungeonBoard,
+    openForge:openForgeScreen, openArena:openArenaScreen, openAtlas:openAtlasScreen, openDiag:openDiagScreen, openDungeons:openDungeonBoard,
     exitToLogin:saveExitToLogin, autoLevel:{ on:()=>state.autoLevel, toggle:()=>toggleAutoLevel() },
     tileFlag:heroTileFlag, activeDungeon:()=>activeDungeon() });
 }
@@ -1708,6 +1711,71 @@ function openArenaScreen(){
     fight:(team,rk)=>startArenaBattle(team,rk),
     pendingResult:()=>pending });
 }
+
+/* ===== overworld: the Atlas + walking a biome region on the delve engine ===== */
+function openAtlasScreen(){
+  townRefresh=openAtlasScreen;
+  openAtlas({ current:()=>state.region?state.region.id:null, unlocked:()=>true,   // all regions open for playtest
+    travel:id=>travelToRegion(id), back:openTownScreen });
+}
+/* enter a region: build its large floor, drop the party at the entry, run the follow-camera scene */
+function travelToRegion(id){
+  if(!REGIONS[id]) return;
+  const built=buildRegionFloor(id, (Date.now()&0x7fffffff)>>>0 || 7);
+  state.region={ id, portals:built.portals, gates:built.gates, busy:false };
+  state.room=built.room; state.cam={x:0,y:0}; state.rally=null; state.foes=[]; fxClear();
+  state.respawnAt=null; state.wipeAt=null; state.bossInWave=false;
+  state.scene="region"; state.phase="idle";        // no combat phase on the overworld
+  placeHeroes();
+  for(const h of party){ if(h.alive){ h.next=state.t+0.2; } }
+  overlay.classList.remove("show"); overlay.innerHTML="";
+  townEl.classList.remove("show");
+  dmenufab.classList.remove("show"); closeDLog(); closeDMenu();
+  updateCamera(1); renderRegionHeader(); renderParty();
+  log(`— <span class="sys">Wildmarch · ${REGIONS[id].name}</span> — <span style="opacity:.7">tap to walk; reach a portal or gate</span>`);
+}
+/* per-frame overworld step: march the party toward the tapped tile; travel on portal/gate arrival */
+function updateRegion(dt){
+  const reg=state.region; if(!reg || reg.busy) return;
+  for(const h of party){ if(!h.alive) continue;
+    if(state.t>=(h.next||0)){ if(state.rally && !(h.r===state.rally.r&&h.c===state.rally.c)) stepToward(h,state.rally); h.next=state.t+0.24; } }
+  const L=party.find(h=>h.alive); if(!L) return;
+  const onP=reg.portals.find(p=>p.r===L.r&&p.c===L.c);
+  if(onP){ reg.busy=true; enterRegionPortal(onP); return; }
+  const onG=reg.gates.find(g=>g.r===L.r&&g.c===L.c);
+  if(onG){ reg.busy=true; regionGate(onG); return; }
+}
+function enterRegionPortal(p){
+  const boss=p.kind==="boss";
+  dtoast(boss?`Descending — ${REGIONS[state.region.id].name}`:"Into the cave…");
+  state.region=null; state.rally=null;
+  startDungeon(p.dungeonId||"emberdeep");          // reuse the existing delve for now
+}
+function regionGate(gt){
+  if(gt.town){ leaveRegionToTown(); }
+  else { const to=gt.to; state.region=null; travelToRegion(to); }
+}
+function leaveRegionToTown(){
+  state.region=null; state.rally=null; state.foes=[]; fxClear(); state.phase="idle";
+  state.scene="town"; townEl.classList.add("show"); dheadEl.classList.remove("show"); dmenufab.classList.remove("show"); closeDLog(); closeDMenu();
+  renderParty(); openTownScreen(); saveGame();
+}
+function leaveRegionToAtlas(){
+  state.region=null; state.rally=null; state.foes=[]; fxClear(); state.phase="idle";
+  state.scene="town"; townEl.classList.add("show"); dheadEl.classList.remove("show"); dmenufab.classList.remove("show"); closeDLog(); closeDMenu();
+  renderParty(); openAtlasScreen(); saveGame();
+}
+function renderRegionHeader(){
+  if(!state.region){ dheadEl.classList.remove("show"); return; }
+  dheadEl.classList.add("show");
+  const R=REGIONS[state.region.id];
+  dheadEl.innerHTML=`<div class="dh-r1"><div class="dh-title"><b>${R.name}</b> <span>· ${R.biome}</span></div><span class="dh-cur"></span></div>
+    <div class="dh-r2" style="align-items:center;gap:10px">
+      <span class="dh-foes" style="color:#cdbff0">Tap to walk · reach a ◆ portal or a gate</span>
+      <span class="dh-boss" data-toatlas style="cursor:pointer">⟵ Atlas</span></div>`;
+  const a=dheadEl.querySelector("[data-toatlas]"); if(a) a.onclick=()=>leaveRegionToAtlas();
+  updateHud();
+}
 /* ---------- forge: spend gems to upgrade gear (town service) ---------- */
 /* every gear item across the party's equipped slots + the shared bag, tagged with its owner/slot
    so the Forge can filter by character (and the bag) and by gear slot */
@@ -1870,6 +1938,7 @@ function goToRoom(idx){
 /* the slim dungeon header: [☰ menu] title · currency  /  tappable minimap · speed · boss timer */
 function renderDungeonHeader(){
   if(state.arenaBattle){ renderArenaHeader(); return; }   // the arena flies its own header
+  if(state.region){ renderRegionHeader(); return; }       // overworld region flies its own header
   if(state.scene!=="dungeon" || !state.room){ dheadEl.classList.remove("show"); dmenufab.classList.remove("show"); return; }
   dheadEl.classList.add("show"); dmenufab.classList.add("show");
   const d=activeDungeon(), idx=state.roomIdx, max=state.roomMax||0, reach=Math.min(BOSS_ROOM,max+1);
@@ -1920,7 +1989,7 @@ function renderDungeonHeader(){
 }
 /* live boss-timer text (cheap; only touches the DOM when the displayed value changes) */
 function tickDungeonHeader(){
-  if(state.arenaBattle) return;                // the arena header is static (no boss timers)
+  if(state.arenaBattle || state.region) return;   // arena/region headers are static (no boss timers)
   if(state.scene!=="dungeon") return;
   if(roamingActive()){                         // roaming floor: keep the live foe count fresh
     const el=dheadEl.querySelector(".dh-foes");
@@ -1989,7 +2058,7 @@ function menuAct(a){
 /* tap the dungeon floor to plant a rally flag — the whole party marches there and holds. Tap the flagged
    tile again to pull the flag and let them resume auto-seeking. */
 cvG.addEventListener("click", e=>{
-  if(state.scene!=="dungeon" || panelShown() || !state.room) return;
+  if((state.scene!=="dungeon" && state.scene!=="region") || panelShown() || !state.room) return;
   const rect=cvG.getBoundingClientRect();
   const px=(e.clientX-rect.left)/rect.width*CW, py=(e.clientY-rect.top)/rect.height*CH;
   const cam=state.cam||{x:0,y:0};                                     // roaming: the floor is scrolled under the viewport
@@ -2066,7 +2135,7 @@ function drawFlag(cx,cy){
 /* (The room compass + boss timer moved to the DOM dungeon header — see renderDungeonHeader.) */
 function render(dt){
   G.setTransform(2,0,0,2,0,0);
-  const roam=roamingActive(); if(roam) updateCamera(dt);
+  const roam=roamingActive() || !!state.region; if(roam) updateCamera(dt);
   const cam=state.cam||{x:0,y:0};
   // blit the visible floor: the whole room (classic), or a camera window into the tall roaming floor
   if(roam) G.drawImage(state.room.base, cam.x*2, cam.y*2, CW*2, CH*2, 0,0, CW, CH);
@@ -2077,11 +2146,12 @@ function render(dt){
   if(state.rally) drawFlag(cx0g(state.rally.c)+T/2, cy0g(state.rally.r)+T/2);
   const sorted=[...party,...state.foes].sort((a,b)=>a.r-b.r||a.c-b.c);   // back→front
   for(const u of sorted) drawUnit(u);
+  if(state.region) drawRegionWorld(G);
   fxUpdateDraw(G,dt);
   G.restore();
-  if(roam){ drawTorch(cam); drawRoamMinimap(cam); }
+  if(roam){ if(!state.region) drawTorch(cam); drawRoamMinimap(cam); }
   if(state.arenaBattle && state.arenaBattle.done){ drawArenaBanner(state.arenaBattle.won); }
-  else if(state.phase==="idle" && !state.arenaBattle){
+  else if(state.phase==="idle" && !state.arenaBattle && !state.region){
     G.fillStyle="#e8dcc4"; G.font="bold 13px monospace"; G.textAlign="center";
     G.fillText("Press Fight! to begin",CW/2,CH-8);
   } else if(state.phase==="paused"){
@@ -2089,6 +2159,23 @@ function render(dt){
     G.fillText("Paused",CW/2,CH-8);
   }
 }
+/* overworld region: draw the live portal glows/pins + gate arrows + labels over the baked floor
+   (called inside the camera-translated world space, so cx0g/cy0g map straight to screen) */
+function drawRegionWorld(g){
+  const reg=state.region; if(!reg) return;
+  for(const p of reg.portals){ const x=cx0g(p.c)+T/2, y=cy0g(p.r)+T/2, boss=p.kind==="boss";
+    const rgb=boss?"255,138,90":"154,209,255", fl=0.72+Math.sin(state.t*4+p.c)*0.14;
+    const rg=g.createRadialGradient(x,y-6,0,x,y-6,(boss?30:22)*fl); rg.addColorStop(0,`rgba(${rgb},.5)`); rg.addColorStop(1,`rgba(${rgb},0)`); g.fillStyle=rg; g.fillRect(x-40,y-40,80,80);
+    const py=y-30; g.fillStyle=boss?"#ffb066":"#9ad1ff"; g.save(); g.translate(x,py); g.rotate(Math.PI/4); g.fillRect(-5,-5,10,10); g.strokeStyle="#1a1018"; g.lineWidth=1.4; g.strokeRect(-5,-5,10,10); g.restore();
+    g.fillStyle="#1a1018"; g.font="bold 10px monospace"; g.textAlign="center"; g.textBaseline="middle"; g.fillText(boss?"!":"·",x,py+0.5); g.textBaseline="alphabetic";
+    regionLabel(g,x,py-9, boss?(REGIONS[reg.id].name+" Depths"):"Cave", boss?"#ffcf8a":"#bfe0ee", boss?"rgba(60,20,10,.85)":"rgba(10,20,30,.85)"); }
+  for(const gt of reg.gates){ const x=cx0g(gt.c)+T/2, y=cy0g(gt.r)+T/2, col=gt.town?"#e0b063":"#cdbff0";
+    const ax=x+(gt.dir==="E"?20:gt.dir==="W"?-20:0), ay=y-14+(gt.dir==="S"?18:gt.dir==="N"?-22:0);
+    g.fillStyle=col; g.save(); g.translate(ax,ay); g.rotate(gt.dir==="E"?0:gt.dir==="W"?Math.PI:gt.dir==="N"?-Math.PI/2:Math.PI/2); g.beginPath(); g.moveTo(-4,-6); g.lineTo(6,0); g.lineTo(-4,6); g.fill(); g.restore();
+    regionLabel(g,x,y-40,gt.name,gt.town?"#f0c877":"#cdbff0","rgba(8,6,14,.82)"); }
+}
+function regionLabel(g,x,y,txt,fg,bg){ g.font="7px monospace"; const w=g.measureText(txt).width;
+  g.fillStyle=bg; rrp(g,x-w/2-4,y-8,w+8,11,3); g.fill(); g.fillStyle=fg; g.textAlign="center"; g.textBaseline="alphabetic"; g.fillText(txt,x,y); }
 /* torch-lit fog: darken the viewport toward the edges, brightest on the party's position */
 function drawTorch(cam){
   const alive=party.filter(h=>h.alive);
@@ -2111,8 +2198,9 @@ function drawRoamMinimap(cam){
   G.save();
   G.fillStyle="rgba(10,8,18,.82)"; G.strokeStyle="#4a3d68"; G.lineWidth=1;
   roundRect(G,x0,y0,boxW,boxH,6); G.fill(); G.stroke();
+  const regTint = state.region ? ((REGIONS[state.region.id]&&REGIONS[state.region.id].tint)||"#3a4a2c") : null;
   for(let i=0;i<rects.length;i++){ const rc=rects[i], seen=room.seen.has(i), boss=i===rects.length-1;
-    G.fillStyle = !seen?"#221a30" : boss?"#5a2420":"#3a4a2c"; G.globalAlpha = seen?1:.5;
+    G.fillStyle = regTint ? regTint : (!seen?"#221a30" : boss?"#5a2420":"#3a4a2c"); G.globalAlpha = regTint?.9:(seen?1:.5);
     G.fillRect(ox+rc.c*sc, oy+rc.r*sc, Math.max(2,rc.w*sc), Math.max(2,rc.h*sc)); G.globalAlpha=1; }
   G.fillStyle="#e5637a";
   for(const f of state.foes) if(f.alive && f.aggro) G.fillRect(ox+f.c*sc-0.6, oy+f.r*sc-0.6, 1.8, 1.8);
@@ -2123,6 +2211,10 @@ function drawRoamMinimap(cam){
   const camC=(cam.x-12)/44, camR=(cam.y-54)/44, camW=CW/44, camH=CH/44;
   G.strokeStyle="rgba(240,200,119,.45)"; G.lineWidth=1;
   G.strokeRect(ox+Math.max(0,camC)*sc, oy+Math.max(0,camR)*sc, camW*sc, camH*sc);
+  // overworld: portal (◆) + gate pins on the minimap
+  if(state.region){ for(const p of state.region.portals){ G.fillStyle=p.kind==="boss"?"#ffb066":"#9ad1ff";
+      G.save(); G.translate(ox+p.c*sc, oy+p.r*sc); G.rotate(Math.PI/4); G.fillRect(-1.6,-1.6,3.2,3.2); G.restore(); }
+    for(const gt of state.region.gates){ G.fillStyle=gt.town?"#e0b063":"#cdbff0"; G.fillRect(ox+gt.c*sc-1, oy+gt.r*sc-1, 2.4,2.4); } }
   G.restore();
 }
 function roundRect(g,x,y,w,h,r){ g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); }
@@ -2173,6 +2265,8 @@ function loop(now){
           F.secs=F.secs*dk+wallDt; F.silver*=dk; F.gems*=dk; F.xp*=dk; F.potions*=dk;
         }
       }
+      // overworld region: walk the party across the biome floor (no combat)
+      if(state.scene==="region") updateRegion(dt);
       // advance grid-slide interpolation for every live unit
       for(const u of liveUnits()){ if(u.moveT!==undefined&&u.moveT<1)
         u.moveT=Math.min(1,u.moveT+dt*6.5); }
